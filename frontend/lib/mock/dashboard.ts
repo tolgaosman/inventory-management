@@ -5,7 +5,9 @@ import {
   purchaseOrders,
   stockLevels,
   stockMovements,
+  suppliers,
   totalStockForProduct,
+  users,
   warehouses,
 } from "./data";
 
@@ -76,7 +78,7 @@ export function getDashboardKpis(): DashboardKpis {
     );
 
   return {
-    totalProducts: products.length,
+    totalProducts: 2048,
     totalWarehouses: warehouses.length,
     criticalStockCount: getCriticalProducts().length,
     todayIn,
@@ -87,10 +89,10 @@ export function getDashboardKpis(): DashboardKpis {
     cancelledOrders,
     onHandUnits,
     incomingUnits,
-    totalUsers: 6,
-    totalSuppliers: 10,
+    totalUsers: users.length,
+    totalSuppliers: suppliers.length,
     categoryCount: categories.length,
-    productVariantCount: products.length,
+    productVariantCount: 2048,
   };
 }
 
@@ -153,7 +155,7 @@ export function getWarehouseStockTotals(): WarehouseStockTotal[] {
     .sort((a, b) => b.units - a.units);
 }
 
-export function getRecentMovements(limit = 8): StockMovement[] {
+export function getRecentMovements(limit = 15): StockMovement[] {
   return stockMovements.slice(0, limit);
 }
 
@@ -165,7 +167,7 @@ export interface TopMover {
   totalQuantity: number;
 }
 
-export function getTopMovers(limit = 6): TopMover[] {
+export function getTopMovers(limit = 15): TopMover[] {
   const byProduct = new Map<string, { count: number; qty: number }>();
   for (const m of stockMovements) {
     const cur = byProduct.get(m.productId) ?? { count: 0, qty: 0 };

@@ -220,14 +220,21 @@ export const products: Product[] = buildProducts();
 // ---------------------------------------------------------------------------
 function buildStockLevels(): StockLevel[] {
   const levels: StockLevel[] = [];
-  for (const product of products) {
+
+  for (let i = 0; i < products.length; i++) {
+    const product = products[i];
+
+    if (i < 16) {
+      product.minStock = 30;
+      const wh = warehouses[0];
+      levels.push({ productId: product.id, warehouseId: wh.id, quantity: int(rand, 1, 5) });
+      continue;
+    }
+
     const warehouseCount = int(rand, 2, warehouses.length);
     const shuffled = [...warehouses].sort(() => rand() - 0.5).slice(0, warehouseCount);
     for (const wh of shuffled) {
-      const belowMin = rand() < 0.08;
-      const quantity = belowMin
-        ? int(rand, 0, Math.max(product.minStock - 1, 0))
-        : int(rand, product.minStock, product.maxStock);
+      const quantity = int(rand, product.minStock + 2, product.maxStock);
       levels.push({ productId: product.id, warehouseId: wh.id, quantity });
     }
   }

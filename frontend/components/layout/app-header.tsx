@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Bell, ChevronDown, LogOut, Settings, UserCog } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@/lib/types";
@@ -102,7 +103,17 @@ export function AppHeader() {
           <DropdownMenuLabel className="flex items-center gap-2">
             <UserCog className="size-3.5" /> Rolü değiştir (demo)
           </DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={role} onValueChange={(v) => setRole(v as Role)}>
+          <DropdownMenuRadioGroup
+            value={role}
+            onValueChange={(v) => {
+              const newRole = v as Role;
+              setRole(newRole);
+              toast.info("Yetki Rolü Değiştirildi", {
+                description: `Aktif Rol: ${ROLE_LABELS[newRole]}`,
+                icon: "👤",
+              });
+            }}
+          >
             {ROLE_ORDER.map((r) => (
               <DropdownMenuRadioItem key={r} value={r}>
                 {ROLE_LABELS[r]}
@@ -110,7 +121,14 @@ export function AppHeader() {
             ))}
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() => {
+              toast.warning("Oturum Kapatıldı", {
+                description: "Giriş sayfasına yönlendiriliyorsunuz...",
+              });
+            }}
+          >
             <LogOut className="size-4" />
             Çıkış yap
           </DropdownMenuItem>

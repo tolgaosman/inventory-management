@@ -1,49 +1,33 @@
-"use client"
+"use client";
 
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { Toaster as Sonner, type ToasterProps } from "sonner";
+import { CheckCircle2, Info, AlertTriangle, XCircle, Loader2 } from "lucide-react";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
-      className="toaster group"
+      className="toaster group font-sans"
       icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
-        info: (
-          <InfoIcon className="size-4" />
-        ),
-        warning: (
-          <TriangleAlertIcon className="size-4" />
-        ),
-        error: (
-          <OctagonXIcon className="size-4" />
-        ),
-        loading: (
-          <Loader2Icon className="size-4 animate-spin" />
-        ),
+        success: <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />,
+        info: <Info className="size-4 text-blue-500 shrink-0" />,
+        warning: <AlertTriangle className="size-4 text-amber-500 shrink-0" />,
+        error: <XCircle className="size-4 text-red-500 shrink-0" />,
+        loading: <Loader2 className="size-4 text-primary animate-spin shrink-0" />,
       }}
-      style={
-        {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
-        } as React.CSSProperties
-      }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast:
+            "group toast flex items-start gap-3 w-full rounded-2xl border border-border/80 bg-card/95 text-card-foreground shadow-xl backdrop-blur-md p-3.5 font-sans transition-all duration-200",
+          title: "text-xs sm:text-sm font-bold text-foreground leading-tight",
+          description: "text-xs text-muted-foreground font-medium mt-0.5 leading-relaxed",
+          actionButton: "bg-primary text-primary-foreground font-semibold text-xs px-3 py-1.5 rounded-lg",
+          cancelButton: "bg-muted text-muted-foreground font-medium text-xs px-3 py-1.5 rounded-lg",
+          icon: "mt-0.5",
         },
       }}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

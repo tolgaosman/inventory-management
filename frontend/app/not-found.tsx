@@ -12,7 +12,9 @@ export default function NotFound() {
         <h1 className="text-lg font-semibold">Sayfa bulunamadı</h1>
         <p className="text-sm text-muted-foreground">Aradığınız sayfa taşınmış veya hiç var olmamış olabilir.</p>
       </div>
-      <Button render={<Link href="/panel" />}>Panele dön</Button>
+      <Button render={<Link href="/panel" />} nativeButton={false}>
+        Panele dön
+      </Button>
     </div>
   );
 }

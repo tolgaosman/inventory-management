@@ -1,5 +1,5 @@
 import { ComingSoon } from "@/components/common/coming-soon";
 
 export default function SettingsPage() {
-  return <ComingSoon title="Ayarlar" />;
+  return <ComingSoon title="Sistem & Şirket Ayarları" />;
 }

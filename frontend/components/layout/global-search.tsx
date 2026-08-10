@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import {
@@ -31,9 +31,16 @@ export function GlobalSearch() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const flatNav = NAV_ITEMS.flatMap((item) => [item, ...(item.children ?? [])]).filter(
-    (item) => !item.permission || can(item.permission),
-  );
+  const flatNav = useMemo(() => {
+    const all = NAV_ITEMS.flatMap((item) => [item, ...(item.children ?? [])]).filter(
+      (item) => !item.permission || can(item.permission),
+    );
+    // A parent and one of its children can share an href (e.g. "Stok
+    // Hareketleri" ↔ "Hareket Geçmişi" both point at /stok/hareketler);
+    // href is used as the React key below, so de-dupe by href, keeping the
+    // first (parent) occurrence.
+    return [...new Map(all.map((item) => [item.href, item])).values()];
+  }, [can]);
 
   function go(href: string) {
     setOpen(false);
@@ -47,11 +54,8 @@ export function GlobalSearch() {
         onClick={() => setOpen(true)}
         className="flex h-9 w-full max-w-xs items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted"
       >
-        <Search className="size-4" />
+        <Search className="size-4 text-muted-foreground" />
         <span className="flex-1 text-left">Her şeyi ara…</span>
-        <kbd className="rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium">
-          ⌘K
-        </kbd>
       </button>
       <CommandDialog open={open} onOpenChange={setOpen} title="Arama" description="Sayfa veya ürün ara">
         <CommandInput placeholder="Sayfa, ürün, SKU ara…" />

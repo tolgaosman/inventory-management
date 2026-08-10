@@ -26,7 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <AuthProvider>
           <TooltipProvider delay={150}>{children}</TooltipProvider>
         </AuthProvider>
-        <Toaster position="top-right" richColors />
+        <Toaster position="top-center" />
       </body>
     </html>
   );
