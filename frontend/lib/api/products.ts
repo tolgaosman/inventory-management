@@ -25,6 +25,26 @@ export interface ProductRow extends Product {
   critical: boolean;
 }
 
+export interface ProductStats {
+  total: number;
+  critical: number;
+  passive: number;
+  stockValue: number;
+}
+
+export interface ProductListResult extends PagedResult<ProductRow> {
+  stats: ProductStats;
+}
+
+function computeStats(rows: ProductRow[]): ProductStats {
+  return {
+    total: rows.length,
+    critical: rows.filter((p) => p.critical).length,
+    passive: rows.filter((p) => p.status === "pasif").length,
+    stockValue: rows.reduce((sum, p) => sum + p.totalStock * p.purchasePrice, 0),
+  };
+}
+
 function toRow(p: Product): ProductRow {
   return {
     ...p,
@@ -34,16 +54,21 @@ function toRow(p: Product): ProductRow {
   };
 }
 
-export async function listProducts(query: ProductQuery = {}): Promise<PagedResult<ProductRow>> {
+export async function listProducts(query: ProductQuery = {}): Promise<ProductListResult> {
   let rows = products.map(toRow);
 
   rows = rows.filter((p) => matchesSearch([p.name, p.sku, p.barcode, p.brand], query.search));
   if (query.categoryId) rows = rows.filter((p) => p.categoryId === query.categoryId);
   if (query.supplierId) rows = rows.filter((p) => p.supplierId === query.supplierId);
   if (query.warehouseId) {
-    rows = rows.filter((p) =>
-      stockForProductByWarehouse(p.id).some((s) => s.warehouseId === query.warehouseId && s.quantity > 0),
-    );
+    rows = rows.filter((p) => {
+      const warehouseStock = stockForProductByWarehouse(p.id).find((s) => s.warehouseId === query.warehouseId);
+      if (warehouseStock && warehouseStock.quantity > 0) {
+        p.totalStock = warehouseStock.quantity;
+        return true;
+      }
+      return false;
+    });
   }
   if (query.stockStatus === "kritik") rows = rows.filter((p) => p.critical);
   if (query.stockStatus === "dusuk")
@@ -62,7 +87,7 @@ export async function listProducts(query: ProductQuery = {}): Promise<PagedResul
     });
   }
 
-  return delay(paginate(rows, query));
+  return delay({ ...paginate(rows, query), stats: computeStats(rows) });
 }
 
 export async function getProduct(id: string): Promise<ProductRow> {
@@ -118,4 +143,21 @@ export async function updateProduct(id: string, input: ProductInput): Promise<Pr
   }
   Object.assign(product, input);
   return delay(toRow(product), 500);
+}
+
+export async function toggleProductStatus(id: string): Promise<ProductRow> {
+  const product = products.find((p) => p.id === id);
+  if (!product) throw new ApiError("Ürün bulunamadı.", "NOT_FOUND");
+  product.status = product.status === "aktif" ? "pasif" : "aktif";
+  return delay(toRow(product), 400);
+}
+
+export async function deleteProduct(id: string): Promise<void> {
+  const index = products.findIndex((p) => p.id === id);
+  if (index === -1) throw new ApiError("Ürün bulunamadı.", "NOT_FOUND");
+  if (stockMovements.some((m) => m.productId === id)) {
+    throw new ApiError("Bu ürüne ait stok hareketi olduğu için silinemez.", "CONFLICT");
+  }
+  products.splice(index, 1);
+  return delay(undefined, 400);
 }

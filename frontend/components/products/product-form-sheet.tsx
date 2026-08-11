@@ -26,8 +26,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubmitButton } from "@/components/common/submit-button";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
-import { categories, suppliers } from "@/lib/mock/data";
-import type { Product } from "@/lib/types";
+import { useCurrency } from "@/lib/currency-context";
+import { CURRENCY_SYMBOLS } from "@/lib/export/report-data";
+import type { Product, Category, Supplier } from "@/lib/types";
 
 const schema = z
   .object({
@@ -51,18 +52,27 @@ const schema = z
 type FormInput = z.input<typeof schema>;
 type FormValues = z.output<typeof schema>;
 
+interface ProductFormSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product?: Product;
+  onSaved: (values: FormValues) => Promise<void>;
+  categories: Category[];
+  suppliers: Supplier[];
+}
+
 export function ProductFormSheet({
   open,
   onOpenChange,
   product,
   onSaved,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  product?: Product;
-  onSaved: (values: FormValues) => Promise<void>;
-}) {
+  categories,
+  suppliers,
+}: ProductFormSheetProps) {
   const { pending, guard } = useSubmitGuard();
+  const { currency, rates } = useCurrency();
+  const rate = rates?.[currency] || 1;
+
   const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -91,8 +101,8 @@ export function ProductFormSheet({
               categoryId: product.categoryId,
               brand: product.brand,
               unit: product.unit,
-              purchasePrice: product.purchasePrice,
-              salePrice: product.salePrice,
+              purchasePrice: product.purchasePrice / rate,
+              salePrice: product.salePrice / rate,
               minStock: product.minStock,
               maxStock: product.maxStock,
               supplierId: product.supplierId,
@@ -113,11 +123,16 @@ export function ProductFormSheet({
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, product]);
+  }, [open, product, rate]);
 
   async function onSubmit(values: FormValues) {
     await guard(async () => {
-      await onSaved(values);
+      const submission = {
+        ...values,
+        purchasePrice: values.purchasePrice * rate,
+        salePrice: values.salePrice * rate,
+      };
+      await onSaved(submission);
       toast.success(product ? "Ürün güncellendi." : "Ürün oluşturuldu.");
       onOpenChange(false);
     });
@@ -187,7 +202,9 @@ export function ProductFormSheet({
                   <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Kategori seçin" />
+                        <SelectValue>
+                          {field.value ? categories.find((c) => c.id === field.value)?.name : "Kategori seçin"}
+                        </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -240,7 +257,7 @@ export function ProductFormSheet({
                 name="purchasePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Alış Fiyatı (USD)</FormLabel>
+                    <FormLabel>Alış Fiyatı ({CURRENCY_SYMBOLS[currency]})</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} value={field.value as number | string} />
                     </FormControl>
@@ -253,7 +270,7 @@ export function ProductFormSheet({
                 name="salePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Satış Fiyatı (USD)</FormLabel>
+                    <FormLabel>Satış Fiyatı ({CURRENCY_SYMBOLS[currency]})</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" {...field} value={field.value as number | string} />
                     </FormControl>
@@ -301,7 +318,9 @@ export function ProductFormSheet({
                   <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
                     <FormControl>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Tedarikçi seçin" />
+                        <SelectValue>
+                          {field.value ? suppliers.find((s) => s.id === field.value)?.name : "Tedarikçi seçin"}
+                        </SelectValue>
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>

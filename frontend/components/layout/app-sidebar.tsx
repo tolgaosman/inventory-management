@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { ChevronDown, Boxes } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { NAV_ITEMS, type NavItem } from "./nav-config";
+import siteLogo from "@/assets/siteLogo.png";
+import siteDarkLogo from "@/assets/siteDarkLogo.png";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -75,6 +78,8 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
+import { MiniCalendar } from "./mini-calendar";
+
 export function AppSidebar() {
   const pathname = usePathname();
   const { can } = useAuth();
@@ -82,26 +87,35 @@ export function AppSidebar() {
   const items = NAV_ITEMS.filter((item) => !item.permission || can(item.permission));
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-      <div className="flex h-16 items-center gap-2 px-4">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <Boxes className="size-4.5" />
+    <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex justify-between">
+      <div className="flex flex-col min-h-0 flex-1">
+        <div className="flex h-16 items-center justify-center py-2 shrink-0">
+          <Image
+            src={siteLogo}
+            alt="Stok Yönetimi"
+            className="h-12 w-auto object-contain dark:hidden"
+            priority
+          />
+          <Image
+            src={siteDarkLogo}
+            alt="Stok Yönetimi"
+            className="h-12 w-auto object-contain hidden dark:block"
+            priority
+          />
         </div>
-        <div className="flex flex-col leading-tight">
-          <span className="text-sm font-bold tracking-tight text-primary">NEAR EAST TECH</span>
-          <span className="text-[10px] font-medium text-muted-foreground">Stok & Envanter</span>
-        </div>
+
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
+          {items.map((item) =>
+            item.children ? (
+              <NavGroup key={item.href} item={item} pathname={pathname} />
+            ) : (
+              <NavLink key={item.href} item={item} pathname={pathname} />
+            ),
+          )}
+        </nav>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {items.map((item) =>
-          item.children ? (
-            <NavGroup key={item.href} item={item} pathname={pathname} />
-          ) : (
-            <NavLink key={item.href} item={item} pathname={pathname} />
-          ),
-        )}
-      </nav>
+      <MiniCalendar />
     </aside>
   );
 }

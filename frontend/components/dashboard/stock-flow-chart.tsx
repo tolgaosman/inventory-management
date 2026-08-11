@@ -112,7 +112,7 @@ export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
       </div>
 
       {showTable ? (
-        <div className="my-4 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0d121c] p-4">
+        <div className="my-4 flex-1 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0d121c] p-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs font-medium text-slate-500 dark:text-slate-400">

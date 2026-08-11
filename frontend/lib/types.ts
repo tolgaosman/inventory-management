@@ -107,7 +107,7 @@ export interface PurchaseOrder {
   items: PurchaseOrderItem[];
   createdAt: string;
   expectedAt: string;
-  currency: "USD" | "TRY";
+  currency: "TRY";
 }
 
 export interface PagedQuery {

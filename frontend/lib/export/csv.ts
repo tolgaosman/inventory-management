@@ -1,50 +1,61 @@
-import { formatDateTime } from "@/lib/format";
 import type { ReportData } from "./report-data";
+import { matchSectionId, CURRENCY_SYMBOLS } from "./report-data";
+import { formatDateTime } from "@/lib/format";
 
-const DELIMITER = ";";
+export function buildReportCsv(data: ReportData, selectedSections: string[] = ["all"]): Blob {
+  const includeAll = selectedSections.includes("all");
 
-function escapeCell(value: string | number): string {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? String(value) : "";
-  }
-  const str = String(value);
-  const needsQuoting = str.includes(DELIMITER) || str.includes('"') || str.includes("\n") || str.includes("\r");
-  return needsQuoting ? `"${str.replace(/"/g, '""')}"` : str;
-}
+  const targetSections = includeAll
+    ? data.sections
+    : data.sections.filter((s) => selectedSections.some((id) => matchSectionId(s.title, id)));
 
-function row(cells: (string | number)[]): string {
-  return cells.map(escapeCell).join(DELIMITER);
-}
+  const rows: string[][] = [];
 
-export function buildReportCsv(data: ReportData): Blob {
-  const lines: string[] = [];
+  // Header / Metadata
+  rows.push([data.company]);
+  rows.push([data.title]);
+  rows.push(["Oluşturma Tarihi", formatDateTime(data.generatedAt.toISOString())]);
+  rows.push(["Dönem", data.rangeLabel]);
+  rows.push(["Oluşturan", data.generatedBy]);
+  rows.push([]);
 
-  lines.push(row([data.company]));
-  lines.push(row([data.title]));
-  lines.push(row(["Oluşturma Tarihi", formatDateTime(data.generatedAt.toISOString())]));
-  lines.push(row(["Dönem", data.rangeLabel]));
-  lines.push(row(["Oluşturan", data.generatedBy]));
-
-  lines.push("");
-  lines.push(row(["=== ÖZET ==="]));
-  lines.push(row(["Metrik", "Değer"]));
-  for (const kpi of data.kpis) {
-    lines.push(row([kpi.currency ? `${kpi.label} (USD)` : kpi.label, kpi.value]));
-  }
-
-  for (const section of data.sections) {
-    lines.push("");
-    lines.push(row([`=== ${section.title.toUpperCase()} ===`]));
-    if (section.rows.length === 0) {
-      lines.push(row([section.emptyMessage]));
-      continue;
+  // KPIs if applicable
+  if ((includeAll || selectedSections.includes("kpi")) && data.kpis.length > 0) {
+    rows.push(["=== KPI ÖZETİ ==="]);
+    rows.push(["Metrik", "Değer"]);
+    const symbol = CURRENCY_SYMBOLS[data.currency];
+    for (const kpi of data.kpis) {
+      rows.push([kpi.currency ? `${kpi.label} (${symbol})` : kpi.label, String(kpi.value)]);
     }
-    lines.push(row(section.columns));
-    for (const r of section.rows) lines.push(row(r));
+    rows.push([]);
   }
 
-  // Explicit UTF-8 BOM (\uFEFF) forces Excel on Windows to parse as UTF-8
-  const BOM = "\uFEFF";
-  const csvText = BOM + lines.join("\r\n");
-  return new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+  // Sections
+  for (const section of targetSections) {
+    if (section.rows.length === 0) continue;
+    rows.push([`=== ${section.title.toUpperCase()} ===`]);
+    rows.push(section.columns);
+    for (const r of section.rows) {
+      rows.push(r.map((cell) => String(cell)));
+    }
+    rows.push([]);
+  }
+
+  // Convert to CSV string with semicolons (Excel Turkish standard)
+  const csvContent = rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const escaped = cell.replace(/"/g, '""');
+          if (escaped.includes(";") || escaped.includes("\n") || escaped.includes('"')) {
+            return `"${escaped}"`;
+          }
+          return escaped;
+        })
+        .join(";"),
+    )
+    .join("\r\n");
+
+  const bom = "\uFEFF";
+  return new Blob([bom + csvContent], { type: "text/csv;charset=utf-8;" });
 }

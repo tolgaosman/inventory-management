@@ -373,7 +373,7 @@ function buildPurchaseOrders(): PurchaseOrder[] {
       items,
       createdAt,
       expectedAt,
-      currency: "USD",
+      currency: "TRY",
     });
   }
   return list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));

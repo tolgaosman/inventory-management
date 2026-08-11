@@ -1,5 +1,6 @@
-import { ComingSoon } from "@/components/common/coming-soon";
+import { ProductDetailClient } from "@/components/products/product-detail-client";
 
-export default function ProductDetailPage() {
-  return <ComingSoon title="Ürün Detayı" />;
+export default async function ProductDetailPage(props: PageProps<"/urunler/[id]">) {
+  const { id } = await props.params;
+  return <ProductDetailClient id={id} />;
 }

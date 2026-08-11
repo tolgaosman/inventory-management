@@ -5,6 +5,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type RowData,
   type SortingState,
   type OnChangeFn,
 } from "@tanstack/react-table";
@@ -15,6 +16,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+declare module "@tanstack/react-table" {
+  // Type params are required to match the augmented interface's signature even though unused here.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    /** Applied to both the header cell and body cells, e.g. to right-align a price column. */
+    className?: string;
+    /** Applied to the header cell only, in addition to `className`. */
+    headClassName?: string;
+  }
+}
 
 interface DataTableProps<T> {
   columns: ColumnDef<T, unknown>[];
@@ -67,23 +80,35 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto custom-scrollbar">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
-                <TableRow key={hg.id} className="hover:bg-transparent">
+                <TableRow key={hg.id} className="border-b border-border/70 hover:bg-transparent">
                   {hg.headers.map((header) => {
                     const sortable = header.column.columnDef.enableSorting !== false && onSortingChange;
                     const sortDir = header.column.getIsSorted();
+                    const meta = header.column.columnDef.meta;
                     return (
-                      <TableHead key={header.id} className="whitespace-nowrap">
+                      <TableHead
+                        key={header.id}
+                        className={cn(
+                          "h-12 whitespace-nowrap px-5 text-xs font-bold tracking-wider text-muted-foreground uppercase",
+                          meta?.className,
+                          meta?.headClassName,
+                        )}
+                      >
                         {header.isPlaceholder ? null : sortable ? (
                           <button
                             type="button"
                             onClick={header.column.getToggleSortingHandler()}
-                            className="flex items-center gap-1 select-none hover:text-foreground"
+                            className={cn(
+                              "inline-flex items-center gap-1 select-none hover:text-foreground",
+                              String(meta?.className ?? "").includes("text-right") && "justify-end w-full",
+                              String(meta?.className ?? "").includes("text-center") && "justify-center w-full",
+                            )}
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
                             {sortDir === "asc" ? (
@@ -105,10 +130,10 @@ export function DataTable<T>({
             </TableHeader>
             <TableBody>
               {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <TableRow key={i}>
+                Array.from({ length: pageSize }).map((_, i) => (
+                  <TableRow key={i} className="border-b border-border/50">
                     {columns.map((_, j) => (
-                      <TableCell key={j}>
+                      <TableCell key={j} className="px-5 py-4">
                         <Skeleton className="h-4 w-full max-w-32" />
                       </TableCell>
                     ))}
@@ -129,9 +154,14 @@ export function DataTable<T>({
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow key={row.id}>
+                  <TableRow key={row.id} className="border-b border-border/50 hover:bg-muted/40 transition-colors">
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                      <TableCell
+                        key={cell.id}
+                        className={cn("px-5 py-4 text-sm", cell.column.columnDef.meta?.className)}
+                      >
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </TableCell>
                     ))}
                   </TableRow>
                 ))

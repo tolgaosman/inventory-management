@@ -46,20 +46,33 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+import { useSettings } from "@/lib/settings-context";
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>("yonetici");
+  const { userProfile } = useSettings();
 
   const value = useMemo<AuthContextValue>(() => {
     const asUser = users.find((u) => u.role === role) ?? users[0];
+    const fullName = `${userProfile.firstName} ${userProfile.lastName}`.trim() || asUser.name;
+    const initials =
+      fullName
+        .split(" ")
+        .filter(Boolean)
+        .map((n) => n[0])
+        .join("")
+        .substring(0, 2)
+        .toUpperCase() || asUser.initials;
+
     return {
       userId: asUser.id,
       role,
-      name: asUser.name,
-      initials: asUser.initials,
+      name: fullName,
+      initials,
       can: (permission) => ROLE_PERMISSIONS[role].includes(permission),
       setRole,
     };
-  }, [role]);
+  }, [role, userProfile]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

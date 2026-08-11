@@ -5,6 +5,7 @@
 // user actually asks for a PDF.
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
 import type { ReportData, ReportSection } from "./report-data";
+import { matchSectionId } from "./report-data";
 
 /** Palette lifted from app/globals.css so the PDF matches the UI. */
 const COLORS = {
@@ -132,7 +133,7 @@ function drawKpiGrid(doc: Doc, data: ReportData, startY: number): number {
     doc.setFont(FONT, "bold");
     doc.setFontSize(14);
     doc.setTextColor(...accentColor(kpi.accent));
-    const value = kpi.currency ? formatCurrency(kpi.value) : formatNumber(kpi.value);
+    const value = kpi.currency ? formatCurrency(kpi.value, data.currency) : formatNumber(kpi.value);
     doc.text(value, x + 10, y + 35);
   });
 
@@ -144,31 +145,7 @@ function renderCell(value: string | number): string {
   return typeof value === "number" ? formatNumber(value) : value;
 }
 
-function matchSectionId(title: string, id: string): boolean {
-  const t = title.toLocaleLowerCase("tr-TR");
-  switch (id) {
-    case "kpi":
-      return t.includes("özet") || t.includes("kpi");
-    case "critical":
-      return t.includes("kritik");
-    case "movements":
-      return t.includes("hareket");
-    case "warehouse":
-      return t.includes("depo");
-    case "products":
-      return t.includes("ürün");
-    case "suppliers":
-      return t.includes("tedarikçi");
-    case "orders":
-      return t.includes("sipariş") || t.includes("satın alma");
-    case "monthly":
-      return t.includes("aylık");
-    case "categories":
-      return t.includes("kategori");
-    default:
-      return false;
-  }
-}
+
 
 export async function buildReportPdf(data: ReportData, selectedSections: string[] = ["all"]): Promise<Blob> {
   const [{ jsPDF }, { autoTable }, fonts] = await Promise.all([
@@ -197,7 +174,7 @@ export async function buildReportPdf(data: ReportData, selectedSections: string[
   let cursorY = HEADER_HEIGHT + 18;
   const includeAll = selectedSections.includes("all");
 
-  if (includeAll || selectedSections.includes("kpi")) {
+  if ((includeAll || selectedSections.includes("kpi")) && data.kpis.length > 0) {
     cursorY = drawSectionTitle(doc, "Özet", cursorY);
     cursorY = drawKpiGrid(doc, data, cursorY);
   }

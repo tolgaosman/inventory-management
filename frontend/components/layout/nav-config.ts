@@ -26,7 +26,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Panel", href: "/panel", icon: LayoutGrid },
-  { label: "Ürünler", href: "/urunler", icon: Package, permission: "products.view" },
+  { label: "Ürün Yönetimi", href: "/urunler", icon: Package, permission: "products.view" },
   { label: "Kategoriler", href: "/kategoriler", icon: FolderTree, permission: "products.view" },
   { label: "Depolar", href: "/depolar", icon: Warehouse, permission: "products.view" },
   {

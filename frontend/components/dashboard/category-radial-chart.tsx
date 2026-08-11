@@ -87,7 +87,7 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
   const activePercent = Math.round((activeCat.units / (totalUnits || 1)) * 100);
 
   return (
-    <div className="relative flex flex-col justify-between rounded-3xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0b0f17] p-6 shadow-sm dark:shadow-2xl text-slate-900 dark:text-slate-100 min-h-[380px] transition-colors">
+    <div className="relative flex flex-col justify-between h-full rounded-3xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0b0f17] p-6 shadow-sm dark:shadow-2xl text-slate-900 dark:text-slate-100 min-h-[380px] transition-colors">
       {/* Header - Identical to StockFlowChart */}
       <div className="flex items-start justify-between gap-4 mb-2">
         <div>
@@ -96,24 +96,20 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Table Toggle Button */}
+          {/* Single Toggle Button: Pie Chart <-> Table */}
           <button
             type="button"
             onClick={() => setShowTable((s) => !s)}
-            className="flex items-center justify-center size-8 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-[#121824] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-            title={showTable ? "Grafik Görünümü" : "Tablo Görünümü"}
+            className="flex size-8 items-center justify-center rounded-full border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            title={showTable ? "Pasta Grafik Görünümü" : "Tablo Görünümü"}
           >
-            {showTable ? <ChartSpline className="size-4" /> : <Table2 className="size-4" />}
+            {showTable ? <PieChart className="size-4" /> : <Table2 className="size-4" />}
           </button>
-
-          <div className="flex size-8 items-center justify-center rounded-full border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 shadow-sm">
-            <PieChart className="size-4" />
-          </div>
         </div>
       </div>
 
       {showTable ? (
-        <div className="my-4 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0d121c] p-4">
+        <div className="my-4 flex-1 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0d121c] p-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs font-medium text-slate-500 dark:text-slate-400">

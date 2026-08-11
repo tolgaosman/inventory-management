@@ -35,9 +35,49 @@ import {
   PRODUCT_STATUS_LABELS,
   PURCHASE_STATUS_LABELS,
 } from "@/lib/constants";
+import type { CurrencyCode } from "@/lib/currency-context";
 
 export const COMPANY_NAME = "Near East Technology";
 export const REPORT_TITLE = "Stok & Envanter Raporu";
+
+export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
+  try: "₺",
+  usd: "$",
+  eur: "€",
+  gbp: "£",
+};
+
+/**
+ * Both exporters filter `ReportData.sections` down to a user-picked subset by
+ * matching this id against each section's Turkish `title` (there is no
+ * dedicated id field on sections). Shared here so csv/excel/pdf agree on the
+ * same rules instead of drifting.
+ */
+export function matchSectionId(title: string, id: string): boolean {
+  const t = title.toLocaleLowerCase("tr-TR");
+  switch (id) {
+    case "kpi":
+      return t.includes("özet") || t.includes("kpi");
+    case "critical":
+      return t.includes("kritik");
+    case "movements":
+      return t.includes("hareket");
+    case "warehouse":
+      return t.includes("depo");
+    case "products":
+      return t.includes("ürün");
+    case "suppliers":
+      return t.includes("tedarikçi");
+    case "orders":
+      return t.includes("sipariş") || t.includes("satın alma");
+    case "monthly":
+      return t.includes("aylık");
+    case "categories":
+      return t.includes("kategori");
+    default:
+      return false;
+  }
+}
 
 /** A table that both exporters can render generically. */
 export interface ReportSection {
@@ -47,6 +87,8 @@ export interface ReportSection {
   rows: (string | number)[][];
   /** Indices of columns holding numbers — right-aligned in the PDF. */
   numericColumns: number[];
+  /** Indices of columns holding a currency amount already converted to `ReportData.currency`. */
+  currencyColumns?: number[];
   /** Shown instead of the table when there are no rows. */
   emptyMessage: string;
 }
@@ -65,6 +107,8 @@ export interface ReportData {
   generatedAt: Date;
   rangeLabel: string;
   generatedBy: string;
+  /** The currency KPI/section values below have already been converted into. */
+  currency: CurrencyCode;
   kpis: ReportKpi[];
   sections: ReportSection[];
 }
@@ -77,6 +121,8 @@ function warehouseName(id: string | undefined): string {
 function categoryName(id: string): string {
   return categories.find((c) => c.id === id)?.name ?? "-";
 }
+
+
 
 function supplierName(id: string): string {
   return suppliers.find((s) => s.id === id)?.name ?? "-";
@@ -93,9 +139,16 @@ function rangeStart(range: DateRangePreset): Date {
   return start;
 }
 
-export function buildReportData(range: DateRangePreset, generatedBy: string): ReportData {
+export function buildReportData(
+  range: DateRangePreset,
+  generatedBy: string,
+  currency: CurrencyCode = "try",
+  rate: number = 1,
+): ReportData {
   const kpis = getDashboardKpis();
   const from = rangeStart(range).toISOString();
+  const symbol = CURRENCY_SYMBOLS[currency];
+  const convert = (v: number) => v / (rate || 1);
 
   // 3 — Monthly inbound/outbound over the selected window.
   const monthlyFlow = getMonthlyFlow(Math.max(MONTHS_BY_RANGE[range], 5));
@@ -216,8 +269,8 @@ export function buildReportData(range: DateRangePreset, generatedBy: string): Re
         "Kategori",
         "Marka",
         "Birim",
-        "Alış (USD)",
-        "Satış (USD)",
+        `Alış (${symbol})`,
+        `Satış (${symbol})`,
         "Min",
         "Maks",
         "Toplam Stok",
@@ -225,6 +278,7 @@ export function buildReportData(range: DateRangePreset, generatedBy: string): Re
         "Tedarikçi",
       ],
       numericColumns: [6, 7, 8, 9, 10],
+      currencyColumns: [6, 7],
       emptyMessage: "Katalogda ürün yok.",
       rows: products.map((p) => [
         p.name,
@@ -233,8 +287,8 @@ export function buildReportData(range: DateRangePreset, generatedBy: string): Re
         categoryName(p.categoryId),
         p.brand,
         p.unit,
-        p.purchasePrice,
-        p.salePrice,
+        convert(p.purchasePrice),
+        convert(p.salePrice),
         p.minStock,
         p.maxStock,
         totalStockForProduct(p.id),
@@ -288,18 +342,19 @@ export function buildReportData(range: DateRangePreset, generatedBy: string): Re
         "Tedarikçi",
         "Durum",
         "Kalem",
-        "Toplam (USD)",
+        `Toplam (${symbol})`,
         "Sipariş Tarihi",
         "Beklenen Teslim",
       ],
       numericColumns: [3, 4],
+      currencyColumns: [4],
       emptyMessage: "Satın alma siparişi yok.",
       rows: purchaseOrders.map((po) => [
         po.code,
         supplierName(po.supplierId),
         PURCHASE_STATUS_LABELS[po.status],
         po.items.length,
-        purchaseOrderTotal(po),
+        convert(purchaseOrderTotal(po)),
         formatDateShort(po.createdAt),
         formatDateShort(po.expectedAt),
       ]),
@@ -312,6 +367,7 @@ export function buildReportData(range: DateRangePreset, generatedBy: string): Re
     generatedAt: new Date(),
     rangeLabel: RANGE_LABELS[range],
     generatedBy,
+    currency,
     kpis: [
       { label: "Toplam Ürün", value: kpis.totalProducts },
       { label: "Toplam Depo", value: kpis.totalWarehouses },
@@ -322,7 +378,7 @@ export function buildReportData(range: DateRangePreset, generatedBy: string): Re
       { label: "Yolda", value: kpis.incomingUnits },
       { label: "Açık Sipariş", value: kpis.openPurchaseOrders },
       { label: "Bekleyen Teslimat", value: kpis.pendingDeliveries },
-      { label: "Satın Alma Tutarı", value: kpis.purchaseTotalValue, currency: true, accent: "good" },
+      { label: "Satın Alma Tutarı", value: convert(kpis.purchaseTotalValue), currency: true, accent: "good" },
       { label: "İptal Sipariş", value: kpis.cancelledOrders },
       { label: "Toplam Tedarikçi", value: kpis.totalSuppliers },
       { label: "Toplam Kullanıcı", value: kpis.totalUsers },

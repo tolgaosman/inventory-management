@@ -2,6 +2,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/empty-state";
 import { Can } from "@/components/common/can";
@@ -11,7 +12,7 @@ export function CriticalStockList({ items }: { items: (Product & { totalStock: n
   return (
     <Card className="shadow-soft border-border/70 flex flex-col justify-between py-5 min-h-[360px]">
       <CardHeader className="flex-row items-center justify-between px-5 pb-2">
-        <CardTitle className="text-sm font-semibold text-foreground">Kritik Stok Uyarıları</CardTitle>
+        <CardTitle className="text-base font-bold tracking-tight text-foreground">Kritik Stok Uyarıları</CardTitle>
         <Link href="/urunler?stockStatus=kritik" className="text-xs font-medium text-primary hover:underline">
           Tümünü gör
         </Link>
@@ -20,42 +21,60 @@ export function CriticalStockList({ items }: { items: (Product & { totalStock: n
         {items.length === 0 ? (
           <EmptyState icon={ShieldCheck} title="Kritik stok yok" description="Tüm ürünler minimum seviyenin üzerinde." />
         ) : (
-          <div className="max-h-[340px] overflow-y-auto custom-scrollbar space-y-2 pr-1.5">
-            {items.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 rounded-xl p-2 hover:bg-muted/50 transition-colors border border-transparent hover:border-border/40">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-status-critical/10 text-status-critical">
-                  <AlertTriangle className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <Link href={`/urunler/${p.id}`} className="block truncate text-xs sm:text-sm font-semibold hover:underline text-foreground">
-                    {p.name}
-                  </Link>
-                  <p className="text-xs text-muted-foreground">
-                    Mevcut: <span className="font-bold text-status-critical">{p.totalStock}</span> · Min: {p.minStock}
-                  </p>
-                </div>
-                <Can permission="purchase.manage">
-                  <Button
-                    render={<Link href={`/satin-alma?productId=${p.id}`} />}
-                    nativeButton={false}
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 text-xs h-8"
-                    onClick={() => {
-                      toast.info("Satın Alma Talebi Başlatıldı", {
-                        description: `${p.name} için tedarik siparişi hazırlanıyor.`,
-                        icon: "🛒",
-                      });
-                    }}
-                  >
-                    Satın alma
-                  </Button>
-                </Can>
-              </div>
-            ))}
+          <div className="max-h-[340px] overflow-y-auto custom-scrollbar">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b border-border/70 hover:bg-transparent">
+                  <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ürün Adı</TableHead>
+                  <TableHead className="text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">Mevcut / Min</TableHead>
+                  <TableHead className="text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">İşlem</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((p) => (
+                  <TableRow key={p.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                    <TableCell className="py-2.5 px-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-status-critical/10 text-status-critical">
+                          <AlertTriangle className="size-3.5" />
+                        </div>
+                        <Link href={`/urunler/${p.id}`} className="block truncate text-xs sm:text-sm font-semibold hover:underline text-foreground">
+                          {p.name}
+                        </Link>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center py-2.5 px-2">
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        <span className="font-bold text-status-critical">{p.totalStock}</span> / {p.minStock}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right py-2.5 px-2">
+                      <Can permission="purchase.manage">
+                        <Button
+                          render={<Link href={`/satin-alma?productId=${p.id}`} />}
+                          nativeButton={false}
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0 text-xs h-7 px-2.5"
+                          onClick={() => {
+                            toast.info("Satın Alma Talebi Başlatıldı", {
+                              description: `${p.name} için tedarik siparişi hazırlanıyor.`,
+                              icon: "🛒",
+                            });
+                          }}
+                        >
+                          Satın alma
+                        </Button>
+                      </Can>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+

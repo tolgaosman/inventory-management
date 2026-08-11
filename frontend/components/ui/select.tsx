@@ -17,7 +17,14 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   );
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+function SelectValue({ className, children, ...props }: SelectPrimitive.Value.Props) {
+  if (children) {
+    return (
+      <span data-slot="select-value" className={cn("flex flex-1 text-left font-medium", className)}>
+        {children as React.ReactNode}
+      </span>
+    );
+  }
   return (
     <SelectPrimitive.Value
       data-slot="select-value"

@@ -1,19 +1,15 @@
-const trNumber = new Intl.NumberFormat("tr-TR");
-const trCurrencyUSD = new Intl.NumberFormat("tr-TR", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
-const trDate = new Intl.DateTimeFormat("tr-TR", {
-  day: "2-digit",
-  month: "long",
-});
-const trDateShort = new Intl.DateTimeFormat("tr-TR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-const trDateTime = new Intl.DateTimeFormat("tr-TR", {
+import { CURRENCY_SYMBOLS } from "./export/report-data";
+
+// These formatters live at module scope (not inside a component/hook) so
+// every call site — including plain functions like lib/export/report-data.ts
+// — can format a value without needing React context. `configureFormatting`
+// is the seam that lets SettingsProvider push preference changes (timezone,
+// kuruş görünürlüğü) into them without threading props everywhere.
+const config: { timeZone?: string; tryDecimals: boolean } = { timeZone: undefined, tryDecimals: false };
+
+let trDate = buildDateFormatter({ day: "2-digit", month: "long" });
+let trDateShort = buildDateFormatter({ day: "2-digit", month: "2-digit", year: "numeric" });
+let trDateTime = buildDateFormatter({
   day: "2-digit",
   month: "2-digit",
   year: "numeric",
@@ -21,12 +17,48 @@ const trDateTime = new Intl.DateTimeFormat("tr-TR", {
   minute: "2-digit",
 });
 
+function buildDateFormatter(opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("tr-TR", { ...opts, timeZone: config.timeZone });
+}
+
+/**
+ * Reconfigures locale-dependent formatting app-wide. Called by
+ * `SettingsProvider` once on hydration and again whenever the relevant
+ * preference changes.
+ */
+export function configureFormatting(opts: { timeZone?: string; tryDecimals?: boolean }): void {
+  if ("timeZone" in opts) config.timeZone = opts.timeZone;
+  if (opts.tryDecimals !== undefined) config.tryDecimals = opts.tryDecimals;
+  trDate = buildDateFormatter({ day: "2-digit", month: "long" });
+  trDateShort = buildDateFormatter({ day: "2-digit", month: "2-digit", year: "numeric" });
+  trDateTime = buildDateFormatter({
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+const trNumber = new Intl.NumberFormat("tr-TR");
+
 export function formatNumber(value: number): string {
   return trNumber.format(value);
 }
 
-export function formatCurrency(value: number): string {
-  return trCurrencyUSD.format(value);
+export function formatCurrency(value: number, currencyCode: string = "TRY", rate: number = 1): string {
+  const converted = value / (rate || 1);
+  const code = currencyCode.toLowerCase();
+  const decimals = code === "try" ? (config.tryDecimals ? 2 : 0) : 2;
+
+  const formattedNumber = new Intl.NumberFormat("tr-TR", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(converted);
+
+  const symbol = CURRENCY_SYMBOLS[code as keyof typeof CURRENCY_SYMBOLS] || currencyCode.toUpperCase();
+
+  return `${formattedNumber} ${symbol}`;
 }
 
 export function formatDate(iso: string): string {
