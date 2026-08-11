@@ -52,13 +52,35 @@ function setWorksheetFormatting(ws: XLSX.WorkSheet, rows: (string | number)[][],
 
       const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
       if (ws[cellRef]) {
+        let fontColor = { rgb: isHeader ? "FFFFFF" : "111827" };
+        let fillColor = isHeader ? { fgColor: { rgb: "0891B2" } } : undefined;
+        let isBold = isHeader;
+
+        const trimmedVal = strVal.trim();
+        if (!isHeader) {
+          if (trimmedVal === "Stok Girişi" || trimmedVal === "Giriş") {
+            fillColor = { fgColor: { rgb: "C6EFCE" } }; // Good Fill
+            fontColor = { rgb: "006100" }; // Good Text
+            isBold = true;
+          } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış") {
+            fillColor = { fgColor: { rgb: "FFC7CE" } }; // Bad Fill
+            fontColor = { rgb: "9C0006" }; // Bad Text
+            isBold = true;
+          } else if (trimmedVal === "Transfer") {
+            fillColor = { fgColor: { rgb: "FFEB9C" } }; // Neutral Fill
+            fontColor = { rgb: "9C6500" }; // Neutral Text
+            isBold = true;
+          }
+        }
+
         ws[cellRef].s = {
-          font: isHeader
-            ? { bold: true, name: "Calibri", sz: 13, color: { rgb: "FFFFFF" } } // Bold, 2 sizes larger (13pt vs 11pt), White text
-            : { bold: false, name: "Calibri", sz: 11, color: { rgb: "111827" } },
-          fill: isHeader
-            ? { fgColor: { rgb: "16A34A" } } // Green background on header cells only
-            : undefined,
+          font: {
+            bold: isBold,
+            name: "Calibri",
+            sz: isHeader ? 13 : 11,
+            color: fontColor,
+          },
+          fill: fillColor,
           border: {
             top: { style: "thin", color: { rgb: "D1D5DB" } },
             bottom: { style: "thin", color: { rgb: "D1D5DB" } },
@@ -67,7 +89,7 @@ function setWorksheetFormatting(ws: XLSX.WorkSheet, rows: (string | number)[][],
           },
           alignment: {
             vertical: "center",
-            horizontal: isHeader ? "center" : typeof val === "number" ? "right" : "left",
+            horizontal: "center",
           },
         };
       }

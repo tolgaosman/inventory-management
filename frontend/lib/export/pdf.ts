@@ -7,20 +7,21 @@ import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
 import type { ReportData, ReportSection } from "./report-data";
 import { matchSectionId } from "./report-data";
 
-/** Palette lifted from app/globals.css so the PDF matches the UI. */
+/** Palette lifted from logo & branding (Turquoise, Sapphire Blue, Emerald). */
 const COLORS = {
-  brand: [22, 163, 74] as [number, number, number],
-  brandTint: [232, 246, 238] as [number, number, number],
-  ink: [11, 11, 11] as [number, number, number],
-  secondary: [82, 81, 78] as [number, number, number],
-  muted: [137, 135, 129] as [number, number, number],
-  grid: [225, 224, 217] as [number, number, number],
-  zebra: [250, 250, 249] as [number, number, number],
+  brand: [8, 145, 178] as [number, number, number], // Turquoise / Cyan (#0891B2) matching logo!
+  brandDark: [15, 76, 129] as [number, number, number], // Deep Sapphire Blue (#0F4C81) matching logo!
+  brandTint: [238, 248, 250] as [number, number, number], // Soft Cyan tint
+  ink: [17, 24, 39] as [number, number, number], // Slate 900
+  secondary: [75, 85, 99] as [number, number, number], // Gray 600
+  muted: [156, 163, 175] as [number, number, number], // Gray 400
+  grid: [229, 231, 235] as [number, number, number], // Gray 200
+  zebra: [248, 250, 252] as [number, number, number], // Slate 50
   white: [255, 255, 255] as [number, number, number],
-  critical: [208, 59, 59] as [number, number, number],
-  criticalTint: [251, 233, 233] as [number, number, number],
-  inbound: [27, 175, 122] as [number, number, number],
-  outbound: [42, 120, 214] as [number, number, number],
+  critical: [225, 29, 72] as [number, number, number], // Rose 600
+  criticalTint: [255, 241, 242] as [number, number, number], // Rose 50
+  inbound: [16, 185, 129] as [number, number, number], // Emerald green (#10B981) matching logo!
+  outbound: [37, 99, 235] as [number, number, number], // Royal Blue (#2563EB) matching logo!
 };
 
 const MARGIN = 40;
@@ -41,7 +42,7 @@ function accentColor(accent: string | undefined): [number, number, number] {
     case "out":
       return COLORS.outbound;
     default:
-      return COLORS.ink;
+      return COLORS.brand;
   }
 }
 
@@ -51,7 +52,7 @@ function drawHeader(doc: Doc, data: ReportData) {
 
   doc.setFont(FONT, "bold");
   doc.setFontSize(15);
-  doc.setTextColor(...COLORS.ink);
+  doc.setTextColor(...COLORS.brandDark);
   doc.text(data.company, MARGIN, 40);
 
   doc.setFont(FONT, "normal");
@@ -68,9 +69,14 @@ function drawHeader(doc: Doc, data: ReportData) {
   doc.text(`Dönem: ${data.rangeLabel}`, right, 46, { align: "right" });
   doc.text(`Oluşturan: ${data.generatedBy}`, right, 58, { align: "right" });
 
+  // Top header lines: Turquoise & Sapphire Blue matching logo!
   doc.setDrawColor(...COLORS.brand);
-  doc.setLineWidth(1.5);
+  doc.setLineWidth(2);
   doc.line(MARGIN, HEADER_HEIGHT - 8, right, HEADER_HEIGHT - 8);
+
+  doc.setDrawColor(...COLORS.brandDark);
+  doc.setLineWidth(1);
+  doc.line(MARGIN, HEADER_HEIGHT - 5, right, HEADER_HEIGHT - 5);
 }
 
 function drawFooter(doc: Doc, data: ReportData, pageNumber: number, pageCount: number) {
@@ -92,11 +98,11 @@ function drawFooter(doc: Doc, data: ReportData, pageNumber: number, pageCount: n
 /** Section heading: a coloured vertical bar plus bold label. */
 function drawSectionTitle(doc: Doc, title: string, y: number): number {
   doc.setFillColor(...COLORS.brand);
-  doc.rect(MARGIN, y - 9, 3, 12, "F");
+  doc.rect(MARGIN, y - 9, 3.5, 12, "F");
 
   doc.setFont(FONT, "bold");
   doc.setFontSize(11);
-  doc.setTextColor(...COLORS.ink);
+  doc.setTextColor(...COLORS.brandDark);
   doc.text(title, MARGIN + 10, y);
   return y + 8;
 }
@@ -256,12 +262,28 @@ function renderSection(
     alternateRowStyles: { fillColor: COLORS.zebra },
     columnStyles,
     didParseCell: (hook) => {
-      if (!isCritical || hook.section !== "body") return;
-      // Flag under-stocked rows, and make the shortfall itself stand out.
-      hook.cell.styles.fillColor = COLORS.criticalTint;
-      if (hook.column.index === shortfallColumn) {
-        hook.cell.styles.textColor = COLORS.critical;
+      if (hook.section !== "body") return;
+      const rawText = String(hook.cell.raw ?? "").trim();
+
+      if (rawText === "Stok Girişi" || rawText === "Giriş") {
+        hook.cell.styles.fillColor = [198, 239, 206]; // Good Fill (#C6EFCE)
+        hook.cell.styles.textColor = [0, 97, 0]; // Good Text (#006100)
         hook.cell.styles.fontStyle = "bold";
+      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış") {
+        hook.cell.styles.fillColor = [255, 199, 206]; // Bad Fill (#FFC7CE)
+        hook.cell.styles.textColor = [156, 0, 6]; // Bad Text (#9C0006)
+        hook.cell.styles.fontStyle = "bold";
+      } else if (rawText === "Transfer") {
+        hook.cell.styles.fillColor = [255, 235, 156]; // Neutral Fill (#FFEB9C)
+        hook.cell.styles.textColor = [156, 101, 0]; // Neutral Text (#9C6500)
+        hook.cell.styles.fontStyle = "bold";
+      } else if (isCritical) {
+        // Flag under-stocked rows, and make the shortfall itself stand out.
+        hook.cell.styles.fillColor = COLORS.criticalTint;
+        if (hook.column.index === shortfallColumn) {
+          hook.cell.styles.textColor = COLORS.critical;
+          hook.cell.styles.fontStyle = "bold";
+        }
       }
     },
   });

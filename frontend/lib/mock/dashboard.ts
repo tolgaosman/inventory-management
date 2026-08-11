@@ -77,8 +77,10 @@ export function getDashboardKpis(): DashboardKpis {
       0,
     );
 
+  const activeProductsCount = products.filter((p) => p.status === "aktif").length;
+
   return {
-    totalProducts: 2048,
+    totalProducts: products.length,
     totalWarehouses: warehouses.length,
     criticalStockCount: getCriticalProducts().length,
     todayIn,
@@ -92,7 +94,7 @@ export function getDashboardKpis(): DashboardKpis {
     totalUsers: users.length,
     totalSuppliers: suppliers.length,
     categoryCount: categories.length,
-    productVariantCount: 2048,
+    productVariantCount: products.length,
   };
 }
 

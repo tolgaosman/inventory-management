@@ -20,7 +20,7 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 function SelectValue({ className, children, ...props }: SelectPrimitive.Value.Props) {
   if (children) {
     return (
-      <span data-slot="select-value" className={cn("flex flex-1 text-left font-medium", className)}>
+      <span data-slot="select-value" className={cn("flex flex-1 text-left font-medium truncate whitespace-nowrap", className)}>
         {children as React.ReactNode}
       </span>
     );
@@ -28,7 +28,7 @@ function SelectValue({ className, children, ...props }: SelectPrimitive.Value.Pr
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
-      className={cn("flex flex-1 text-left font-medium", className)}
+      className={cn("flex flex-1 text-left font-medium truncate whitespace-nowrap", className)}
       {...props}
     />
   );
@@ -47,7 +47,7 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-fit items-center justify-between gap-2 rounded-xl border border-border/80 bg-card/80 px-3 py-1.5 text-xs sm:text-sm font-semibold text-foreground transition-all outline-none select-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50 shadow-xs cursor-pointer",
+        "flex w-fit items-center justify-between gap-2 rounded-xl border border-border/80 bg-card/80 px-3 py-1.5 text-xs sm:text-sm font-semibold text-foreground transition-all outline-none select-none hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-primary/50 shadow-xs cursor-pointer whitespace-nowrap overflow-hidden",
         className
       )}
       {...props}

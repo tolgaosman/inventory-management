@@ -198,7 +198,7 @@ export default function PanelPage() {
         <div className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <KpiPanel title="Stok Özeti" icon={Boxes}>
-              <KpiTile icon={Package} tint="blue" label="Toplam Ürün" value={formatNumber(view.kpis.totalProducts)} />
+              <KpiTile icon={Package} tint="blue" label="Toplam Stok Miktarı" value={`${formatNumber(view.kpis.onHandUnits)} Adet`} />
               <KpiTile icon={Warehouse} tint="indigo" label="Toplam Depo" value={formatNumber(view.kpis.totalWarehouses)} />
               <KpiTile icon={ArrowDownToLine} tint="green" label="Bugünkü Giriş" value={formatNumber(view.kpis.todayIn)} />
               <KpiTile icon={ArrowUpFromLine} tint="orange" label="Bugünkü Çıkış" value={formatNumber(view.kpis.todayOut)} />
@@ -249,7 +249,7 @@ export default function PanelPage() {
               <CardContent className="grid grid-cols-3 gap-2 px-5 pt-2">
                 <KpiTile icon={AlertTriangle} tint="red" label="Kritik Stok" value={formatNumber(view.kpis.criticalStockCount)} />
                 <KpiTile icon={Layers} tint="violet" label="Kategori" value={formatNumber(view.kpis.categoryCount)} />
-                <KpiTile icon={Tag} tint="indigo" label="Ürün Çeşidi" value={formatNumber(view.kpis.productVariantCount)} />
+                <KpiTile icon={Tag} tint="indigo" label="Ürün Çeşidi" value={`${formatNumber(view.kpis.productVariantCount)} Çeşit`} />
               </CardContent>
             </Card>
           </div>
