@@ -4,12 +4,12 @@ import type { MovementType, ProductStatus, PurchaseOrderStatus } from "@/lib/typ
 import { MOVEMENT_TYPE_LABELS, PRODUCT_STATUS_LABELS, PURCHASE_STATUS_LABELS } from "@/lib/constants";
 
 const badgeBase =
-  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap";
+  "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap";
 
 export function StockStatusBadge({ level }: { level: "kritik" | "dusuk" | "normal" }) {
   const map = {
     kritik: { label: "Kritik", cls: "bg-status-critical/10 text-status-critical", Icon: AlertTriangle },
-    dusuk: { label: "Düşük", cls: "bg-status-warning/15 text-[#8a5a00]", Icon: Clock },
+    dusuk: { label: "Düşük", cls: "bg-status-warning/12 text-status-warning-foreground", Icon: Clock },
     normal: { label: "Normal", cls: "bg-status-good/10 text-status-good", Icon: CheckCircle2 },
   } as const;
   const { label, cls, Icon } = map[level];
@@ -35,11 +35,16 @@ export function ProductStatusBadge({ status }: { status: ProductStatus }) {
   );
 }
 
+/**
+ * Movement types are a neutral taxonomy, not a health signal — they use
+ * foreground/primary tints rather than the status palette so they never read
+ * as "something is wrong".
+ */
 export function MovementTypeBadge({ type }: { type: MovementType }) {
   const map = {
-    giris: { cls: "bg-series-3/10 text-series-3", Icon: ArrowUpRight },
-    cikis: { cls: "bg-series-2/10 text-series-2", Icon: ArrowDownRight },
-    transfer: { cls: "bg-series-1/10 text-series-1", Icon: ArrowLeftRight },
+    giris: { cls: "bg-status-good/10 text-status-good", Icon: ArrowUpRight },
+    cikis: { cls: "bg-muted text-foreground", Icon: ArrowDownRight },
+    transfer: { cls: "bg-accent text-accent-foreground", Icon: ArrowLeftRight },
   } as const;
   const { cls, Icon } = map[type];
   return (
@@ -53,8 +58,8 @@ export function MovementTypeBadge({ type }: { type: MovementType }) {
 export function PurchaseStatusBadge({ status }: { status: PurchaseOrderStatus }) {
   const map: Record<PurchaseOrderStatus, { cls: string; Icon: typeof CheckCircle2 }> = {
     draft: { cls: "bg-muted text-muted-foreground", Icon: CircleDot },
-    ordered: { cls: "bg-series-2/10 text-series-2", Icon: Clock },
-    partially_received: { cls: "bg-status-warning/15 text-[#8a5a00]", Icon: Clock },
+    ordered: { cls: "bg-primary/10 text-primary", Icon: Clock },
+    partially_received: { cls: "bg-status-warning/12 text-status-warning-foreground", Icon: Clock },
     received: { cls: "bg-status-good/10 text-status-good", Icon: CheckCircle2 },
     cancelled: { cls: "bg-status-critical/10 text-status-critical", Icon: XCircle },
   };

@@ -20,10 +20,10 @@ export const MONTHS_BY_RANGE: Record<DateRangePreset, number> = {
 };
 
 export const RANGE_LABELS: Record<DateRangePreset, string> = {
-  "bu-ay": "Bu ay",
-  "son-3-ay": "Son 3 ay",
-  "son-6-ay": "Son 6 ay",
-  "bu-yil": "Bu yıl",
+  "bu-ay": "Bu Ay",
+  "son-3-ay": "Son 3 Ay",
+  "son-6-ay": "Son 6 Ay",
+  "bu-yil": "Bu Yıl",
 };
 
 export async function getDashboardData(range: DateRangePreset = "son-6-ay") {

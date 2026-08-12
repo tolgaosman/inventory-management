@@ -37,7 +37,7 @@ export function AppHeader() {
   const criticalCount = notifications.notifyStock ? getCriticalProducts().length : 0;
 
   return (
-    <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card/60 px-4 backdrop-blur md:px-6">
+    <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 md:px-6">
       <div className="hidden flex-1 md:block" />
 
       <div className="flex flex-1 justify-center max-w-md w-full">
@@ -50,34 +50,42 @@ export function AppHeader() {
         <PopoverTrigger render={<Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors" />}>
           <Bell className="size-5" />
           {criticalCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-rose-500 ring-2 ring-background" />
+            <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive ring-2 ring-card" />
           )}
         </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={8} className="w-80 p-0 rounded-2xl border border-border/80 bg-background/95 shadow-xl backdrop-blur-md overflow-hidden">
+        <PopoverContent align="end" sideOffset={8} className="w-80 overflow-hidden rounded-lg border border-border bg-popover p-0 shadow-soft">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border/60 px-4 py-3 bg-muted/30">
+          <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
             <div className="flex items-center gap-2">
-              <div className="flex size-6 items-center justify-center rounded-md bg-rose-500/10 text-rose-500 dark:text-rose-400">
-                <Bell className="size-3.5" />
-              </div>
-              <span className="text-sm font-bold text-foreground">Stok Uyarısı Bildirimleri</span>
+              <Bell className="size-4 text-muted-foreground" />
+              <span className="text-sm font-semibold text-foreground">Stok Uyarıları</span>
             </div>
             {criticalCount > 0 && (
-              <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-bold text-rose-600 dark:text-rose-400">
+              <span className="rounded-md bg-status-critical/10 px-2 py-0.5 text-xs font-medium text-status-critical">
                 {criticalCount} kritik
               </span>
             )}
           </div>
 
           {/* List */}
-          <div className="max-h-80 overflow-y-auto custom-scrollbar p-2 space-y-1">
-            {criticalCount === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center px-4">
-                <div className="flex size-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 mb-2">
-                  <Bell className="size-5" />
-                </div>
-                <p className="text-xs font-semibold text-foreground">Kritik stok uyarısı yok</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Tüm ürünler güvenli stok seviyesinde.</p>
+          <div className="max-h-80 space-y-0.5 overflow-y-auto p-2 custom-scrollbar">
+            {!notifications.notifyStock ? (
+              <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+                <Bell className="mb-2 size-6 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">Kritik stok bildirimleri kapalı</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Bildirimi{" "}
+                  <Link href="/ayarlar" className="font-medium text-primary hover:underline">
+                    Ayarlar
+                  </Link>
+                  &apos;dan tekrar açabilirsiniz.
+                </p>
+              </div>
+            ) : criticalCount === 0 ? (
+              <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+                <Bell className="mb-2 size-6 text-muted-foreground" />
+                <p className="text-sm font-medium text-foreground">Kritik stok uyarısı yok</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">Tüm ürünler güvenli stok seviyesinde.</p>
               </div>
             ) : (
               getCriticalProducts()
@@ -86,19 +94,19 @@ export function AppHeader() {
                   <Link
                     key={p.id}
                     href={`/urunler/${p.id}`}
-                    className="flex items-start gap-3 rounded-xl p-2.5 transition-colors hover:bg-muted/60 border border-transparent hover:border-border/40 group"
+                    className="group flex items-start gap-2.5 rounded-md p-2.5 transition-colors hover:bg-muted"
                   >
-                    <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-rose-500/10 text-rose-500 dark:text-rose-400 mt-0.5">
-                      <AlertTriangle className="size-3.5" />
-                    </div>
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-critical" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-foreground group-hover:text-primary transition-colors truncate">
+                      <p className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary">
                         {p.name}
                       </p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
-                        <span>Mevcut: <strong className="text-rose-500 dark:text-rose-400 font-bold">{totalStockForProduct(p.id)}</strong></span>
-                        <span>•</span>
-                        <span>Minimum: <strong>{p.minStock}</strong></span>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        Mevcut{" "}
+                        <span className="font-medium tabular-nums text-status-critical">
+                          {totalStockForProduct(p.id)}
+                        </span>{" "}
+                        · Minimum <span className="tabular-nums">{p.minStock}</span>
                       </p>
                     </div>
                   </Link>
@@ -108,12 +116,12 @@ export function AppHeader() {
 
           {/* Footer */}
           {criticalCount > 0 && (
-            <div className="border-t border-border/60 p-2 bg-muted/20">
+            <div className="border-t border-border bg-muted/30 p-2">
               <Link
                 href="/urunler?stockStatus=kritik"
-                className="flex items-center justify-center gap-1.5 rounded-xl py-2 px-3 text-center text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
+                className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-primary transition-colors hover:bg-primary/10"
               >
-                <span>Tüm kritik ürünleri gör ({criticalCount})</span>
+                Tüm kritik ürünleri gör ({criticalCount})
               </Link>
             </div>
           )}
@@ -121,7 +129,7 @@ export function AppHeader() {
       </Popover>
 
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-2 rounded-full py-1 pr-2 pl-1 hover:bg-muted">
+        <DropdownMenuTrigger className="flex items-center gap-2 rounded-md py-1 pr-2 pl-1 transition-colors hover:bg-muted">
           <Avatar className="size-8">
             <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
               {initials}
@@ -145,9 +153,8 @@ export function AppHeader() {
             onValueChange={(v) => {
               const newRole = v as Role;
               setRole(newRole);
-              toast.info("Yetki Rolü Değiştirildi", {
-                description: `Aktif Rol: ${ROLE_LABELS[newRole]}`,
-                icon: "👤",
+              toast.info("Yetki rolü değiştirildi", {
+                description: `Aktif rol: ${ROLE_LABELS[newRole]}`,
               });
             }}
           >
@@ -158,6 +165,10 @@ export function AppHeader() {
             ))}
           </DropdownMenuRadioGroup>
           <DropdownMenuSeparator />
+          <DropdownMenuItem render={<Link href="/ayarlar" />}>
+            <Settings className="size-4" />
+            Ayarlar
+          </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
             onClick={() => {

@@ -52,10 +52,13 @@ export function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-9 w-full max-w-xs items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted"
+        className="flex h-9 w-full max-w-sm items-center gap-2 rounded-md border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted"
       >
-        <Search className="size-4 text-muted-foreground" />
-        <span className="flex-1 text-left">Her şeyi ara…</span>
+        <Search className="size-4" />
+        <span className="flex-1 text-left">Ara</span>
+        <kbd className="hidden items-center gap-0.5 rounded border border-border bg-card px-1.5 py-0.5 font-mono text-micro text-muted-foreground sm:inline-flex">
+          Ctrl K
+        </kbd>
       </button>
       <CommandDialog open={open} onOpenChange={setOpen} title="Arama" description="Sayfa veya ürün ara">
         <CommandInput placeholder="Sayfa, ürün, SKU ara…" />

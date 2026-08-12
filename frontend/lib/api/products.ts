@@ -1,13 +1,16 @@
-import type { PagedQuery, PagedResult, Product } from "@/lib/types";
+import type { MovementType, PagedQuery, PagedResult, Product } from "@/lib/types";
 import {
   categories,
   products,
   stockForProductByWarehouse,
   stockMovements,
   totalStockForProduct,
+  users,
+  warehouses,
 } from "@/lib/mock/data";
 import { isProductCritical } from "@/lib/mock/dashboard";
 import { id as makeId } from "@/lib/mock/seed";
+import { MOVEMENT_REASON_LABELS } from "@/lib/constants";
 import { ApiError, delay, matchesSearch, paginate } from "./client";
 
 export interface ProductQuery extends PagedQuery {
@@ -21,6 +24,8 @@ export interface ProductQuery extends PagedQuery {
 
 export interface ProductRow extends Product {
   totalStock: number;
+  /** Quantity in the currently filtered warehouse — only set when `query.warehouseId` is active. */
+  warehouseStock?: number;
   categoryName: string;
   critical: boolean;
 }
@@ -41,7 +46,7 @@ function computeStats(rows: ProductRow[]): ProductStats {
     total: rows.length,
     critical: rows.filter((p) => p.critical).length,
     passive: rows.filter((p) => p.status === "pasif").length,
-    stockValue: rows.reduce((sum, p) => sum + p.totalStock * p.purchasePrice, 0),
+    stockValue: rows.reduce((sum, p) => sum + (p.warehouseStock ?? p.totalStock) * p.purchasePrice, 0),
   };
 }
 
@@ -54,17 +59,38 @@ function toRow(p: Product): ProductRow {
   };
 }
 
+function getCategoryAndDescendantIds(catId: string): Set<string> {
+  const ids = new Set<string>([catId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const c of categories) {
+      if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) {
+        ids.add(c.id);
+        added = true;
+      }
+    }
+  }
+  return ids;
+}
+
 export async function listProducts(query: ProductQuery = {}): Promise<ProductListResult> {
   let rows = products.map(toRow);
 
   rows = rows.filter((p) => matchesSearch([p.name, p.sku, p.barcode, p.brand], query.search));
-  if (query.categoryId) rows = rows.filter((p) => p.categoryId === query.categoryId);
+  if (query.categoryId) {
+    const allowedCatIds = getCategoryAndDescendantIds(query.categoryId);
+    rows = rows.filter((p) => allowedCatIds.has(p.categoryId));
+  }
   if (query.supplierId) rows = rows.filter((p) => p.supplierId === query.supplierId);
   if (query.warehouseId) {
+    // Keep totalStock as the product's overall stock (so the critical-stock
+    // badge and min/max comparison stay correct); attach the warehouse-scoped
+    // quantity separately for display.
     rows = rows.filter((p) => {
       const warehouseStock = stockForProductByWarehouse(p.id).find((s) => s.warehouseId === query.warehouseId);
       if (warehouseStock && warehouseStock.quantity > 0) {
-        p.totalStock = warehouseStock.quantity;
+        p.warehouseStock = warehouseStock.quantity;
         return true;
       }
       return false;
@@ -104,7 +130,14 @@ export interface ProductHistoryEntry {
   id: string;
   date: string;
   delta: number;
-  label: string;
+  type: MovementType;
+  warehouseName: string;
+  targetWarehouseName?: string;
+  reasonLabel: string;
+  userName: string;
+  note?: string;
+  previousQuantity: number;
+  newQuantity: number;
 }
 
 export async function getProductHistory(id: string): Promise<ProductHistoryEntry[]> {
@@ -114,12 +147,15 @@ export async function getProductHistory(id: string): Promise<ProductHistoryEntry
       id: m.id,
       date: m.createdAt,
       delta: m.type === "giris" ? m.quantity : -m.quantity,
-      label:
-        m.type === "giris"
-          ? "Stok Girişi"
-          : m.type === "cikis"
-            ? "Stok Çıkışı"
-            : "Depolar Arası Transfer",
+      type: m.type,
+      warehouseName: warehouses.find((w) => w.id === m.warehouseId)?.name ?? "-",
+      targetWarehouseName:
+        m.type === "transfer" ? warehouses.find((w) => w.id === m.targetWarehouseId)?.name : undefined,
+      reasonLabel: MOVEMENT_REASON_LABELS[m.reason],
+      userName: users.find((u) => u.id === m.userId)?.name ?? "-",
+      note: m.note,
+      previousQuantity: m.previousQuantity,
+      newQuantity: m.newQuantity,
     }));
   return delay(entries);
 }
@@ -160,4 +196,57 @@ export async function deleteProduct(id: string): Promise<void> {
   }
   products.splice(index, 1);
   return delay(undefined, 400);
+}
+
+export async function bulkSetProductStatus(ids: string[], status: "aktif" | "pasif"): Promise<{ updatedCount: number }> {
+  let count = 0;
+  for (const id of ids) {
+    const product = products.find((p) => p.id === id);
+    if (product) {
+      product.status = status;
+      count++;
+    }
+  }
+  return delay({ updatedCount: count }, 400);
+}
+
+export async function bulkDeleteProducts(ids: string[]): Promise<{ deletedCount: number; failedSkus: string[] }> {
+  let deletedCount = 0;
+  const failedSkus: string[] = [];
+
+  for (const id of ids) {
+    const index = products.findIndex((p) => p.id === id);
+    if (index !== -1) {
+      const prd = products[index];
+      if (stockMovements.some((m) => m.productId === id)) {
+        failedSkus.push(prd.sku);
+      } else {
+        products.splice(index, 1);
+        deletedCount++;
+      }
+    }
+  }
+
+  return delay({ deletedCount, failedSkus }, 500);
+}
+
+export async function bulkImportProducts(inputs: ProductInput[]): Promise<{ importedCount: number; errors: string[] }> {
+  let importedCount = 0;
+  const errors: string[] = [];
+
+  for (const input of inputs) {
+    if (products.some((p) => p.sku.toLowerCase() === input.sku.toLowerCase())) {
+      errors.push(`"${input.sku}" SKU'su zaten mevcut, atlandı.`);
+      continue;
+    }
+    const product: Product = {
+      ...input,
+      id: makeId("prd", products.length + 1),
+      status: "aktif",
+    };
+    products.push(product);
+    importedCount++;
+  }
+
+  return delay({ importedCount, errors }, 600);
 }

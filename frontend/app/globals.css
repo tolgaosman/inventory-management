@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-montserrat), sans-serif;
-  --font-mono: var(--font-montserrat), sans-serif;
-  --font-heading: var(--font-montserrat), sans-serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-heading: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -27,6 +27,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -45,6 +46,8 @@
   --color-status-warning: var(--status-warning);
   --color-status-serious: var(--status-serious);
   --color-status-critical: var(--status-critical);
+  /* Readable ink for text sitting on a tinted warning chip. */
+  --color-status-warning-foreground: var(--status-warning-foreground);
 
   /* Chart series (validated against a white surface — see project palette) */
   --color-series-1: var(--series-1);
@@ -60,93 +63,102 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Palette is derived from the product logo: deep navy + teal. Green survives
+ * only as the "good status" semantic — it is no longer a brand colour.
+ */
 :root {
-  --background: #f5f7f6;
-  --foreground: #0b0b0b;
+  --background: #f6f7f9;
+  --foreground: #101828;
   --card: #ffffff;
-  --card-foreground: #0b0b0b;
+  --card-foreground: #101828;
   --popover: #ffffff;
-  --popover-foreground: #0b0b0b;
-  --primary: #16a34a;
+  --popover-foreground: #101828;
+  --primary: #14315e;
   --primary-foreground: #ffffff;
-  --secondary: #eef1ef;
-  --secondary-foreground: #0b0b0b;
-  --muted: #eef1ef;
-  --muted-foreground: #6b6f6c;
-  --accent: #e8f6ee;
-  --accent-foreground: #0f5132;
-  --destructive: #d03b3b;
-  --border: rgba(11, 11, 11, 0.08);
-  --input: rgba(11, 11, 11, 0.12);
-  --ring: #16a34a;
-  --radius: 0.9rem;
+  --secondary: #f1f3f6;
+  --secondary-foreground: #101828;
+  --muted: #f1f3f6;
+  --muted-foreground: #667085;
+  --accent: #e6f4f2;
+  --accent-foreground: #0b6d64;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --border: rgba(16, 24, 40, 0.09);
+  --input: rgba(16, 24, 40, 0.14);
+  --ring: #0f9b8e;
+  --radius: 0.5rem;
 
   --sidebar: #ffffff;
-  --sidebar-foreground: #0b0b0b;
-  --sidebar-primary: #16a34a;
+  --sidebar-foreground: #101828;
+  --sidebar-primary: #14315e;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e6f6f4;
-  --sidebar-accent-foreground: #0a5f58;
-  --sidebar-border: rgba(11, 11, 11, 0.06);
-  --sidebar-ring: #16a34a;
+  --sidebar-accent: #eef2f8;
+  --sidebar-accent-foreground: #14315e;
+  --sidebar-border: rgba(16, 24, 40, 0.08);
+  --sidebar-ring: #0f9b8e;
 
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
+  --status-good: #067647;
+  --status-warning: #b54708;
+  --status-warning-foreground: #93370d;
+  --status-serious: #c4320a;
+  --status-critical: #b42318;
 
-  --series-1: #eb6834;
-  --series-2: #2a78d6;
-  --series-3: #1baf7a;
+  --series-1: #1d4e89;
+  --series-2: #0f9b8e;
+  --series-3: #7a8ba0;
   --chart-1: var(--series-1);
   --chart-2: var(--series-2);
   --chart-3: var(--series-3);
-  --chart-4: #eda100;
-  --chart-5: #4a3aa7;
+  --chart-4: #b98900;
+  --chart-5: #6b5ca5;
 }
 
 .dark {
-  --background: #0d0d0d;
-  --foreground: #ffffff;
-  --card: #17181a;
-  --card-foreground: #ffffff;
-  --popover: #17181a;
-  --popover-foreground: #ffffff;
-  --primary: #22c55e;
-  --primary-foreground: #052e13;
-  --secondary: #1f2422;
-  --secondary-foreground: #ffffff;
-  --muted: #1f2422;
-  --muted-foreground: #a3a9a5;
-  --accent: #16341f;
-  --accent-foreground: #86efac;
-  --destructive: #e66767;
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.15);
-  --ring: #22c55e;
+  --background: #0b1017;
+  --foreground: #e8ecf2;
+  --card: #121821;
+  --card-foreground: #e8ecf2;
+  --popover: #121821;
+  --popover-foreground: #e8ecf2;
+  /* Navy is unreadable on a dark surface — lift it into a legible blue. */
+  --primary: #5b8fd0;
+  --primary-foreground: #08131f;
+  --secondary: #1b2430;
+  --secondary-foreground: #e8ecf2;
+  --muted: #1b2430;
+  --muted-foreground: #94a3b3;
+  --accent: #10322f;
+  --accent-foreground: #5fd4c6;
+  --destructive: #f0715f;
+  --destructive-foreground: #200704;
+  --border: rgba(232, 236, 242, 0.12);
+  --input: rgba(232, 236, 242, 0.16);
+  --ring: #2ec4b6;
 
-  --sidebar: #141614;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #22c55e;
-  --sidebar-primary-foreground: #052e13;
-  --sidebar-accent: #113330;
-  --sidebar-accent-foreground: #7fe6d9;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #22c55e;
+  --sidebar: #0f151d;
+  --sidebar-foreground: #e8ecf2;
+  --sidebar-primary: #5b8fd0;
+  --sidebar-primary-foreground: #08131f;
+  --sidebar-accent: #1a2536;
+  --sidebar-accent-foreground: #b4cdec;
+  --sidebar-border: rgba(232, 236, 242, 0.1);
+  --sidebar-ring: #2ec4b6;
 
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #e66767;
+  --status-good: #45b97c;
+  --status-warning: #e0964a;
+  --status-warning-foreground: #f0b478;
+  --status-serious: #ef8354;
+  --status-critical: #f0715f;
 
-  --series-1: #d95926;
-  --series-2: #3987e5;
-  --series-3: #199e70;
+  --series-1: #6ba3e0;
+  --series-2: #2ec4b6;
+  --series-3: #9aabbd;
   --chart-1: var(--series-1);
   --chart-2: var(--series-2);
   --chart-3: var(--series-3);
-  --chart-4: #c98500;
-  --chart-5: #9085e9;
+  --chart-4: #d8a83c;
+  --chart-5: #9b8fdc;
 }
 
 * {
@@ -158,13 +170,35 @@ html,
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-montserrat), sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
-.shadow-soft {
+/*
+ * Tight hairline elevation. Declared with @utility so `dark:` and other
+ * variants apply — as a plain class it could not be varied, which is why
+ * dark mode used to render a black shadow on a black surface (invisible).
+ */
+@utility shadow-soft {
   box-shadow:
-    0 1px 2px rgba(11, 11, 11, 0.04),
-    0 8px 24px rgba(11, 11, 11, 0.04);
+    0 1px 2px rgba(16, 24, 40, 0.04),
+    0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.dark .shadow-soft {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * The single approved style for small uppercase meta labels. Replaces the
+ * ad-hoc text-[9px]…text-[13px] sizes that were scattered across the app.
+ */
+@utility text-micro {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .tabular-nums {

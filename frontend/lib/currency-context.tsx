@@ -36,11 +36,14 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  // Initialize currency from localStorage
+  // Initialize currency from localStorage. This has to run post-mount (not
+  // in the initializer) so the server-rendered output stays "try" and
+  // hydration doesn't mismatch against a persisted preference.
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY) as CurrencyCode;
       if (saved && ["try", "usd", "eur", "gbp"].includes(saved)) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration guard, must run post-mount
         setCurrencyState(saved);
       }
     }
@@ -83,6 +86,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch rates on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data fetch, must run post-mount
     refreshRates();
   }, []);
 

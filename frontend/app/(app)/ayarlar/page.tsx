@@ -18,6 +18,8 @@ import {
   Wallet,
   Clock,
   Palette,
+  Calendar,
+  Coins,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { SubmitButton } from "@/components/common/submit-button";
@@ -42,7 +44,9 @@ import { cn } from "@/lib/utils";
 import { useCurrency, type CurrencyCode } from "@/lib/currency-context";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useSettings } from "@/lib/settings-context";
-import { ROLE_LABELS } from "@/lib/constants";
+import { ROLE_LABELS, TIMEZONE_OPTIONS } from "@/lib/constants";
+import { RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
+import { relativeTimeFromNow } from "@/lib/format";
 import { TINTS, type TintName } from "@/lib/tints";
 import type { Role } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
@@ -50,34 +54,30 @@ import type { LucideIcon } from "lucide-react";
 const ROLE_ORDER: Role[] = ["yonetici", "satinalma", "depo"];
 
 /**
- * Border + light/dark background + text for a "selected" pill or card,
- * keyed the same as `TINTS` (which only covers the icon-chip bg/text pair)
- * so a component can pick one tint and get both treatments from it.
- * "neutral" is a local-only addition for options with no obvious hue (e.g.
- * "system theme").
+ * Selected-state treatment for a choice pill or card. Every tint resolves to
+ * the same brand treatment — a settings screen shouldn't use a different hue
+ * per option. Kept keyed by `TintName` so call sites don't have to change.
  */
+const SELECTED_PILL = "border-primary/30 bg-primary/10 text-primary";
 const PILL: Record<TintName | "neutral", string> = {
-  blue: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/30 dark:bg-blue-950/40 dark:text-blue-300",
-  indigo:
-    "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/30 dark:bg-indigo-950/40 dark:text-indigo-300",
-  violet:
-    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-950/40 dark:text-violet-300",
-  fuchsia:
-    "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-500/30 dark:bg-fuchsia-950/40 dark:text-fuchsia-300",
-  pink: "border-pink-200 bg-pink-50 text-pink-700 dark:border-pink-500/30 dark:bg-pink-950/40 dark:text-pink-300",
-  red: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-950/40 dark:text-red-300",
-  orange:
-    "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/30 dark:bg-orange-950/40 dark:text-orange-300",
-  amber:
-    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-300",
-  yellow:
-    "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/30 dark:bg-yellow-950/40 dark:text-yellow-300",
-  green:
-    "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-950/40 dark:text-emerald-300",
-  teal: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-500/30 dark:bg-teal-950/40 dark:text-teal-300",
-  cyan: "border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-950/40 dark:text-cyan-300",
-  sky: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-950/40 dark:text-sky-300",
-  neutral: "border-primary/30 bg-primary/10 text-primary dark:border-primary/40 dark:bg-primary/15",
+  brand: SELECTED_PILL,
+  neutral: SELECTED_PILL,
+  positive: SELECTED_PILL,
+  warning: SELECTED_PILL,
+  critical: SELECTED_PILL,
+  blue: SELECTED_PILL,
+  indigo: SELECTED_PILL,
+  violet: SELECTED_PILL,
+  fuchsia: SELECTED_PILL,
+  pink: SELECTED_PILL,
+  red: SELECTED_PILL,
+  orange: SELECTED_PILL,
+  amber: SELECTED_PILL,
+  yellow: SELECTED_PILL,
+  green: SELECTED_PILL,
+  teal: SELECTED_PILL,
+  cyan: SELECTED_PILL,
+  sky: SELECTED_PILL,
 };
 
 /** Groups a set of `SectionCard`s under a labeled, colored category heading. */
@@ -98,7 +98,7 @@ function CategoryHeader({
         <Icon className="size-4" />
       </div>
       <div>
-        <h2 className="text-sm font-bold tracking-tight text-foreground">{title}</h2>
+        <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </div>
@@ -123,9 +123,9 @@ function SectionCard({
   hint?: string;
 }) {
   return (
-    <Card className="shadow-soft border-border/70 py-5 gap-3">
+    <Card className="py-5 gap-3">
       <CardHeader className="px-5 pb-2">
-        <CardTitle className="flex items-center gap-2.5 text-base font-bold tracking-tight text-foreground">
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-foreground">
           <div className={cn("flex size-9 items-center justify-center rounded-xl", TINTS[tint])}>
             <Icon className="size-4" />
           </div>
@@ -177,8 +177,8 @@ function OptionCard({
       >
         <Icon className="size-4" />
       </div>
-      <span className={cn("text-xs", selected ? "font-bold" : "font-medium text-muted-foreground")}>{label}</span>
-      {sublabel && <span className="text-[11px] text-muted-foreground">{sublabel}</span>}
+      <span className={cn("text-xs", selected ? "font-semibold" : "font-medium text-muted-foreground")}>{label}</span>
+      {sublabel && <span className="text-micro text-muted-foreground">{sublabel}</span>}
     </button>
   );
 }
@@ -242,46 +242,30 @@ export default function SettingsPage() {
     userProfile,
     notifications,
     timezone,
+    showKurus,
+    defaultRange,
     updateCompany,
     updateUserProfile,
     updateNotifications,
     setTimezone,
+    setShowKurus,
+    setDefaultRange,
   } = useSettings();
 
   const { theme, setTheme } = useTheme();
-  const { currency, setCurrency, rates, isLoading, refreshRates } = useCurrency();
+  const { currency, setCurrency, rates, isLoading, lastUpdated, refreshRates } = useCurrency();
+
+  // Theme is only known after hydration (it depends on localStorage / the OS
+  // preference), so the theme picker renders nothing until then to avoid a
+  // server/client mismatch.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration guard, must run post-mount
     setMounted(true);
   }, []);
 
-  const [profFirstName, setProfFirstName] = useState(userProfile.firstName);
-  const [profLastName, setProfLastName] = useState(userProfile.lastName);
-  const [profEmail, setProfEmail] = useState(userProfile.email);
-  const [profPhone, setProfPhone] = useState(userProfile.phone);
-
-  const [compName, setCompName] = useState(company.companyName);
-  const [compTaxOffice, setCompTaxOffice] = useState(company.taxOffice);
-  const [compTaxNumber, setCompTaxNumber] = useState(company.taxNumber);
-  const [compAddress, setCompAddress] = useState(company.address);
-
   const [newPassword, setNewPassword] = useState("");
   const strength = passwordStrength(newPassword);
-
-  // Sync state if context changes
-  useEffect(() => {
-    setProfFirstName(userProfile.firstName);
-    setProfLastName(userProfile.lastName);
-    setProfEmail(userProfile.email);
-    setProfPhone(userProfile.phone);
-  }, [userProfile]);
-
-  useEffect(() => {
-    setCompName(company.companyName);
-    setCompTaxOffice(company.taxOffice);
-    setCompTaxNumber(company.taxNumber);
-    setCompAddress(company.address);
-  }, [company]);
 
   const securityGuard = useSubmitGuard();
 
@@ -323,7 +307,7 @@ export default function SettingsPage() {
             tint="blue"
             title="Profil Bilgileri"
             description="Kişisel bilgilerinizi buradan güncelleyebilirsiniz."
-            hint="✨ Değişiklikler anında otomatik kaydedilir."
+            hint="Değişiklikler anında otomatik kaydedilir."
           >
             <div className="flex items-center gap-3">
               <Avatar size="lg" className="ring-2 ring-primary/20">
@@ -333,7 +317,7 @@ export default function SettingsPage() {
                 <p className="text-sm font-medium text-foreground">{name}</p>
                 <span
                   className={cn(
-                    "mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    "mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-micro font-medium",
                     PILL[ROLE_TINTS[role]],
                   )}
                 >
@@ -346,22 +330,16 @@ export default function SettingsPage() {
                 <Label htmlFor="firstName">Ad</Label>
                 <Input
                   id="firstName"
-                  value={profFirstName}
-                  onChange={(e) => {
-                    setProfFirstName(e.target.value);
-                    updateUserProfile({ firstName: e.target.value });
-                  }}
+                  value={userProfile.firstName}
+                  onChange={(e) => updateUserProfile({ firstName: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Soyad</Label>
                 <Input
                   id="lastName"
-                  value={profLastName}
-                  onChange={(e) => {
-                    setProfLastName(e.target.value);
-                    updateUserProfile({ lastName: e.target.value });
-                  }}
+                  value={userProfile.lastName}
+                  onChange={(e) => updateUserProfile({ lastName: e.target.value })}
                 />
               </div>
             </div>
@@ -370,11 +348,8 @@ export default function SettingsPage() {
               <Input
                 id="email"
                 type="email"
-                value={profEmail}
-                onChange={(e) => {
-                  setProfEmail(e.target.value);
-                  updateUserProfile({ email: e.target.value });
-                }}
+                value={userProfile.email}
+                onChange={(e) => updateUserProfile({ email: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -382,11 +357,8 @@ export default function SettingsPage() {
               <Input
                 id="phone"
                 type="tel"
-                value={profPhone}
-                onChange={(e) => {
-                  setProfPhone(e.target.value);
-                  updateUserProfile({ phone: e.target.value });
-                }}
+                value={userProfile.phone}
+                onChange={(e) => updateUserProfile({ phone: e.target.value })}
               />
             </div>
           </SectionCard>
@@ -433,7 +405,7 @@ export default function SettingsPage() {
                       className={cn(
                         "text-xs font-medium",
                         strength.tone === "critical" && "text-status-critical",
-                        strength.tone === "warning" && "text-[#8a5a00]",
+                        strength.tone === "warning" && "text-status-warning-foreground",
                         strength.tone === "good" && "text-status-good",
                       )}
                     >
@@ -490,7 +462,7 @@ export default function SettingsPage() {
                       <Label htmlFor={row.id} className="cursor-pointer">
                         {row.label}
                       </Label>
-                      <p className="text-[13px] text-muted-foreground">{row.description}</p>
+                      <p className="text-sm text-muted-foreground">{row.description}</p>
                     </div>
                     <Checkbox
                       id={row.id}
@@ -552,7 +524,7 @@ export default function SettingsPage() {
               {CURRENCY_OPTIONS.map((c) => (
                 <OptionCard
                   key={c.value}
-                  icon={() => <span className="text-sm font-bold">{c.symbol}</span>}
+                  icon={() => <span className="text-sm font-semibold">{c.symbol}</span>}
                   label={c.value.toUpperCase()}
                   tint={c.tint}
                   selected={currency === c.value}
@@ -565,6 +537,74 @@ export default function SettingsPage() {
                 Anlık Kur: 1 {currency.toUpperCase()} = {rates[currency]?.toFixed(4)} ₺
               </p>
             )}
+            {lastUpdated && (
+              <p className="text-xs text-muted-foreground">Kurlar {relativeTimeFromNow(lastUpdated)} güncellendi.</p>
+            )}
+            <div className="flex items-start gap-3 rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/50">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <Coins className="size-4" />
+              </div>
+              <div className="flex flex-1 items-start justify-between gap-3">
+                <div className="space-y-1 leading-none">
+                  <Label htmlFor="showKurus" className="cursor-pointer">
+                    ₺ Kuruşları Göster
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Kapalıyken TL tutarlar tam sayıya yuvarlanır (ör. ₺1.235 yerine ₺1.234,56).
+                  </p>
+                </div>
+                <Checkbox
+                  id="showKurus"
+                  checked={showKurus}
+                  onCheckedChange={(c) => setShowKurus(Boolean(c))}
+                  className="mt-0.5 shrink-0"
+                />
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            icon={Clock}
+            tint="sky"
+            title="Saat Dilimi"
+            description="Sistem saat ve tarih formatlamasında kullanılır."
+            hint="Değişiklikler anında uygulanır."
+          >
+            <Select value={timezone} onValueChange={(v) => v && setTimezone(v as string)}>
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label ?? "Saat dilimi seçin"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {TIMEZONE_OPTIONS.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>
+                    {t.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SectionCard>
+
+          <SectionCard
+            icon={Calendar}
+            tint="cyan"
+            title="Panel Varsayılanı"
+            description="Panel her açıldığında seçili gelecek tarih aralığı."
+            hint="Değişiklikler anında uygulanır."
+          >
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(RANGE_LABELS) as DateRangePreset[]).map((r) => (
+                <OptionCard
+                  key={r}
+                  icon={Calendar}
+                  label={RANGE_LABELS[r]}
+                  tint="cyan"
+                  selected={defaultRange === r}
+                  onClick={() => setDefaultRange(r)}
+                />
+              ))}
+            </div>
           </SectionCard>
         </div>
       </section>
@@ -597,7 +637,6 @@ export default function SettingsPage() {
                     setRole(r);
                     toast.info("Yetki Rolü Değiştirildi", {
                       description: `Aktif Rol: ${ROLE_LABELS[r]}`,
-                      icon: "👤",
                     });
                   }}
                 />
@@ -611,17 +650,14 @@ export default function SettingsPage() {
               tint="violet"
               title="Şirket Bilgileri"
               description="Fatura ve resmi işlemler için kullanılacak şirket detayları."
-              hint="✨ Değişiklikler anında otomatik kaydedilir."
+              hint="Değişiklikler anında otomatik kaydedilir."
             >
               <div className="space-y-2">
                 <Label htmlFor="companyName">Şirket Adı</Label>
                 <Input
                   id="companyName"
-                  value={compName}
-                  onChange={(e) => {
-                    setCompName(e.target.value);
-                    updateCompany({ companyName: e.target.value });
-                  }}
+                  value={company.companyName}
+                  onChange={(e) => updateCompany({ companyName: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -629,22 +665,16 @@ export default function SettingsPage() {
                   <Label htmlFor="taxOffice">Vergi Dairesi</Label>
                   <Input
                     id="taxOffice"
-                    value={compTaxOffice}
-                    onChange={(e) => {
-                      setCompTaxOffice(e.target.value);
-                      updateCompany({ taxOffice: e.target.value });
-                    }}
+                    value={company.taxOffice}
+                    onChange={(e) => updateCompany({ taxOffice: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="taxNumber">Vergi Numarası</Label>
                   <Input
                     id="taxNumber"
-                    value={compTaxNumber}
-                    onChange={(e) => {
-                      setCompTaxNumber(e.target.value);
-                      updateCompany({ taxNumber: e.target.value });
-                    }}
+                    value={company.taxNumber}
+                    onChange={(e) => updateCompany({ taxNumber: e.target.value })}
                   />
                 </div>
               </div>
@@ -652,11 +682,8 @@ export default function SettingsPage() {
                 <Label htmlFor="address">Açık Adres</Label>
                 <Input
                   id="address"
-                  value={compAddress}
-                  onChange={(e) => {
-                    setCompAddress(e.target.value);
-                    updateCompany({ address: e.target.value });
-                  }}
+                  value={company.address}
+                  onChange={(e) => updateCompany({ address: e.target.value })}
                 />
               </div>
             </SectionCard>

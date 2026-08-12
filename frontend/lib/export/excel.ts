@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx-js-style";
 import type { ReportData } from "./report-data";
-import { matchSectionId } from "./report-data";
+import { CURRENCY_SYMBOLS, matchSectionId } from "./report-data";
 
 export function buildReportExcel(data: ReportData, selectedSections: string[] = ["all"]): Blob {
   const wb = XLSX.utils.book_new();
@@ -12,6 +12,7 @@ export function buildReportExcel(data: ReportData, selectedSections: string[] = 
 
   const sheetRows: (string | number)[][] = [];
   const headerRowIndexes = new Set<number>();
+  const currencyCellMap = new Set<string>();
 
   for (const section of targetSections) {
     if (section.rows.length === 0) continue;
@@ -19,8 +20,19 @@ export function buildReportExcel(data: ReportData, selectedSections: string[] = 
     
     headerRowIndexes.add(sheetRows.length);
     sheetRows.push(section.columns);
+
+    const startRowIdx = sheetRows.length;
     for (const r of section.rows) {
       sheetRows.push(r);
+    }
+    const endRowIdx = sheetRows.length - 1;
+
+    if (section.currencyColumns && section.currencyColumns.length > 0) {
+      for (let rIdx = startRowIdx; rIdx <= endRowIdx; rIdx++) {
+        for (const cIdx of section.currencyColumns) {
+          currencyCellMap.add(`${rIdx},${cIdx}`);
+        }
+      }
     }
   }
 
@@ -31,7 +43,7 @@ export function buildReportExcel(data: ReportData, selectedSections: string[] = 
   }
 
   const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-  setWorksheetFormatting(ws, sheetRows, headerRowIndexes);
+  setWorksheetFormatting(ws, sheetRows, headerRowIndexes, currencyCellMap, data.currency);
   XLSX.utils.book_append_sheet(wb, ws, "Ürün Yönetimi");
 
   const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -40,58 +52,76 @@ export function buildReportExcel(data: ReportData, selectedSections: string[] = 
   });
 }
 
-function setWorksheetFormatting(ws: XLSX.WorkSheet, rows: (string | number)[][], headerRowIndexes: Set<number>) {
+function setWorksheetFormatting(
+  ws: XLSX.WorkSheet,
+  rows: (string | number)[][],
+  headerRowIndexes: Set<number>,
+  currencyCellMap: Set<string>,
+  currencyCode: string,
+) {
+  const symbol = CURRENCY_SYMBOLS[currencyCode?.toLowerCase() as keyof typeof CURRENCY_SYMBOLS] || "₺";
+  const numFmt = `"${symbol}"#,##0;("${symbol}"#,##0);"-"`;
   const colWidths: number[] = [];
 
   rows.forEach((r, rowIdx) => {
+    if (r.length === 0) return;
     const isHeader = headerRowIndexes.has(rowIdx);
 
     r.forEach((val, colIdx) => {
-      const strVal = String(val ?? "");
+      const isCurrency = !isHeader && currencyCellMap.has(`${rowIdx},${colIdx}`) && typeof val === "number";
+      const strVal = isCurrency ? `${symbol} ${val}` : String(val ?? "");
       colWidths[colIdx] = Math.max(colWidths[colIdx] || 0, strVal.length);
 
       const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: colIdx });
-      if (ws[cellRef]) {
-        let fontColor = { rgb: isHeader ? "FFFFFF" : "111827" };
-        let fillColor = isHeader ? { fgColor: { rgb: "0891B2" } } : undefined;
-        let isBold = isHeader;
+      if (!ws[cellRef]) {
+        ws[cellRef] = { t: typeof val === "number" ? "n" : "s", v: val };
+      }
 
-        const trimmedVal = strVal.trim();
-        if (!isHeader) {
-          if (trimmedVal === "Stok Girişi" || trimmedVal === "Giriş") {
-            fillColor = { fgColor: { rgb: "C6EFCE" } }; // Good Fill
-            fontColor = { rgb: "006100" }; // Good Text
-            isBold = true;
-          } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış") {
-            fillColor = { fgColor: { rgb: "FFC7CE" } }; // Bad Fill
-            fontColor = { rgb: "9C0006" }; // Bad Text
-            isBold = true;
-          } else if (trimmedVal === "Transfer") {
-            fillColor = { fgColor: { rgb: "FFEB9C" } }; // Neutral Fill
-            fontColor = { rgb: "9C6500" }; // Neutral Text
-            isBold = true;
-          }
+      let fontColor = { rgb: isHeader ? "FFFFFF" : "111827" };
+      let fillColor = isHeader ? { fgColor: { rgb: "0891B2" } } : undefined;
+      let isBold = isHeader;
+
+      const trimmedVal = strVal.trim();
+      const lowerVal = trimmedVal.toLowerCase();
+      if (!isHeader) {
+        if (trimmedVal === "Stok Girişi" || trimmedVal === "Giriş" || lowerVal === "aktif") {
+          fillColor = { fgColor: { rgb: "C6EFCE" } }; // Good Fill (#C6EFCE)
+          fontColor = { rgb: "006100" }; // Good Text (#006100)
+          isBold = true;
+        } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış" || lowerVal === "pasif") {
+          fillColor = { fgColor: { rgb: "FFC7CE" } }; // Bad Fill (#FFC7CE)
+          fontColor = { rgb: "9C0006" }; // Bad Text (#9C0006)
+          isBold = true;
+        } else if (trimmedVal === "Transfer") {
+          fillColor = { fgColor: { rgb: "FFEB9C" } }; // Neutral Fill (#FFEB9C)
+          fontColor = { rgb: "9C6500" }; // Neutral Text (#9C6500)
+          isBold = true;
         }
+      }
 
-        ws[cellRef].s = {
-          font: {
-            bold: isBold,
-            name: "Calibri",
-            sz: isHeader ? 13 : 11,
-            color: fontColor,
-          },
-          fill: fillColor,
-          border: {
-            top: { style: "thin", color: { rgb: "D1D5DB" } },
-            bottom: { style: "thin", color: { rgb: "D1D5DB" } },
-            left: { style: "thin", color: { rgb: "D1D5DB" } },
-            right: { style: "thin", color: { rgb: "D1D5DB" } },
-          },
-          alignment: {
-            vertical: "center",
-            horizontal: "center",
-          },
-        };
+      ws[cellRef].s = {
+        font: {
+          bold: isBold,
+          name: "Calibri",
+          sz: isHeader ? 12 : 10,
+          color: fontColor,
+        },
+        fill: fillColor,
+        border: {
+          top: { style: "thin", color: { rgb: "6B7280" } },
+          bottom: { style: "thin", color: { rgb: "6B7280" } },
+          left: { style: "thin", color: { rgb: "6B7280" } },
+          right: { style: "thin", color: { rgb: "6B7280" } },
+        },
+        alignment: {
+          vertical: "center",
+          horizontal: "center",
+          wrapText: true,
+        },
+        ...(isCurrency ? { numFmt } : {}),
+      };
+      if (isCurrency) {
+        ws[cellRef].z = numFmt;
       }
     });
   });

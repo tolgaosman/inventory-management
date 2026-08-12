@@ -1,8 +1,9 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type { Role } from "@/lib/types";
 import { users } from "@/lib/mock/data";
+import { useSettings } from "@/lib/settings-context";
 
 export type Permission =
   | "products.view"
@@ -46,11 +47,8 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-import { useSettings } from "@/lib/settings-context";
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role>("yonetici");
-  const { userProfile } = useSettings();
+  const { role, setRole, userProfile } = useSettings();
 
   const value = useMemo<AuthContextValue>(() => {
     const asUser = users.find((u) => u.role === role) ?? users[0];
@@ -72,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       can: (permission) => ROLE_PERMISSIONS[role].includes(permission),
       setRole,
     };
-  }, [role, userProfile]);
+  }, [role, userProfile, setRole]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

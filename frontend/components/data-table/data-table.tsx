@@ -63,6 +63,9 @@ export function DataTable<T>({
   emptyDescription,
   isFiltered,
 }: DataTableProps<T>) {
+  // TanStack Table's useReactTable() returns functions that the React
+  // Compiler can't safely memoize — inherent to the library, not a bug here.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
@@ -95,7 +98,7 @@ export function DataTable<T>({
                       <TableHead
                         key={header.id}
                         className={cn(
-                          "h-12 whitespace-nowrap px-5 text-xs font-bold tracking-wider text-muted-foreground uppercase",
+                          "h-11 whitespace-nowrap px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase",
                           meta?.className,
                           meta?.headClassName,
                         )}
@@ -133,7 +136,7 @@ export function DataTable<T>({
                 Array.from({ length: pageSize }).map((_, i) => (
                   <TableRow key={i} className="border-b border-border/50">
                     {columns.map((_, j) => (
-                      <TableCell key={j} className="px-5 py-4">
+                      <TableCell key={j} className="px-4 py-3">
                         <Skeleton className="h-4 w-full max-w-32" />
                       </TableCell>
                     ))}
@@ -158,7 +161,7 @@ export function DataTable<T>({
                     {row.getVisibleCells().map((cell) => (
                       <TableCell
                         key={cell.id}
-                        className={cn("px-5 py-4 text-sm", cell.column.columnDef.meta?.className)}
+                        className={cn("px-4 py-3 text-sm", cell.column.columnDef.meta?.className)}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
@@ -174,8 +177,10 @@ export function DataTable<T>({
       {!loading && data.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <p>
-            Toplam <span className="font-medium text-foreground">{formatNumber(total)}</span> kayıt · Sayfa{" "}
-            {page} / {pageCount}
+            <span className="font-medium text-foreground">
+              {formatNumber((page - 1) * pageSize + 1)}–{formatNumber(Math.min(page * pageSize, total))}
+            </span>{" "}
+            / {formatNumber(total)} kayıt · Sayfa {page} / {pageCount}
           </p>
           <div className="flex items-center gap-1.5">
             <Button

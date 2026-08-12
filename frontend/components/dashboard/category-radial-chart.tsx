@@ -1,52 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { PieChart, Table2, ChartSpline, Layers } from "lucide-react";
 import type { CategoryShare } from "@/lib/types";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ChartCard } from "@/components/charts/chart-card";
 
-const CATEGORY_COLORS = [
-  {
-    stroke: "#06b6d4", // Cyan
-    gradientId: "catCyan",
-    bgLight: "bg-cyan-50 border-cyan-200 text-cyan-800",
-    bgDark: "dark:bg-cyan-950/60 dark:border-cyan-500/30 dark:text-cyan-300",
-    barColor: "bg-cyan-500",
-  },
-  {
-    stroke: "#f59e0b", // Amber
-    gradientId: "catAmber",
-    bgLight: "bg-amber-50 border-amber-200 text-amber-800",
-    bgDark: "dark:bg-amber-950/60 dark:border-amber-500/30 dark:text-amber-300",
-    barColor: "bg-amber-500",
-  },
-  {
-    stroke: "#10b981", // Emerald
-    gradientId: "catEmerald",
-    bgLight: "bg-emerald-50 border-emerald-200 text-emerald-800",
-    bgDark: "dark:bg-emerald-950/60 dark:border-emerald-500/30 dark:text-emerald-300",
-    barColor: "bg-emerald-500",
-  },
-  {
-    stroke: "#8b5cf6", // Violet
-    gradientId: "catViolet",
-    bgLight: "bg-violet-50 border-violet-200 text-violet-800",
-    bgDark: "dark:bg-violet-950/60 dark:border-violet-500/30 dark:text-violet-300",
-    barColor: "bg-violet-500",
-  },
-  {
-    stroke: "#f43f5e", // Rose
-    gradientId: "catRose",
-    bgLight: "bg-rose-50 border-rose-200 text-rose-800",
-    bgDark: "dark:bg-rose-950/60 dark:border-rose-500/30 dark:text-rose-300",
-    barColor: "bg-rose-500",
-  },
-];
+/** Series colours come from the theme's chart tokens, never from raw hex. */
+const SERIES = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
 export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
-  const [showTable, setShowTable] = useState(false);
 
   const categories = useMemo(() => {
     if (!shares || shares.length === 0) {
@@ -63,175 +27,131 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
 
   const totalUnits = useMemo(() => categories.reduce((s, c) => s + c.units, 0), [categories]);
   const leader = categories[0];
-  const leaderPercentage = Math.round((leader.units / (totalUnits || 1)) * 100);
 
-  // Calculate Donut Slices
-  let cumulativeAngle = -90; // Start top
-  const slices = categories.map((cat, idx) => {
+  // Each slice's start angle is the running total of the ones before it.
+  const slices = categories.reduce<
+    Array<(typeof categories)[number] & { percentage: number; startAngle: number; angleLength: number; color: string }>
+  >((acc, cat, idx) => {
     const percentage = (cat.units / (totalUnits || 1)) * 100;
     const angleLength = (percentage / 100) * 360;
-    const startAngle = cumulativeAngle;
-    cumulativeAngle += angleLength;
-    const colorTheme = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
-
-    return {
-      ...cat,
-      percentage: Math.round(percentage),
-      startAngle,
-      angleLength,
-      colorTheme,
-    };
-  });
+    const startAngle = -90 + acc.reduce((sum, s) => sum + s.angleLength, 0);
+    acc.push({ ...cat, percentage: Math.round(percentage), startAngle, angleLength, color: SERIES[idx % SERIES.length] });
+    return acc;
+  }, []);
 
   const activeCat = categories.find((c) => c.categoryId === hoveredCategory) || leader;
   const activePercent = Math.round((activeCat.units / (totalUnits || 1)) * 100);
 
+  const tableView = (
+    <div className="overflow-x-auto custom-scrollbar">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground uppercase">
+            <th className="pb-2 font-medium">Kategori</th>
+            <th className="pb-2 text-right font-medium">Adet</th>
+            <th className="pb-2 text-right font-medium">Pay</th>
+          </tr>
+        </thead>
+        <tbody>
+          {slices.map((c) => (
+            <tr key={c.categoryId || c.name} className="border-b border-border/60 last:border-0">
+              <td className="flex items-center gap-2 py-2 font-medium text-foreground">
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+                {c.name}
+              </td>
+              <td className="py-2 text-right tabular-nums text-foreground">{formatNumber(c.units)}</td>
+              <td className="py-2 text-right tabular-nums text-muted-foreground">%{c.percentage}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
-    <div className="relative flex flex-col justify-between h-full rounded-3xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0b0f17] p-6 shadow-sm dark:shadow-2xl text-slate-900 dark:text-slate-100 min-h-[380px] transition-colors">
-      {/* Header - Identical to StockFlowChart */}
-      <div className="flex items-start justify-between gap-4 mb-2">
-        <div>
-          <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Öne Çıkan Kategoriler</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Kategori bazlı stok yoğunluğu ve payları</p>
-        </div>
+    <ChartCard
+      title="Öne Çıkan Kategoriler"
+      description="Kategori bazlı stok dağılımı"
+      tableView={tableView}
+      className="h-full"
+    >
+      <div className="grid grid-cols-1 items-center gap-6 sm:grid-cols-12">
+        {/* Donut */}
+        <div className="flex items-center justify-center sm:col-span-5">
+          <div className="relative aspect-square w-full max-w-[180px]">
+            <svg viewBox="0 0 220 220" className="size-full -rotate-90 overflow-visible">
+              <circle cx={110} cy={110} r={82} fill="none" stroke="var(--muted)" strokeWidth={18} />
+              {slices.map((s) => {
+                const isHovered = hoveredCategory === s.categoryId || hoveredCategory === s.name;
+                const circumference = 2 * Math.PI * 82;
+                const strokeDash = (s.angleLength / 360) * circumference;
+                return (
+                  <circle
+                    key={s.name}
+                    cx={110}
+                    cy={110}
+                    r={82}
+                    fill="none"
+                    stroke={s.color}
+                    strokeWidth={18}
+                    strokeDasharray={`${strokeDash} ${circumference - strokeDash}`}
+                    transform={`rotate(${s.startAngle + 90} 110 110)`}
+                    className="cursor-pointer transition-opacity duration-200"
+                    opacity={hoveredCategory && !isHovered ? 0.35 : 1}
+                    onMouseEnter={() => setHoveredCategory(s.categoryId || s.name)}
+                    onMouseLeave={() => setHoveredCategory(null)}
+                  />
+                );
+              })}
+            </svg>
 
-        <div className="flex items-center gap-2">
-          {/* Single Toggle Button: Pie Chart <-> Table */}
-          <button
-            type="button"
-            onClick={() => setShowTable((s) => !s)}
-            className="flex size-8 items-center justify-center rounded-full border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 shadow-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
-            title={showTable ? "Pasta Grafik Görünümü" : "Tablo Görünümü"}
-          >
-            {showTable ? <PieChart className="size-4" /> : <Table2 className="size-4" />}
-          </button>
-        </div>
-      </div>
-
-      {showTable ? (
-        <div className="my-4 flex-1 overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0d121c] p-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-left text-xs font-medium text-slate-500 dark:text-slate-400">
-                <th className="pb-2">Kategori</th>
-                <th className="pb-2">Birim Adedi</th>
-                <th className="pb-2">Pay (%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {slices.map((c) => (
-                <tr key={c.categoryId || c.name} className="border-b border-slate-200/70 dark:border-slate-800/60 text-slate-700 dark:text-slate-300 last:border-0 hover:bg-slate-100 dark:hover:bg-slate-800/30">
-                  <td className="py-2.5 font-medium flex items-center gap-2">
-                    <span className="size-2.5 rounded-full" style={{ backgroundColor: c.colorTheme.stroke }} />
-                    {c.name}
-                  </td>
-                  <td className="py-2.5 font-semibold text-slate-900 dark:text-slate-100">{formatNumber(c.units)} adet</td>
-                  <td className="py-2.5 font-semibold text-slate-600 dark:text-slate-300">%{c.percentage}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="my-2 grid grid-cols-1 sm:grid-cols-12 gap-4 items-center flex-1">
-          {/* Left / Top: Interactive Donut Chart */}
-          <div className="sm:col-span-5 relative flex items-center justify-center">
-            <div className="relative aspect-square w-full max-w-[190px]">
-              <svg viewBox="0 0 220 220" className="size-full -rotate-90 overflow-visible">
-                <circle cx={110} cy={110} r={82} fill="none" className="stroke-slate-100 dark:stroke-slate-800/70" strokeWidth={16} />
-
-                {slices.map((s) => {
-                  const isHovered = hoveredCategory === s.categoryId || hoveredCategory === s.name;
-                  const circumference = 2 * Math.PI * 82;
-                  const strokeDash = (s.angleLength / 360) * circumference;
-                  const gap = circumference - strokeDash;
-
-                  return (
-                    <circle
-                      key={s.name}
-                      cx={110}
-                      cy={110}
-                      r={82}
-                      fill="none"
-                      stroke={s.colorTheme.stroke}
-                      strokeWidth={isHovered ? 22 : 16}
-                      strokeDasharray={`${strokeDash} ${gap}`}
-                      transform={`rotate(${s.startAngle + 90} 110 110)`}
-                      className="cursor-pointer transition-all duration-300 hover:opacity-100"
-                      opacity={hoveredCategory && !isHovered ? 0.4 : 0.95}
-                      onMouseEnter={() => setHoveredCategory(s.categoryId || s.name)}
-                      onMouseLeave={() => setHoveredCategory(null)}
-                    />
-                  );
-                })}
-              </svg>
-
-              {/* Center Info Readout */}
-              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center p-2">
-                <span className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-none">
-                  %{activePercent}
-                </span>
-                <span className="text-[10.5px] font-extrabold leading-tight text-slate-600 dark:text-slate-300 mt-1 max-w-[105px] text-center">
-                  {activeCat.name}
-                </span>
-              </div>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+              <span className="text-2xl font-semibold tabular-nums text-foreground">%{activePercent}</span>
+              <span className="mt-0.5 line-clamp-2 text-micro text-muted-foreground">{activeCat.name}</span>
             </div>
           </div>
+        </div>
 
-          {/* Right / Bottom: Category Progress Legend List (Fixed Number Positions & Non-wrapping Text) */}
-          <div className="sm:col-span-7 space-y-2">
-            {slices.map((c) => {
-              const isHovered = hoveredCategory === c.categoryId || hoveredCategory === c.name;
-              return (
-                <div
-                  key={c.name}
-                  onMouseEnter={() => setHoveredCategory(c.categoryId || c.name)}
-                  onMouseLeave={() => setHoveredCategory(null)}
-                  className={cn(
-                    "group flex flex-col gap-1 rounded-xl border px-3 py-2 transition-all duration-200 cursor-pointer",
-                    isHovered
-                      ? "border-slate-300 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 shadow-sm"
-                      : "border-slate-200/60 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    {/* Left Category Name - Scaled Font */}
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: c.colorTheme.stroke }} />
-                      <span className="text-[10px] sm:text-[11px] lg:text-[11.5px] font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap truncate">
-                        {c.name}
-                      </span>
-                    </div>
-
-                    {/* Right Fixed Number Columns */}
-                    <div className="flex items-center gap-2.5 shrink-0 text-[11px] sm:text-xs font-bold">
-                      <span className="text-slate-400 dark:text-slate-400 min-w-[30px] text-right font-medium">%{c.percentage}</span>
-                      <span className="text-slate-900 dark:text-slate-100 min-w-[44px] text-right">{formatNumber(c.units)}</span>
-                    </div>
+        {/* Legend list */}
+        <div className="space-y-2 sm:col-span-7">
+          {slices.map((c) => {
+            const isHovered = hoveredCategory === c.categoryId || hoveredCategory === c.name;
+            return (
+              <div
+                key={c.name}
+                onMouseEnter={() => setHoveredCategory(c.categoryId || c.name)}
+                onMouseLeave={() => setHoveredCategory(null)}
+                className={cn(
+                  "cursor-pointer space-y-1.5 rounded-md px-2 py-1.5 transition-colors",
+                  isHovered ? "bg-muted" : "hover:bg-muted/60",
+                )}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: c.color }} />
+                    <span className="truncate text-xs font-medium text-foreground">{c.name}</span>
                   </div>
-
-                  {/* Progress Bar */}
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-                    <div
-                      className={cn("h-full rounded-full transition-all duration-500", c.colorTheme.barColor)}
-                      style={{ width: `${c.percentage}%` }}
-                    />
+                  <div className="flex shrink-0 items-center gap-3 text-xs tabular-nums">
+                    <span className="min-w-[34px] text-right text-muted-foreground">%{c.percentage}</span>
+                    <span className="min-w-[48px] text-right font-medium text-foreground">{formatNumber(c.units)}</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${c.percentage}%`, backgroundColor: c.color }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
-
-      {/* Footer Pill Summary - Matching StockFlowChart footer styling */}
-      <div className="mt-3 flex items-center justify-between rounded-full border border-slate-200 dark:border-slate-800/80 bg-slate-100 dark:bg-[#080d14] px-4 py-2 text-xs">
-        <span className="flex items-center gap-2 text-slate-600 dark:text-slate-400 font-medium">
-          <Layers className="size-3.5 text-amber-500" />
-          Toplam Envanter Adedi
-        </span>
-        <span className="font-bold text-slate-900 dark:text-white">{formatNumber(totalUnits)} birim</span>
       </div>
-    </div>
+
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs">
+        <span className="text-muted-foreground">Toplam envanter adedi</span>
+        <span className="font-medium tabular-nums text-foreground">{formatNumber(totalUnits)}</span>
+      </div>
+    </ChartCard>
   );
 }

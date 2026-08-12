@@ -15,12 +15,12 @@ export function KpiTile({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl transition-all hover:scale-105", TINTS[tint])}>
+      <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-md", TINTS[tint])}>
         <Icon className="size-[18px]" />
       </div>
       <div className="min-w-0">
-        <p className="truncate text-xs text-muted-foreground font-medium">{label}</p>
-        <p className="text-lg font-semibold tracking-tight">{value}</p>
+        <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="text-lg font-semibold tabular-nums">{value}</p>
       </div>
     </div>
   );

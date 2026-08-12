@@ -181,6 +181,34 @@ function buildProducts(): Product[] {
     const unit = unitByCategory[catId];
     const [minP, maxP] = priceRangeByCategory[catId];
 
+    const imagesByCategory: Record<string, string[]> = {
+      "cat-laptop": [
+        "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=1200&q=85",
+        "https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=1200&q=85",
+        "https://images.unsplash.com/photo-1588872657578-7efd1f1555ed?w=1200&q=85",
+      ],
+      "cat-telefon": [
+        "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=1200&q=85",
+        "https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=1200&q=85",
+      ],
+      "cat-tablet": [
+        "https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=1200&q=85",
+        "https://images.unsplash.com/photo-1561154464-82e9adf32764?w=1200&q=85",
+      ],
+      "cat-aksesuar": [
+        "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=1200&q=85",
+        "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=1200&q=85",
+        "https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=1200&q=85",
+      ],
+      "cat-kirtasiye": [
+        "https://images.unsplash.com/photo-1586075010923-2dd4570fb338?w=1200&q=85",
+      ],
+      "cat-mobilya": [
+        "https://images.unsplash.com/photo-1580481072645-022f9a6d83d0?w=1200&q=85",
+        "https://images.unsplash.com/photo-1518455027359-f3f8164ba6bd?w=1200&q=85",
+      ],
+    };
+
     for (let rep = 0; rep < 3; rep++) {
       for (const baseName of names) {
         const brand = pick(rand, brands);
@@ -191,6 +219,11 @@ function buildProducts(): Product[] {
         const maxStock = minStock + int(rand, 15, 60);
         const supplierId = pick(rand, suppliers).id;
         const suffix = rep === 0 ? "" : ` (Rev ${rep + 1})`;
+        const pool = imagesByCategory[catId] || [
+          "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=1200&q=85",
+        ];
+        const imageUrl = pool[n % pool.length];
+
         list.push({
           id: id("prd", n),
           name: `${baseName}${suffix}`,
@@ -205,6 +238,7 @@ function buildProducts(): Product[] {
           maxStock,
           status: rand() > 0.05 ? "aktif" : "pasif",
           supplierId,
+          imageUrl,
         });
         n++;
       }

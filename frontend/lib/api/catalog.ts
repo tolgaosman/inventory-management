@@ -2,7 +2,7 @@
 import type { PagedQuery, PagedResult } from "@/lib/types";
 import { categories, suppliers, users, warehouses, products, stockLevels } from "@/lib/mock/data";
 import { getWarehouseStockTotals } from "@/lib/mock/dashboard";
-import { delay, matchesSearch, paginate } from "./client";
+import { ApiError, delay, matchesSearch, paginate } from "./client";
 
 export async function listWarehouses() {
   const totals = getWarehouseStockTotals();
@@ -16,7 +16,7 @@ export async function listWarehouses() {
 
 export async function getWarehouse(id: string) {
   const wh = warehouses.find((w) => w.id === id);
-  if (!wh) throw new Error("Depo bulunamadı.");
+  if (!wh) throw new ApiError("Depo bulunamadı.", "NOT_FOUND");
   const levels = stockLevels
     .filter((s) => s.warehouseId === id)
     .map((s) => ({

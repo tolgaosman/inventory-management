@@ -30,6 +30,9 @@ import { useCurrency } from "@/lib/currency-context";
 import { CURRENCY_SYMBOLS } from "@/lib/export/report-data";
 import type { Product, Category, Supplier } from "@/lib/types";
 
+import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
+import { Upload, X as ClearIcon } from "lucide-react";
+
 const schema = z
   .object({
     name: z.string().min(2, "Ürün adı en az 2 karakter olmalı."),
@@ -43,6 +46,7 @@ const schema = z
     minStock: z.coerce.number().int().min(0, "Minimum stok negatif olamaz."),
     maxStock: z.coerce.number().int().min(1, "Maksimum stok en az 1 olmalı."),
     supplierId: z.string().min(1, "Tedarikçi seçin."),
+    imageUrl: z.string().optional(),
   })
   .refine((v) => v.maxStock >= v.minStock, {
     message: "Maksimum stok, minimum stoktan küçük olamaz.",
@@ -106,6 +110,7 @@ export function ProductFormSheet({
               minStock: product.minStock,
               maxStock: product.maxStock,
               supplierId: product.supplierId,
+              imageUrl: product.imageUrl || "",
             }
           : {
               name: "",
@@ -119,6 +124,7 @@ export function ProductFormSheet({
               minStock: 5,
               maxStock: 50,
               supplierId: "",
+              imageUrl: "",
             },
       );
     }
@@ -150,6 +156,62 @@ export function ProductFormSheet({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Ürün Görseli</FormLabel>
+                  <div className="flex items-center gap-3">
+                    <ProductImageThumbnail src={field.value} alt="Önizleme" size="lg" />
+                    <div className="flex-1 space-y-1.5">
+                      <FormControl>
+                        <Input
+                          placeholder="Görsel URL'si (https://...)"
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1 text-micro font-medium text-primary hover:underline">
+                          <Upload className="size-3" />
+                          Dosya Yükle
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (evt) => {
+                                  if (evt.target?.result) {
+                                    field.onChange(evt.target.result as string);
+                                  }
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                        {field.value && (
+                          <button
+                            type="button"
+                            onClick={() => field.onChange("")}
+                            className="inline-flex items-center gap-0.5 text-micro font-medium text-destructive hover:underline"
+                          >
+                            <ClearIcon className="size-3" />
+                            Kaldır
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="name"

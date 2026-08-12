@@ -11,9 +11,9 @@ export function KpiPanel({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="shadow-soft border-border/70 gap-4 py-5">
+    <Card className="gap-4 py-5">
       <CardHeader className="px-5">
-        <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
           {Icon ? <Icon className="size-4 text-muted-foreground" /> : null}
           {title}
         </CardTitle>

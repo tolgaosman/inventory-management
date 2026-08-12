@@ -34,7 +34,6 @@ interface PersistedSettings {
   role: Role;
   showKurus: boolean;
   defaultRange: DateRangePreset;
-  defaultExportSections: string[];
 }
 
 interface SettingsContextValue extends PersistedSettings {
@@ -45,7 +44,6 @@ interface SettingsContextValue extends PersistedSettings {
   setRole: (role: Role) => void;
   setShowKurus: (value: boolean) => void;
   setDefaultRange: (range: DateRangePreset) => void;
-  setDefaultExportSections: (sections: string[]) => void;
 }
 
 const STORAGE_KEY = "net_app_settings_v1";
@@ -78,7 +76,6 @@ const DEFAULTS: PersistedSettings = {
   role: "yonetici",
   showKurus: false,
   defaultRange: "son-6-ay",
-  defaultExportSections: ["all"],
 };
 
 function timezoneToIana(tz: string): string | undefined {
@@ -95,9 +92,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [role, setRoleState] = useState<Role>(DEFAULTS.role);
   const [showKurus, setShowKurusState] = useState<boolean>(DEFAULTS.showKurus);
   const [defaultRange, setDefaultRangeState] = useState<DateRangePreset>(DEFAULTS.defaultRange);
-  const [defaultExportSections, setDefaultExportSectionsState] = useState<string[]>(
-    DEFAULTS.defaultExportSections,
-  );
 
   // Load from localStorage on mount, then push the formatting-relevant
   // preferences into lib/format.ts (which can't read this context directly).
@@ -115,8 +109,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           role: parsed.role ?? DEFAULTS.role,
           showKurus: parsed.showKurus ?? DEFAULTS.showKurus,
           defaultRange: parsed.defaultRange ?? DEFAULTS.defaultRange,
-          defaultExportSections: parsed.defaultExportSections ?? DEFAULTS.defaultExportSections,
         };
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration guard, must run post-mount
         setCompany(loaded.company);
         setUserProfile(loaded.userProfile);
         setNotifications(loaded.notifications);
@@ -124,13 +118,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setRoleState(loaded.role);
         setShowKurusState(loaded.showKurus);
         setDefaultRangeState(loaded.defaultRange);
-        setDefaultExportSectionsState(loaded.defaultExportSections);
       }
     } catch (e) {
       console.error("Failed to load settings from localStorage", e);
     }
     configureFormatting({ timeZone: timezoneToIana(loaded.timezone), tryDecimals: loaded.showKurus });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveAll = (next: PersistedSettings) => {
@@ -149,7 +141,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     role,
     showKurus,
     defaultRange,
-    defaultExportSections,
   });
 
   const updateCompany = (newCompany: Partial<CompanySettings>) => {
@@ -198,11 +189,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     saveAll({ ...current(), defaultRange: range });
   };
 
-  const setDefaultExportSections = (sections: string[]) => {
-    setDefaultExportSectionsState(sections);
-    saveAll({ ...current(), defaultExportSections: sections });
-  };
-
   return (
     <SettingsContext.Provider
       value={{
@@ -213,7 +199,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         role,
         showKurus,
         defaultRange,
-        defaultExportSections,
         updateCompany,
         updateUserProfile,
         updateNotifications,
@@ -221,7 +206,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setRole,
         setShowKurus,
         setDefaultRange,
-        setDefaultExportSections,
       }}
     >
       {children}

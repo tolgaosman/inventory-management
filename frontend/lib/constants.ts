@@ -34,7 +34,7 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
   pasif: "Pasif",
 };
 
-export const PAGE_SIZE = 10;
+export const PAGE_SIZE = 25;
 
 export const TIMEZONE_OPTIONS: { value: string; label: string; iana: string }[] = [
   { value: "europe-istanbul", label: "(UTC+03:00) İstanbul", iana: "Europe/Istanbul" },
@@ -44,12 +44,12 @@ export const TIMEZONE_OPTIONS: { value: string; label: string; iana: string }[] 
 
 /** Shared by the Panel export modal and the Ayarlar "default export sections" preference. */
 export const REPORT_SECTIONS = [
-  { id: "all", label: "Tüm Rapor (Tam Döküm)", desc: "KPI özetleri, stok hareketleri, depolar ve tüm ürünler." },
-  { id: "kpi", label: "Dashboard & KPI Özeti", desc: "Yalnızca üst panel sayısal metrikleri." },
-  { id: "critical", label: "Kritik Stok Listesi", desc: "Minimum stok seviyesinin altındaki ürünler." },
-  { id: "movements", label: "Stok Hareketleri", desc: "Tüm giriş, çıkış ve depolar arası transfer kayıtları." },
-  { id: "warehouse", label: "Depo Bazında Stok", desc: "Depo doluluk oranları ve birim kapasiteleri." },
-  { id: "products", label: "Ürün Kataloğu", desc: "Katalogdaki tüm aktif ürünler ve mevcut stok miktarları." },
+  { id: "all", label: "Tüm Dashboard Özeti", desc: "KPI metrikleri, kritik stoklar, stok hareketleri, depolar ve popüler ürünler." },
+  { id: "kpi", label: "KPI Metrikleri & Özet", desc: "Stok, satın alma ve envanter üst panel göstergeleri." },
+  { id: "critical", label: "Kritik Stok Uyarıları", desc: "Minimum stok seviyesinin altındaki acil ürünler." },
+  { id: "movements", label: "Son Stok Hareketleri", desc: "Panelde yer alan son stok giriş, çıkış ve transfer kayıtları." },
+  { id: "warehouse", label: "Depo Stok Kapasiteleri", desc: "Depo doluluk oranları ve birim kapasiteleri." },
+  { id: "top_movers", label: "En Çok Hareket Görenler", desc: "İşlem hacmi en yüksek ilk 15 ürün." },
 ];
 
 export const ALL_SPECIFIC_IDS = REPORT_SECTIONS.filter((s) => s.id !== "all").map((s) => s.id);

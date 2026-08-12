@@ -7,9 +7,9 @@ import { Warehouse } from "lucide-react";
 
 export function WarehouseStockBars({ data }: { data: WarehouseStockTotal[] }) {
   return (
-    <Card className="shadow-soft border-border/70 flex flex-col justify-between py-5 min-h-[360px]">
+    <Card className="flex flex-col justify-between py-5 min-h-[360px]">
       <CardHeader className="px-5 pb-2">
-        <CardTitle className="text-base font-bold tracking-tight text-foreground flex items-center justify-between">
+        <CardTitle className="text-base font-semibold tracking-tight text-foreground flex items-center justify-between">
           <span>Depo Bazında Stok</span>
           <span className="text-xs font-normal text-muted-foreground">{data.length} depo</span>
         </CardTitle>
@@ -22,8 +22,8 @@ export function WarehouseStockBars({ data }: { data: WarehouseStockTotal[] }) {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-border/70 hover:bg-transparent">
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Depo Adı</TableHead>
-                  <TableHead className="text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">Toplam Stok</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Depo Adı</TableHead>
+                  <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Toplam Stok</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -38,7 +38,7 @@ export function WarehouseStockBars({ data }: { data: WarehouseStockTotal[] }) {
                       </div>
                     </TableCell>
                     <TableCell className="text-right py-2.5 px-2">
-                      <span className="text-xs font-bold text-foreground bg-muted/70 px-2.5 py-1 rounded-md inline-block">
+                      <span className="text-xs font-semibold text-foreground bg-muted/70 px-2.5 py-1 rounded-md inline-block">
                         {formatNumber(w.units)} adet
                       </span>
                     </TableCell>

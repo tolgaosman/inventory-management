@@ -20,7 +20,7 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 function SelectValue({ className, children, ...props }: SelectPrimitive.Value.Props) {
   if (children) {
     return (
-      <span data-slot="select-value" className={cn("flex flex-1 text-left font-medium truncate whitespace-nowrap", className)}>
+      <span data-slot="select-value" className={cn("flex flex-1 text-left font-medium truncate whitespace-nowrap min-w-0 pr-1", className)}>
         {children as React.ReactNode}
       </span>
     );
@@ -28,7 +28,7 @@ function SelectValue({ className, children, ...props }: SelectPrimitive.Value.Pr
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
-      className={cn("flex flex-1 text-left font-medium truncate whitespace-nowrap", className)}
+      className={cn("flex flex-1 text-left font-medium truncate whitespace-nowrap min-w-0 pr-1", className)}
       {...props}
     />
   );
@@ -55,7 +55,7 @@ function SelectTrigger({
       {children}
       <SelectPrimitive.Icon
         render={
-          <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground transition-transform duration-200" />
+          <ChevronDownIcon className="pointer-events-none size-4 shrink-0 text-muted-foreground transition-transform duration-200" />
         }
       />
     </SelectPrimitive.Trigger>

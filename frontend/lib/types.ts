@@ -50,6 +50,7 @@ export interface Product {
   maxStock: number;
   status: ProductStatus;
   supplierId: string;
+  imageUrl?: string;
 }
 
 /** Quantity of a single product inside a single warehouse. */

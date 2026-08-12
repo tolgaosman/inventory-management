@@ -43,26 +43,17 @@ import { TopMoversList } from "@/components/dashboard/top-movers-list";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useAuth } from "@/lib/auth";
-import { ROLE_LABELS } from "@/lib/constants";
+import { ROLE_LABELS, REPORT_SECTIONS, ALL_SPECIFIC_IDS } from "@/lib/constants";
 import { getDashboardData, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { buildReportData } from "@/lib/export/report-data";
 import { downloadBlob, reportFilename, slugify } from "@/lib/export/download";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useCurrency } from "@/lib/currency-context";
-
-const REPORT_SECTIONS = [
-  { id: "all", label: "Tüm Rapor (Tam Döküm)", desc: "KPI özetleri, stok hareketleri, depolar ve tüm ürünler." },
-  { id: "kpi", label: "Dashboard & KPI Özeti", desc: "Yalnızca üst panel sayısal metrikleri." },
-  { id: "critical", label: "Kritik Stok Listesi", desc: "Minimum stok seviyesinin altındaki ürünler." },
-  { id: "movements", label: "Stok Hareketleri", desc: "Tüm giriş, çıkış ve depolar arası transfer kayıtları." },
-  { id: "warehouse", label: "Depo Bazında Stok", desc: "Depo doluluk oranları ve birim kapasiteleri." },
-  { id: "products", label: "Ürün Kataloğu", desc: "Katalogdaki tüm aktif ürünler ve mevcut stok miktarları." },
-];
-
-const ALL_SPECIFIC_IDS = ["kpi", "critical", "movements", "warehouse", "products"];
+import { useSettings } from "@/lib/settings-context";
 
 export default function PanelPage() {
-  const [range, setRange] = useState<DateRangePreset>("son-6-ay");
+  const { company, defaultRange } = useSettings();
+  const [range, setRange] = useState<DateRangePreset>(defaultRange);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>(["all"]);
 
@@ -76,7 +67,8 @@ export default function PanelPage() {
   const exporting = excelGuard.pending || pdfGuard.pending;
   const hasSelection = selectedSections.length > 0;
 
-  const reportInput = () => buildReportData(range, `${name} (${ROLE_LABELS[role]})`, currency, rates?.[currency]);
+  const reportInput = () =>
+    buildReportData(range, `${name} (${ROLE_LABELS[role]})`, currency, rates?.[currency], company.companyName);
 
   const toggleSection = (id: string) => {
     if (id === "all") {
@@ -126,7 +118,7 @@ export default function PanelPage() {
         const { buildReportExcel } = await import("@/lib/export/excel");
         const filename = getCustomFilename("xlsx", report.generatedAt);
         downloadBlob(buildReportExcel(report, selectedSections), filename);
-        toast.success("Excel Raporu Başarıyla İndirildi 📊", {
+        toast.success("Excel Raporu Başarıyla İndirildi", {
           description: `Seçilen bölümler Excel (.xlsx) olarak kaydedildi.`,
         });
         setShowExportModal(false);
@@ -146,7 +138,7 @@ export default function PanelPage() {
         const { buildReportPdf } = await import("@/lib/export/pdf");
         const filename = getCustomFilename("pdf", report.generatedAt);
         downloadBlob(await buildReportPdf(report, selectedSections), filename);
-        toast.success("PDF Raporu Başarıyla İndirildi 📄", {
+        toast.success("PDF Raporu Başarıyla İndirildi", {
           description: `Seçilen bölümler tasarımlı PDF olarak kaydedildi.`,
         });
         setShowExportModal(false);
@@ -176,7 +168,7 @@ export default function PanelPage() {
               }}
             >
               <SelectTrigger className="w-[140px]">
-                <SelectValue />
+                <SelectValue>{RANGE_LABELS[range]}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {(Object.keys(RANGE_LABELS) as DateRangePreset[]).map((r) => (
@@ -186,6 +178,14 @@ export default function PanelPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExportModal(true)}
+            >
+              <Download className="size-4" />
+              Dışa Aktar
+            </Button>
           </>
         }
       />
@@ -213,9 +213,9 @@ export default function PanelPage() {
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card className="shadow-soft border-border/70 py-5 gap-3">
+            <Card className="py-5 gap-3">
               <CardHeader className="px-5 pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
                   <Layers className="size-4 text-muted-foreground" />
                   Envanter Özeti
                 </CardTitle>
@@ -226,9 +226,9 @@ export default function PanelPage() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-soft border-border/70 py-5 gap-3">
+            <Card className="py-5 gap-3">
               <CardHeader className="px-5 pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
                   <Users className="size-4 text-muted-foreground" />
                   Kullanıcı &amp; Tedarikçi
                 </CardTitle>
@@ -239,9 +239,9 @@ export default function PanelPage() {
               </CardContent>
             </Card>
 
-            <Card className="shadow-soft border-border/70 py-5 gap-3">
+            <Card className="py-5 gap-3">
               <CardHeader className="px-5 pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-foreground">
+                <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
                   <AlertTriangle className="size-4 text-muted-foreground" />
                   Stok Durumu
                 </CardTitle>
@@ -272,7 +272,118 @@ export default function PanelPage() {
         </div>
       )}
 
+      {/* Export Selection & Format Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg bg-background shadow-2xl border border-border/80 rounded-2xl overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border/60">
+              <div>
+                <CardTitle className="text-base font-semibold text-foreground">Dışa Aktarma Seçenekleri</CardTitle>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  İndirmek istediğiniz içeriği seçin (birden fazla seçebilirsiniz).
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 rounded-full text-muted-foreground hover:text-foreground"
+                onClick={() => setShowExportModal(false)}
+              >
+                <X className="size-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-5 space-y-5">
+              {/* Step 1: Select Content (Multi-select Checkboxes) */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
+                    1. İndirilecek İçerikleri Seçin
+                  </label>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {selectedSections.includes("all")
+                      ? `${REPORT_SECTIONS.length - 1} / ${REPORT_SECTIONS.length - 1} seçili`
+                      : `${selectedSections.length} / ${REPORT_SECTIONS.length - 1} seçili`}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+                  {REPORT_SECTIONS.map((sec) => {
+                    const isSelected = sec.id === "all"
+                      ? selectedSections.includes("all") || selectedSections.length === ALL_SPECIFIC_IDS.length
+                      : selectedSections.includes("all") || selectedSections.includes(sec.id);
 
+                    return (
+                      <button
+                        key={sec.id}
+                        type="button"
+                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary font-semibold shadow-xs"
+                            : "border-border/60 bg-card hover:bg-muted/50 text-foreground"
+                        }`}
+                        onClick={() => toggleSection(sec.id)}
+                      >
+                        <div className={`size-4 rounded border flex items-center justify-center mt-0.5 shrink-0 ${
+                          isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
+                        }`}>
+                          {isSelected && <Check className="size-3 stroke-[3]" />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold leading-tight truncate">{sec.label}</p>
+                          <p className="text-micro text-muted-foreground leading-tight mt-0.5 line-clamp-1">{sec.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {!hasSelection && (
+                  <p className="text-xs font-medium text-status-warning-foreground mt-2 flex items-center gap-1.5">
+                    <AlertTriangle className="size-3.5" />
+                    Lütfen indirmek için en az 1 içerik seçin.
+                  </p>
+                )}
+              </div>
+
+              {/* Step 2: Select Format Actions (Excel & PDF) */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
+                  2. Dosya Formatını Seçin ve İndirin
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={exporting || !hasSelection}
+                    className="flex items-center gap-3.5 p-3.5 rounded-xl border border-border/70 bg-card hover:border-status-good hover:bg-status-good/90 transition-all text-left group cursor-pointer disabled:pointer-events-none disabled:opacity-40"
+                    onClick={exportExcel}
+                  >
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-good/100/10 text-status-good transition-transform shrink-0">
+                      {excelGuard.pending ? <Loader2 className="size-5 animate-spin" /> : <FileSpreadsheet className="size-5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">Excel Tablosu (.xlsx)</p>
+                      <p className="text-xs text-muted-foreground">Auto-fit, BOLD & All Borders</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={exporting || !hasSelection}
+                    className="flex items-center gap-3.5 p-3.5 rounded-xl border border-border/70 bg-card hover:border-status-critical hover:bg-status-critical/100/5 transition-all text-left group cursor-pointer disabled:pointer-events-none disabled:opacity-40"
+                    onClick={exportPdf}
+                  >
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-critical/100/10 text-status-critical transition-transform shrink-0">
+                      {pdfGuard.pending ? <Loader2 className="size-5 animate-spin" /> : <FileText className="size-5" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground">PDF Raporu (.pdf)</p>
+                      <p className="text-xs text-muted-foreground">Tasarımlı Rapor Belgesi</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

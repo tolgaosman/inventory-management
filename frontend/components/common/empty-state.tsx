@@ -16,8 +16,8 @@ export function EmptyState({
   onAction?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/80 bg-muted/30 px-6 py-14 text-center">
-      <div className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-border bg-muted/30 px-6 py-16 text-center">
+      <div className="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
         <Icon className="size-5" />
       </div>
       <div className="space-y-1">

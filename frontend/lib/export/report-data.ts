@@ -61,9 +61,11 @@ export function matchSectionId(title: string, id: string): boolean {
     case "critical":
       return t.includes("kritik");
     case "movements":
-      return t.includes("hareket");
+      return t.includes("hareketleri") || (t.includes("hareket") && !t.includes("gören"));
     case "warehouse":
       return t.includes("depo");
+    case "top_movers":
+      return t.includes("en çok") || t.includes("gören");
     case "products":
       return t.includes("ürün");
     case "suppliers":
@@ -144,6 +146,7 @@ export function buildReportData(
   generatedBy: string,
   currency: CurrencyCode = "try",
   rate: number = 1,
+  companyName: string = COMPANY_NAME,
 ): ReportData {
   const kpis = getDashboardKpis();
   const from = rangeStart(range).toISOString();
@@ -269,8 +272,8 @@ export function buildReportData(
         "Kategori",
         "Marka",
         "Birim",
-        `Alış (${symbol})`,
-        `Satış (${symbol})`,
+        "Alış Fiyatı",
+        "Satış Fiyatı",
         "Min",
         "Maks",
         "Toplam Stok",
@@ -362,7 +365,7 @@ export function buildReportData(
   ];
 
   return {
-    company: COMPANY_NAME,
+    company: companyName,
     title: REPORT_TITLE,
     generatedAt: new Date(),
     rangeLabel: RANGE_LABELS[range],

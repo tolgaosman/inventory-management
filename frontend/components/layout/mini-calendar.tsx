@@ -45,7 +45,7 @@ export function MiniCalendar() {
   return (
     <div className="m-3 p-2 text-sidebar-foreground select-none shrink-0 border-t border-sidebar-border/60 pt-3">
       <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-xs font-bold text-sidebar-foreground tracking-tight">
+        <span className="text-xs font-medium text-sidebar-foreground">
           {MONTH_NAMES[month]} {year}
         </span>
         <div className="flex items-center gap-0.5">
@@ -70,7 +70,7 @@ export function MiniCalendar() {
 
       <div className="grid grid-cols-7 gap-0.5 text-center mb-1">
         {DAY_NAMES.map((day) => (
-          <span key={day} className="text-[10px] font-bold text-sidebar-foreground/50 uppercase">
+          <span key={day} className="text-micro text-sidebar-foreground/45 uppercase">
             {day}
           </span>
         ))}
@@ -86,10 +86,10 @@ export function MiniCalendar() {
             <div key={day} className="flex items-center justify-center h-6">
               <span
                 className={cn(
-                  "flex items-center justify-center size-6 rounded-full text-[11px] font-medium transition-all",
+                  "flex size-6 items-center justify-center rounded-md text-micro transition-colors",
                   isToday
-                    ? "bg-red-600 text-white font-bold shadow-xs ring-2 ring-red-600/30"
-                    : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                    ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground"
+                    : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
                 {day}

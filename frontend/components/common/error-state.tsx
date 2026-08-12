@@ -2,7 +2,7 @@ import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function ErrorState({
-  title = "Bir şeyler ters gitti",
+  title = "İşlem tamamlanamadı",
   message,
   onRetry,
 }: {
@@ -11,8 +11,8 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-6 py-14 text-center">
-      <div className="flex size-11 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-6 py-16 text-center">
+      <div className="flex size-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
         <AlertTriangle className="size-5" />
       </div>
       <div className="space-y-1">

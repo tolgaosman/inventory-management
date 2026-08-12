@@ -24,26 +24,54 @@ export interface NavItem {
   children?: NavItem[];
 }
 
-export const NAV_ITEMS: NavItem[] = [
-  { label: "Panel", href: "/panel", icon: LayoutGrid },
-  { label: "Ürün Yönetimi", href: "/urunler", icon: Package, permission: "products.view" },
-  { label: "Kategoriler", href: "/kategoriler", icon: FolderTree, permission: "products.view" },
-  { label: "Depolar", href: "/depolar", icon: Warehouse, permission: "products.view" },
+/** A labelled run of nav items. Sections whose items are all denied by the
+ *  permission filter are dropped along with their heading. */
+export interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+export const NAV_SECTIONS: NavSection[] = [
   {
-    label: "Stok Hareketleri",
-    href: "/stok/hareketler",
-    icon: History,
-    permission: "stock.in",
-    children: [
-      { label: "Stok Girişi", href: "/stok/giris", icon: ArrowDownToLine, permission: "stock.in" },
-      { label: "Stok Çıkışı", href: "/stok/cikis", icon: ArrowUpFromLine, permission: "stock.out" },
-      { label: "Transfer", href: "/stok/transfer", icon: ArrowLeftRight, permission: "stock.transfer" },
-      { label: "Hareket Geçmişi", href: "/stok/hareketler", icon: History, permission: "stock.in" },
+    label: "Genel",
+    items: [{ label: "Panel", href: "/panel", icon: LayoutGrid }],
+  },
+  {
+    label: "Envanter",
+    items: [
+      { label: "Ürün Yönetimi", href: "/urunler", icon: Package, permission: "products.view" },
+      { label: "Kategoriler", href: "/kategoriler", icon: FolderTree, permission: "products.view" },
+      { label: "Depolar", href: "/depolar", icon: Warehouse, permission: "products.view" },
     ],
   },
-  { label: "Tedarikçiler", href: "/tedarikciler", icon: Truck, permission: "suppliers.view" },
-  { label: "Satın Alma", href: "/satin-alma", icon: ShoppingCart, permission: "purchase.view" },
-  { label: "Raporlar", href: "/raporlar", icon: BarChart3, permission: "reports.view" },
-  { label: "Kullanıcılar", href: "/kullanicilar", icon: Users, permission: "users.manage" },
-  { label: "Ayarlar", href: "/ayarlar", icon: Settings },
+  {
+    label: "Operasyon",
+    items: [
+      {
+        label: "Stok Hareketleri",
+        href: "/stok/hareketler",
+        icon: History,
+        permission: "stock.in",
+        children: [
+          { label: "Stok Girişi", href: "/stok/giris", icon: ArrowDownToLine, permission: "stock.in" },
+          { label: "Stok Çıkışı", href: "/stok/cikis", icon: ArrowUpFromLine, permission: "stock.out" },
+          { label: "Transfer", href: "/stok/transfer", icon: ArrowLeftRight, permission: "stock.transfer" },
+          { label: "Hareket Geçmişi", href: "/stok/hareketler", icon: History, permission: "stock.in" },
+        ],
+      },
+      { label: "Tedarikçiler", href: "/tedarikciler", icon: Truck, permission: "suppliers.view" },
+      { label: "Satın Alma", href: "/satin-alma", icon: ShoppingCart, permission: "purchase.view" },
+    ],
+  },
+  {
+    label: "Yönetim",
+    items: [
+      { label: "Raporlar", href: "/raporlar", icon: BarChart3, permission: "reports.view" },
+      { label: "Kullanıcılar", href: "/kullanicilar", icon: Users, permission: "users.manage" },
+      { label: "Ayarlar", href: "/ayarlar", icon: Settings },
+    ],
+  },
 ];
+
+/** Flat list, kept for consumers that don't care about grouping. */
+export const NAV_ITEMS: NavItem[] = NAV_SECTIONS.flatMap((s) => s.items);

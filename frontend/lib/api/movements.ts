@@ -16,7 +16,13 @@ export async function listMovements(query: MovementQuery = {}) {
   let rows = [...stockMovements];
   if (query.type) rows = rows.filter((m) => m.type === query.type);
   if (query.productId) rows = rows.filter((m) => m.productId === query.productId);
-  if (query.warehouseId) rows = rows.filter((m) => m.warehouseId === query.warehouseId);
+  // Match both the source warehouse and, for transfers, the destination —
+  // otherwise a warehouse's incoming transfers never show up in its history.
+  if (query.warehouseId) {
+    rows = rows.filter(
+      (m) => m.warehouseId === query.warehouseId || m.targetWarehouseId === query.warehouseId,
+    );
+  }
   if (query.userId) rows = rows.filter((m) => m.userId === query.userId);
   if (query.dateFrom) rows = rows.filter((m) => m.createdAt >= query.dateFrom!);
   if (query.dateTo) rows = rows.filter((m) => m.createdAt <= query.dateTo!);
@@ -159,6 +165,11 @@ export async function createTransfer(input: TransferInput): Promise<StockMovemen
     throw new ApiError("Kaynak ve hedef depo aynı olamaz.", "VALIDATION");
   }
   if (input.quantity <= 0) throw new ApiError("Miktar sıfırdan büyük olmalı.", "VALIDATION");
+
+  const product = products.find((p) => p.id === input.productId);
+  if (product && product.status === "pasif") {
+    throw new ApiError(`"${product.name}" pasif durumda olduğu için stok transferi yapılamaz.`, "VALIDATION");
+  }
 
   const sourceLevel = findLevel(input.productId, input.sourceWarehouseId);
   const currentQuantity = sourceLevel?.quantity ?? 0;

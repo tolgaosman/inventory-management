@@ -21,6 +21,8 @@ export interface ProductStockMatrixRow {
   totalStock: number;
   totalValue: number;
   isCritical: boolean;
+  status: "aktif" | "pasif";
+  imageUrl?: string;
   stocksByWarehouse: Record<string, number>;
 }
 
@@ -62,7 +64,18 @@ export async function getProductStockMatrix(query: WarehouseQuery = {}): Promise
   let filteredProducts = [...products];
 
   if (query.categoryId && query.categoryId !== "all") {
-    filteredProducts = filteredProducts.filter((p) => p.categoryId === query.categoryId);
+    const ids = new Set<string>([query.categoryId]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const c of categories) {
+        if (c.parentId && ids.has(c.parentId) && !ids.has(c.id)) {
+          ids.add(c.id);
+          added = true;
+        }
+      }
+    }
+    filteredProducts = filteredProducts.filter((p) => ids.has(p.categoryId));
   }
 
   if (query.search) {
@@ -82,11 +95,6 @@ export async function getProductStockMatrix(query: WarehouseQuery = {}): Promise
       totalStock += q;
     });
 
-    if (query.warehouseId && query.warehouseId !== "all") {
-      // Keep only products that have stock in selected warehouse or match search
-      // But matrix still retains full warehouse breakdown
-    }
-
     const category = categories.find((c) => c.id === p.categoryId);
 
     return {
@@ -100,6 +108,8 @@ export async function getProductStockMatrix(query: WarehouseQuery = {}): Promise
       totalStock,
       totalValue: totalStock * p.purchasePrice,
       isCritical: totalStock < p.minStock,
+      status: p.status,
+      imageUrl: p.imageUrl,
       stocksByWarehouse,
     };
   });

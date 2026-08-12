@@ -1,5 +1,6 @@
-import { ComingSoon } from "@/components/common/coming-soon";
+import { WarehouseDetailClient } from "@/components/warehouses/warehouse-detail-client";
 
-export default function WarehouseDetailPage() {
-  return <ComingSoon title="Depo Detayı" />;
+export default async function WarehouseDetailPage(props: PageProps<"/depolar/[id]">) {
+  const { id } = await props.params;
+  return <WarehouseDetailClient id={id} />;
 }

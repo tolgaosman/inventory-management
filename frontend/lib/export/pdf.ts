@@ -146,13 +146,6 @@ function drawKpiGrid(doc: Doc, data: ReportData, startY: number): number {
   return y + cardHeight + 18;
 }
 
-/** Numbers are formatted here (tr-TR) rather than in report-data. */
-function renderCell(value: string | number): string {
-  return typeof value === "number" ? formatNumber(value) : value;
-}
-
-
-
 export async function buildReportPdf(data: ReportData, selectedSections: string[] = ["all"]): Promise<Blob> {
   const [{ jsPDF }, { autoTable }, fonts] = await Promise.all([
     import("jspdf"),
@@ -220,7 +213,7 @@ function renderSection(
     cursorY = HEADER_HEIGHT + 18;
   }
 
-  let y = drawSectionTitle(doc, section.title, cursorY);
+  const y = drawSectionTitle(doc, section.title, cursorY);
 
   if (section.rows.length === 0) {
     doc.setFont(FONT, "normal");
@@ -233,13 +226,20 @@ function renderSection(
   const isCritical = section.title === "Kritik Stok";
   const shortfallColumn = section.columns.length - 1;
 
-  const columnStyles: Record<number, { halign: "right" }> = {};
-  for (const index of section.numericColumns) columnStyles[index] = { halign: "right" };
-
   autoTable(doc, {
     startY: y + 4,
     head: [section.columns],
-    body: section.rows.map((row) => row.map(renderCell)),
+    body: section.rows.map((row) =>
+      row.map((val, colIdx) => {
+        if (typeof val === "number") {
+          if (section.currencyColumns?.includes(colIdx)) {
+            return formatCurrency(val, data.currency);
+          }
+          return formatNumber(val);
+        }
+        return val;
+      }),
+    ),
     margin: { left: MARGIN, right: MARGIN, top: HEADER_HEIGHT + 10, bottom: FOOTER_HEIGHT + 10 },
     styles: {
       font: FONT,
@@ -250,6 +250,8 @@ function renderSection(
       lineColor: COLORS.grid,
       lineWidth: 0.4,
       overflow: "linebreak",
+      halign: "center",
+      valign: "middle",
     },
     headStyles: {
       font: FONT,
@@ -258,18 +260,20 @@ function renderSection(
       textColor: COLORS.white,
       fontSize: 7.5,
       lineWidth: 0.4,
+      halign: "center",
+      valign: "middle",
     },
     alternateRowStyles: { fillColor: COLORS.zebra },
-    columnStyles,
     didParseCell: (hook) => {
       if (hook.section !== "body") return;
       const rawText = String(hook.cell.raw ?? "").trim();
+      const lowerText = rawText.toLowerCase();
 
-      if (rawText === "Stok Girişi" || rawText === "Giriş") {
+      if (rawText === "Stok Girişi" || rawText === "Giriş" || lowerText === "aktif") {
         hook.cell.styles.fillColor = [198, 239, 206]; // Good Fill (#C6EFCE)
         hook.cell.styles.textColor = [0, 97, 0]; // Good Text (#006100)
         hook.cell.styles.fontStyle = "bold";
-      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış") {
+      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış" || lowerText === "pasif") {
         hook.cell.styles.fillColor = [255, 199, 206]; // Bad Fill (#FFC7CE)
         hook.cell.styles.textColor = [156, 0, 6]; // Bad Text (#9C0006)
         hook.cell.styles.fontStyle = "bold";

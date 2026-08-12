@@ -10,9 +10,9 @@ import { products, users, warehouses } from "@/lib/mock/data";
 
 export function RecentMovementsTable({ items }: { items: StockMovement[] }) {
   return (
-    <Card className="shadow-soft border-border/70 flex flex-col justify-between py-5 min-h-[360px]">
+    <Card className="flex flex-col justify-between py-5 min-h-[360px]">
       <CardHeader className="flex-row items-center justify-between px-5 pb-2">
-        <CardTitle className="text-base font-bold tracking-tight text-foreground">Son Stok Hareketleri</CardTitle>
+        <CardTitle className="text-base font-semibold tracking-tight text-foreground">Son Stok Hareketleri</CardTitle>
         <Link href="/stok/hareketler" className="text-xs font-medium text-primary hover:underline">
           Tümünü gör
         </Link>
@@ -25,9 +25,9 @@ export function RecentMovementsTable({ items }: { items: StockMovement[] }) {
             <Table>
               <TableHeader>
                 <TableRow className="border-b border-border/70 hover:bg-transparent">
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">İşlem Tipi</TableHead>
-                  <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Ürün & Detay</TableHead>
-                  <TableHead className="text-right text-xs font-bold uppercase tracking-wider text-muted-foreground">Zaman</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">İşlem Tipi</TableHead>
+                  <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ürün & Detay</TableHead>
+                  <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Zaman</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -44,7 +44,7 @@ export function RecentMovementsTable({ items }: { items: StockMovement[] }) {
                         <Link href={`/urunler/${m.productId}`} className="block truncate text-xs sm:text-sm font-semibold hover:underline text-foreground">
                           {product?.name ?? "Bilinmeyen ürün"}
                         </Link>
-                        <p className="truncate text-[11px] text-muted-foreground">
+                        <p className="truncate text-micro text-muted-foreground">
                           {warehouse?.name} · {user?.name}
                         </p>
                       </TableCell>

@@ -77,8 +77,6 @@ export function getDashboardKpis(): DashboardKpis {
       0,
     );
 
-  const activeProductsCount = products.filter((p) => p.status === "aktif").length;
-
   return {
     totalProducts: products.length,
     totalWarehouses: warehouses.length,
@@ -167,6 +165,7 @@ export interface TopMover {
   sku: string;
   movementCount: number;
   totalQuantity: number;
+  imageUrl?: string;
 }
 
 export function getTopMovers(limit = 15): TopMover[] {
@@ -186,6 +185,7 @@ export function getTopMovers(limit = 15): TopMover[] {
         sku: product.sku,
         movementCount: v.count,
         totalQuantity: v.qty,
+        imageUrl: product?.imageUrl,
       };
     })
     .sort((a, b) => b.totalQuantity - a.totalQuantity)
