@@ -86,12 +86,12 @@ export function AppSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-5">
-          <Image src={siteLogo} alt="Stok Yönetimi" className="h-8 w-auto object-contain dark:hidden" priority />
+        <div className="flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border py-2 px-4">
+          <Image src={siteLogo} alt="Stok Yönetimi" className="h-11 w-auto object-contain dark:hidden" priority />
           <Image
             src={siteDarkLogo}
             alt="Stok Yönetimi"
-            className="hidden h-8 w-auto object-contain dark:block"
+            className="hidden h-11 w-auto object-contain dark:block"
             priority
           />
         </div>

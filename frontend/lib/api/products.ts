@@ -77,7 +77,7 @@ function getCategoryAndDescendantIds(catId: string): Set<string> {
 export async function listProducts(query: ProductQuery = {}): Promise<ProductListResult> {
   let rows = products.map(toRow);
 
-  rows = rows.filter((p) => matchesSearch([p.name, p.sku, p.barcode, p.brand], query.search));
+  rows = rows.filter((p) => matchesSearch([p.name, p.sku, p.barcode, p.brand, p.categoryName], query.search));
   if (query.categoryId) {
     const allowedCatIds = getCategoryAndDescendantIds(query.categoryId);
     rows = rows.filter((p) => allowedCatIds.has(p.categoryId));

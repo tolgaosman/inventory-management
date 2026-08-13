@@ -45,6 +45,7 @@ import { ProductImageThumbnail } from "@/components/common/product-image-thumbna
 import { WarehouseFormSheet } from "@/components/warehouses/warehouse-form-sheet";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useCurrency } from "@/lib/currency-context";
+import { useSettings } from "@/lib/settings-context";
 import { getWarehouse, listUsers, listWarehouses } from "@/lib/api/catalog";
 import { listWarehousesDetailed, getProductStockMatrix, updateWarehouseInput, deleteWarehouseInput } from "@/lib/api/warehouses";
 import { listMovements } from "@/lib/api/movements";
@@ -52,11 +53,13 @@ import { ApiError } from "@/lib/api/client";
 import { MOVEMENT_REASON_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDateTime, formatNumber, formatSigned } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { capacityIndicatorClass } from "@/lib/capacity";
 import type { Warehouse } from "@/lib/types";
 
 export function WarehouseDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const { currency, rates } = useCurrency();
+  const { showKurus } = useSettings();
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -198,7 +201,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
           </Card>
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/100/10 text-primary">
+              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Package className="size-4.5" />
               </div>
               <div>
@@ -215,7 +218,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
               <div>
                 <p className="text-xs text-muted-foreground">Envanter Değeri</p>
                 <p className="text-lg font-semibold tabular-nums text-foreground">
-                  {formatCurrency(detail.totalValue, currency, rates?.[currency] || 1)}
+                  {formatCurrency(detail.totalValue, currency, rates?.[currency] || 1, showKurus)}
                 </p>
               </div>
             </CardContent>
@@ -226,7 +229,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
               <p className="text-lg font-semibold tabular-nums text-foreground">%{detail.capacityUsagePercent}</p>
               <Progress value={detail.capacityUsagePercent} className="mt-1.5">
                 <ProgressTrack>
-                  <ProgressIndicator className={cn(detail.capacityUsagePercent >= 90 && "bg-status-critical")} />
+                  <ProgressIndicator className={capacityIndicatorClass(detail.capacityUsagePercent)} />
                 </ProgressTrack>
               </Progress>
             </CardContent>

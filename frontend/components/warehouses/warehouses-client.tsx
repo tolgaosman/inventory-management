@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useCurrency } from "@/lib/currency-context";
+import { useSettings } from "@/lib/settings-context";
 import { useAuth } from "@/lib/auth";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
@@ -17,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
+import { capacityIndicatorClass } from "@/lib/capacity";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -79,6 +81,7 @@ import type { Warehouse } from "@/lib/types";
 
 export function WarehousesClient() {
   const { currency, rates } = useCurrency();
+  const { showKurus } = useSettings();
   const { name, role } = useAuth();
 
   // State
@@ -320,7 +323,7 @@ export function WarehousesClient() {
               icon={Boxes}
               tint="teal"
               label="Depolardaki Envanter Değeri"
-              value={formatCurrency(summaryMetrics.totalValue, currency, rates?.[currency] || 1)}
+              value={formatCurrency(summaryMetrics.totalValue, currency, rates?.[currency] || 1, showKurus)}
             />
           </CardContent>
         </Card>
@@ -434,7 +437,7 @@ export function WarehousesClient() {
                   <div className="flex items-baseline justify-between text-xs font-semibold">
                     <span className="text-muted-foreground">Toplam Değer:</span>
                     <span className="text-primary font-semibold">
-                      {formatCurrency(wh.totalValue, currency, rates?.[currency] || 1)}
+                      {formatCurrency(wh.totalValue, currency, rates?.[currency] || 1, showKurus)}
                     </span>
                   </div>
 
@@ -446,10 +449,11 @@ export function WarehousesClient() {
                         %{wh.capacityUsagePercent} ({formatNumber(wh.units)} / {formatNumber(wh.capacity)})
                       </span>
                     </div>
-                    <Progress
-                      value={wh.capacityUsagePercent}
-                      className="h-1.5"
-                    />
+                    <Progress value={wh.capacityUsagePercent} className="h-1.5">
+                      <ProgressTrack className="h-1.5">
+                        <ProgressIndicator className={capacityIndicatorClass(wh.capacityUsagePercent)} />
+                      </ProgressTrack>
+                    </Progress>
                   </div>
                 </CardContent>
               </Card>
@@ -606,7 +610,7 @@ export function WarehousesClient() {
                                 "font-semibold border-status-good px-2.5 py-0.5 text-xs select-none pointer-events-none",
                                 isSelected
                                   ? "bg-primary/15 text-primary border-primary/30"
-                                  : "bg-status-good/100/10 text-status-good "
+                                  : "bg-status-good/10 text-status-good"
                               )}
                             >
                               {qty} Adet
@@ -626,7 +630,7 @@ export function WarehousesClient() {
                         </div>
                         {row.isCritical && (
                           <Badge variant="destructive" className="mt-0.5 text-micro px-1.5 py-0 h-4 inline-flex items-center justify-center">
-                            <AlertTriangle className="mr-0.5 size-2.5" /> Kritik ({row.minStock})
+                            <AlertTriangle className="mr-0.5 size-2.5" /> Kritik (&lt;{row.minStock})
                           </Badge>
                         )}
                       </div>
@@ -634,7 +638,7 @@ export function WarehousesClient() {
 
                     {/* Total Value */}
                     <td className="py-3 px-3 text-right font-semibold text-foreground whitespace-nowrap">
-                      {formatCurrency(row.totalValue, currency, rates?.[currency] || 1)}
+                      {formatCurrency(row.totalValue, currency, rates?.[currency] || 1, showKurus)}
                     </td>
 
                     {/* Action */}
@@ -691,13 +695,13 @@ export function WarehousesClient() {
                 <div>
                   <p className="text-muted-foreground">Birim Fiyat</p>
                   <p className="text-sm font-semibold text-foreground">
-                    {formatCurrency(detailProduct.unitPrice, currency, rates?.[currency] || 1)}
+                    {formatCurrency(detailProduct.unitPrice, currency, rates?.[currency] || 1, showKurus)}
                   </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Toplam Değer</p>
                   <p className="text-sm font-semibold text-foreground">
-                    {formatCurrency(detailProduct.totalValue, currency, rates?.[currency] || 1)}
+                    {formatCurrency(detailProduct.totalValue, currency, rates?.[currency] || 1, showKurus)}
                   </p>
                 </div>
               </div>
@@ -861,7 +865,7 @@ export function WarehousesClient() {
             </Button>
             <Button
               size="sm"
-              className="h-9 px-5 bg-primary hover:bg-primary text-white font-semibold"
+              className="h-9 px-5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
               disabled={transferGuard.pending}
               onClick={handleExecuteTransfer}
             >

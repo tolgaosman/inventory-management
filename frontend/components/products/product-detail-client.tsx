@@ -49,6 +49,7 @@ import { ApiError } from "@/lib/api/client";
 import { formatCurrency, formatDateShort, formatDateTime, formatNumber, formatSigned } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useCurrency } from "@/lib/currency-context";
+import { useSettings } from "@/lib/settings-context";
 
 function stockLevel(totalStock: number, minStock: number, critical: boolean): "kritik" | "dusuk" | "normal" {
   if (critical) return "kritik";
@@ -61,6 +62,7 @@ export function ProductDetailClient({ id }: { id: string }) {
   const [movementMode, setMovementMode] = useState<StockMovementMode | null>(null);
   const [imageLightBoxOpen, setImageLightBoxOpen] = useState(false);
   const { currency, rates } = useCurrency();
+  const { showKurus } = useSettings();
 
   const { status, data, staleData, error, refetch } = useAsync(
     () =>
@@ -133,8 +135,8 @@ export function ProductDetailClient({ id }: { id: string }) {
     { label: "Marka", value: product.brand },
     { label: "Birim", value: product.unit },
     { label: "Tedarikçi", value: supplierName },
-    { label: "Alış Fiyatı", value: formatCurrency(product.purchasePrice, currency, rates?.[currency] || 1) },
-    { label: "Satış Fiyatı", value: formatCurrency(product.salePrice, currency, rates?.[currency] || 1) },
+    { label: "Alış Fiyatı", value: formatCurrency(product.purchasePrice, currency, rates?.[currency] || 1, showKurus) },
+    { label: "Satış Fiyatı", value: formatCurrency(product.salePrice, currency, rates?.[currency] || 1, showKurus) },
     { label: "Minimum Stok", value: formatNumber(product.minStock) },
     { label: "Maksimum Stok", value: formatNumber(product.maxStock) },
     { label: "Durum", value: <ProductStatusBadge status={product.status} /> },
@@ -252,7 +254,7 @@ export function ProductDetailClient({ id }: { id: string }) {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Stok Değeri</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1)}</p>
+                <p className="text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus)}</p>
               </div>
             </CardContent>
           </Card>
@@ -304,7 +306,13 @@ export function ProductDetailClient({ id }: { id: string }) {
                         <Progress value={ratio}>
                           <ProgressTrack>
                             <ProgressIndicator
-                              className={cn(s.quantity < product.minStock && "bg-status-critical")}
+                              className={cn(
+                                s.quantity < product.minStock
+                                  ? "bg-tint-red"
+                                  : s.quantity < product.minStock * 1.5
+                                    ? "bg-tint-amber"
+                                    : "bg-tint-green",
+                              )}
                             />
                           </ProgressTrack>
                         </Progress>
@@ -425,14 +433,16 @@ export function ProductDetailClient({ id }: { id: string }) {
       />
 
       <Dialog open={imageLightBoxOpen} onOpenChange={setImageLightBoxOpen}>
-        <DialogContent className="sm:max-w-5xl lg:max-w-6xl p-0 overflow-hidden bg-muted border-muted-foreground text-white shadow-2xl">
-          <DialogHeader className="p-4 px-6 bg-muted backdrop-blur-md border-b border-muted-foreground flex flex-row items-center justify-between">
+        {/* An image viewer stays dark regardless of the app theme, so this
+            deliberately uses fixed neutrals rather than --card/--muted. */}
+        <DialogContent className="sm:max-w-5xl lg:max-w-6xl p-0 overflow-hidden bg-neutral-900 border-neutral-700 text-white shadow-2xl">
+          <DialogHeader className="p-4 px-6 bg-neutral-900 border-b border-neutral-700 flex flex-row items-center justify-between">
             <div>
               <DialogTitle className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
                 <Package className="size-5 text-primary" />
                 {product.name}
               </DialogTitle>
-              <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
+              <DialogDescription className="text-xs sm:text-sm text-neutral-400">
                 SKU: {product.sku} · Kategori: {product.categoryName} · Marka: {product.brand}
               </DialogDescription>
             </div>
@@ -446,7 +456,7 @@ export function ProductDetailClient({ id }: { id: string }) {
                 className="size-full object-contain rounded-lg animate-in zoom-in-95 duration-200"
               />
             ) : (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground py-12">
+              <div className="flex flex-col items-center gap-2 text-neutral-400 py-12">
                 <Package className="size-16 stroke-[1.5]" />
                 <p className="text-sm font-medium">Bu ürün için henüz yüklenmiş bir görsel yok.</p>
               </div>

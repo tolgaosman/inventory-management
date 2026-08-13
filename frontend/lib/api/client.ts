@@ -31,9 +31,37 @@ export function paginate<T>(rows: T[], query: PagedQuery): PagedResult<T> {
   };
 }
 
+export function normalizeSearchString(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/i/g, "i")
+    .replace(/ı/g, "i")
+    .replace(/İ/g, "i")
+    .replace(/I/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/Ğ/g, "g")
+    .replace(/ü/g, "u")
+    .replace(/Ü/g, "u")
+    .replace(/ş/g, "s")
+    .replace(/Ş/g, "s")
+    .replace(/ö/g, "o")
+    .replace(/Ö/g, "o")
+    .replace(/ç/g, "c")
+    .replace(/Ç/g, "c");
+}
+
 export function matchesSearch(haystacks: (string | undefined)[], term: string | undefined): boolean {
   if (!term) return true;
-  const needle = term.trim().toLocaleLowerCase("tr-TR");
-  if (!needle) return true;
-  return haystacks.some((h) => h?.toLocaleLowerCase("tr-TR").includes(needle));
+  const rawNeedle = term.trim();
+  if (!rawNeedle) return true;
+
+  const needleLower = rawNeedle.toLowerCase();
+  const needleNorm = normalizeSearchString(rawNeedle);
+
+  return haystacks.some((h) => {
+    if (!h) return false;
+    const hLower = h.toLowerCase();
+    const hNorm = normalizeSearchString(h);
+    return hLower.includes(needleLower) || hNorm.includes(needleNorm);
+  });
 }

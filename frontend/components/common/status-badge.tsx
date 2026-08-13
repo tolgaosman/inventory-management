@@ -36,14 +36,14 @@ export function ProductStatusBadge({ status }: { status: ProductStatus }) {
 }
 
 /**
- * Movement types are a neutral taxonomy, not a health signal — they use
- * foreground/primary tints rather than the status palette so they never read
- * as "something is wrong".
+ * Movement types are a neutral taxonomy, not a health signal, so they don't
+ * use the status palette — but each still gets its own tone from the accent
+ * family so the three types stay visually distinct in a movement list.
  */
 export function MovementTypeBadge({ type }: { type: MovementType }) {
   const map = {
-    giris: { cls: "bg-status-good/10 text-status-good", Icon: ArrowUpRight },
-    cikis: { cls: "bg-muted text-foreground", Icon: ArrowDownRight },
+    giris: { cls: "bg-tint-green/10 text-tint-green", Icon: ArrowUpRight },
+    cikis: { cls: "bg-tint-amber/12 text-tint-amber", Icon: ArrowDownRight },
     transfer: { cls: "bg-accent text-accent-foreground", Icon: ArrowLeftRight },
   } as const;
   const { cls, Icon } = map[type];

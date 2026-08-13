@@ -13,6 +13,8 @@ import {
   FileText,
   Loader2,
   RefreshCw,
+  Trash2,
+  FileType,
 } from "lucide-react";
 import {
   Dialog,
@@ -28,6 +30,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { bulkImportProducts, type ProductInput } from "@/lib/api/products";
 import { downloadBlob } from "@/lib/export/download";
 import { formatCurrency } from "@/lib/format";
+import { useSettings } from "@/lib/settings-context";
+import { cn } from "@/lib/utils";
 import type { Category, Supplier, Product } from "@/lib/types";
 
 interface ParsedImportRow {
@@ -67,11 +71,21 @@ export function ProductImportModal({
 }: ProductImportModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [fileSize, setFileSize] = useState<string | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedImportRow[]>([]);
   const [isParsing, setIsParsing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const { showKurus } = useSettings();
 
-  // Download Sample Excel Template
+  function formatBytes(bytes: number): string {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+  }
+
   function handleDownloadTemplate() {
     const headers = [
       "Ürün Adı",
@@ -118,9 +132,8 @@ export function ProductImportModal({
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);
-
-    // Set column widths
     ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 4, 15) }));
+    XLSX.utils.book_append_sheet(wb, ws, "Ürünler");
 
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
     const blob = new Blob([wbout], {
@@ -132,12 +145,9 @@ export function ProductImportModal({
     });
   }
 
-  // Parse Uploaded Excel/CSV File
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  async function processFile(file: File) {
     setFileName(file.name);
+    setFileSize(formatBytes(file.size));
     setIsParsing(true);
 
     try {
@@ -159,7 +169,6 @@ export function ProductImportModal({
       const seenFileSkus = new Set<string>();
 
       const rows: ParsedImportRow[] = rawRows.map((r) => {
-        // Flexible key finder
         const findVal = (...keys: string[]) => {
           for (const key of keys) {
             for (const rKey of Object.keys(r)) {
@@ -183,15 +192,12 @@ export function ProductImportModal({
         const maxStock = Number(findVal("Maksimum Stok", "Maks Stok", "Max")) || 50;
         const suppName = findVal("Tedarikçi", "Supplier");
 
-        // Category resolution
         let matchedCat = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase());
         if (!matchedCat && categories.length > 0) matchedCat = categories[0];
 
-        // Supplier resolution
         let matchedSupp = suppliers.find((s) => s.name.toLowerCase() === suppName.toLowerCase());
         if (!matchedSupp && suppliers.length > 0) matchedSupp = suppliers[0];
 
-        // Validation
         let isValid = true;
         let errorReason: string | undefined = undefined;
 
@@ -240,7 +246,18 @@ export function ProductImportModal({
     }
   }
 
-  // Handle Import Submit
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  }
+
   async function handleImportSubmit() {
     const validRows = parsedRows.filter((r) => r.isValid);
     if (validRows.length === 0) {
@@ -283,6 +300,7 @@ export function ProductImportModal({
 
   function resetState() {
     setFileName(null);
+    setFileSize(null);
     setParsedRows([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -298,25 +316,32 @@ export function ProductImportModal({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
-        <DialogHeader className="p-6 pb-4 border-b border-border">
-          <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
-            <FileSpreadsheet className="size-5 text-status-good" />
-            Excel&apos;den Toplu Ürün Yükleme
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            Şablon formatındaki Excel dosyanızı yükleyerek ürünlerinizi tek seferde sisteme ekleyebilirsiniz.
-          </DialogDescription>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden rounded-xl border border-border">
+        {/* Header */}
+        <DialogHeader className="p-6 pb-4 border-b border-border bg-card">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+              <FileSpreadsheet className="size-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-semibold text-foreground">
+                Excel&apos;den Toplu Ürün Yükleme
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                Şablon formatındaki Excel dosyanızı yükleyerek ürünlerinizi tek seferde sisteme ekleyebilirsiniz.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
-          {/* Top Info & Template Link */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-xl border border-status-good bg-status-good/10 text-xs">
-            <div className="flex items-start gap-2.5">
-              <FileText className="size-4 text-status-good shrink-0 mt-0.5" />
-              <div>
-                <p className="font-semibold text-foreground">Excel Şablon Formatı</p>
-                <p className="text-muted-foreground">
+          {/* Template Info Card */}
+          <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/20">
+            <div className="flex items-start gap-3 min-w-0">
+              <FileText className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-0.5 min-w-0">
+                <p className="text-xs font-semibold text-foreground">Excel Şablon Formatı</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   Hızlı yükleme yapmak için önceden hazırlanmış örnek Excel şablonunu kullanabilirsiniz.
                 </p>
               </div>
@@ -326,90 +351,128 @@ export function ProductImportModal({
               variant="outline"
               size="sm"
               onClick={handleDownloadTemplate}
-              className="gap-1.5 shrink-0 border-status-good text-status-good hover:bg-status-good/90 "
+              className="gap-1.5 shrink-0 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-700 text-xs h-8"
             >
               <Download className="size-3.5" />
-              Örnek Şablon İndir (.xlsx)
+              Şablon İndir (.xlsx)
             </Button>
           </div>
 
-          {/* Upload Dropzone */}
-          <div
-            onClick={() => fileInputRef.current?.click()}
-            className="group flex flex-col items-center justify-center p-6 border-2 border-dashed border-border rounded-xl hover:border-status-good hover:bg-muted/30 transition-all cursor-pointer text-center"
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx, .xls, .csv"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            <div className="size-10 rounded-full bg-status-good/10 flex items-center justify-center text-status-good mb-2 transition-transform">
-              <Upload className="size-5" />
+          {/* Upload Dropzone or Selected File Card */}
+          {!fileName ? (
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              className={cn(
+                "group flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl transition-all cursor-pointer text-center",
+                isDragging
+                  ? "border-emerald-500 bg-emerald-500/10"
+                  : "border-border/80 hover:border-emerald-500/60 hover:bg-muted/40"
+              )}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <div className="size-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <Upload className="size-5" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
+                Dosya Seçin veya Sürükleyip Bırakın
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Desteklenen formatlar: <span className="font-medium text-foreground">.xlsx, .xls, .csv</span>
+              </p>
             </div>
-            <p className="text-sm font-semibold text-foreground">
-              {fileName ? fileName : "Dosya Seçin veya Sürükleyip Bırakın"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Desteklenen formatlar: <span className="font-medium text-foreground">.xlsx, .xls, .csv</span>
-            </p>
-          </div>
-
-          {/* Parsed Results Preview */}
-          {isParsing && (
-            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2">
-              <Loader2 className="size-4 animate-spin text-status-good" />
-              Excel verileri okunuyor ve doğrulanıyor...
-            </div>
-          )}
-
-          {!isParsing && parsedRows.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-semibold text-foreground">Önizleme ({parsedRows.length} Ürün)</span>
-                  <Badge variant="outline" className="bg-status-good/10 text-status-good border-status-good">
-                    {validCount} Geçerli
-                  </Badge>
-                  {invalidCount > 0 && (
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="size-3" />
-                      {invalidCount} Hatalı / Atlanacak
-                    </Badge>
-                  )}
+          ) : (
+            <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="size-10 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <FileType className="size-5" />
                 </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-foreground truncate">{fileName}</p>
+                  <p className="text-micro text-muted-foreground mt-0.5">{fileSize} · Excel Dosyası</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-8 text-xs gap-1"
+                >
+                  <RefreshCw className="size-3" />
+                  Değiştir
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={resetState}
-                  className="size-7 p-0 text-muted-foreground hover:text-foreground"
-                  title="Temizle"
+                  className="h-8 size-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  title="Dosyayı Kaldır"
                 >
-                  <RefreshCw className="size-3.5" />
+                  <Trash2 className="size-4" />
                 </Button>
               </div>
+            </div>
+          )}
 
-              <div className="max-h-60 overflow-y-auto rounded-lg border border-border bg-card">
+          {/* Parsed Results Preview */}
+          {isParsing && (
+            <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2.5">
+              <Loader2 className="size-4 animate-spin text-emerald-600" />
+              Excel verileri analiz ediliyor...
+            </div>
+          )}
+
+          {!isParsing && parsedRows.length > 0 && (
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-semibold text-foreground">Önizleme ({parsedRows.length} Satır)</span>
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                    {validCount} Geçerli
+                  </Badge>
+                  {invalidCount > 0 && (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="size-3" />
+                      {invalidCount} Hatalı
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-card">
                 <Table className="text-xs">
-                  <TableHeader className="bg-muted/50 sticky top-0">
+                  <TableHeader className="bg-muted/60 sticky top-0">
                     <TableRow>
-                      <TableHead className="h-8">Durum</TableHead>
-                      <TableHead className="h-8">Ürün Adı</TableHead>
-                      <TableHead className="h-8">SKU</TableHead>
-                      <TableHead className="h-8">Kategori</TableHead>
-                      <TableHead className="h-8 text-right">Alış</TableHead>
-                      <TableHead className="h-8 text-right">Satış</TableHead>
+                      <TableHead className="h-8 font-semibold">Durum</TableHead>
+                      <TableHead className="h-8 font-semibold">Ürün Adı</TableHead>
+                      <TableHead className="h-8 font-semibold">SKU</TableHead>
+                      <TableHead className="h-8 font-semibold">Kategori</TableHead>
+                      <TableHead className="h-8 text-right font-semibold">Alış</TableHead>
+                      <TableHead className="h-8 text-right font-semibold">Satış</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {parsedRows.map((row, idx) => (
-                      <TableRow key={idx} className={!row.isValid ? "bg-status-critical/10 " : undefined}>
+                      <TableRow key={idx} className={!row.isValid ? "bg-destructive/5" : undefined}>
                         <TableCell className="py-2">
                           {row.isValid ? (
-                            <Badge variant="outline" className="bg-status-good/10 text-status-good border-status-good text-micro py-0">
-                              <CheckCircle2 className="size-3 mr-1 text-status-good" />
+                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-micro py-0">
+                              <CheckCircle2 className="size-3 mr-1 text-emerald-600 dark:text-emerald-400" />
                               Geçerli
                             </Badge>
                           ) : (
@@ -419,11 +482,11 @@ export function ProductImportModal({
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="py-2 font-medium truncate max-w-40">{row.name || "-"}</TableCell>
-                        <TableCell className="py-2 font-mono text-micro">{row.sku || "-"}</TableCell>
-                        <TableCell className="py-2 truncate max-w-32">{row.categoryName}</TableCell>
-                        <TableCell className="py-2 text-right">{formatCurrency(row.purchasePrice)}</TableCell>
-                        <TableCell className="py-2 text-right">{formatCurrency(row.salePrice)}</TableCell>
+                        <TableCell className="py-2 font-medium truncate max-w-40 text-foreground">{row.name || "-"}</TableCell>
+                        <TableCell className="py-2 font-mono text-micro text-muted-foreground">{row.sku || "-"}</TableCell>
+                        <TableCell className="py-2 truncate max-w-32 text-muted-foreground">{row.categoryName}</TableCell>
+                        <TableCell className="py-2 text-right tabular-nums text-foreground">{formatCurrency(row.purchasePrice, "TRY", 1, showKurus)}</TableCell>
+                        <TableCell className="py-2 text-right tabular-nums text-foreground">{formatCurrency(row.salePrice, "TRY", 1, showKurus)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -433,8 +496,9 @@ export function ProductImportModal({
           )}
         </div>
 
-        <DialogFooter className="p-4 border-t border-border bg-muted/20 gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+        {/* Footer */}
+        <DialogFooter className="mx-0 mb-0 px-6 py-4 border-t border-border bg-card gap-3 sm:gap-3 justify-end items-center">
+          <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)} className="h-9 px-4 text-xs">
             Vazgeç
           </Button>
           <Button
@@ -442,7 +506,7 @@ export function ProductImportModal({
             size="sm"
             onClick={handleImportSubmit}
             disabled={validCount === 0 || isImporting || isParsing}
-            className="bg-status-good hover:bg-status-good/90 text-white gap-1.5"
+            className="h-9 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 shadow-xs"
           >
             {isImporting ? (
               <>

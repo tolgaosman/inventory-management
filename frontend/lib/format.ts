@@ -46,10 +46,15 @@ export function formatNumber(value: number): string {
   return trNumber.format(value);
 }
 
-export function formatCurrency(value: number, currencyCode: string = "TRY", rate: number = 1): string {
+export function formatCurrency(
+  value: number,
+  currencyCode: string = "TRY",
+  rate: number = 1,
+  showKurus?: boolean,
+): string {
   const converted = value / (rate || 1);
   const code = currencyCode.toLowerCase();
-  const decimals = code === "try" ? (config.tryDecimals ? 2 : 0) : 2;
+  const decimals = code === "try" ? ((showKurus ?? config.tryDecimals) ? 2 : 0) : 2;
 
   const formattedNumber = new Intl.NumberFormat("tr-TR", {
     minimumFractionDigits: decimals,

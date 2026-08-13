@@ -54,6 +54,18 @@
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
 
+  /*
+   * The accent family — six tones drawn from one saturation/lightness
+   * recipe so they read as one palette rather than a colour picker. Every
+   * KPI/status tint in the app resolves to one of these (see lib/tints.ts).
+   */
+  --color-tint-blue: var(--tint-blue);
+  --color-tint-teal: var(--tint-teal);
+  --color-tint-plum: var(--tint-plum);
+  --color-tint-amber: var(--tint-amber);
+  --color-tint-green: var(--tint-green);
+  --color-tint-red: var(--tint-red);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -64,38 +76,39 @@
 }
 
 /*
- * Palette is derived from the product logo: deep navy + teal. Green survives
- * only as the "good status" semantic — it is no longer a brand colour.
+ * Palette is derived from the product logo: navy + teal. Warm-neutral
+ * surfaces in light mode keep the app from reading as a sterile grey box;
+ * dark mode stays cool-neutral (warm + dark turns muddy).
  */
 :root {
-  --background: #f6f7f9;
+  --background: #f7f6f4;
   --foreground: #101828;
   --card: #ffffff;
   --card-foreground: #101828;
   --popover: #ffffff;
   --popover-foreground: #101828;
-  --primary: #14315e;
+  --primary: #1a4d8f;
   --primary-foreground: #ffffff;
-  --secondary: #f1f3f6;
+  --secondary: #eeece8;
   --secondary-foreground: #101828;
-  --muted: #f1f3f6;
-  --muted-foreground: #667085;
+  --muted: #eeece8;
+  --muted-foreground: #6b6a66;
   --accent: #e6f4f2;
   --accent-foreground: #0b6d64;
   --destructive: #b42318;
   --destructive-foreground: #ffffff;
-  --border: rgba(16, 24, 40, 0.09);
-  --input: rgba(16, 24, 40, 0.14);
+  --border: rgba(28, 25, 23, 0.1);
+  --input: rgba(28, 25, 23, 0.15);
   --ring: #0f9b8e;
   --radius: 0.5rem;
 
   --sidebar: #ffffff;
   --sidebar-foreground: #101828;
-  --sidebar-primary: #14315e;
+  --sidebar-primary: #1a4d8f;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef2f8;
-  --sidebar-accent-foreground: #14315e;
-  --sidebar-border: rgba(16, 24, 40, 0.08);
+  --sidebar-accent: #e6f4f2;
+  --sidebar-accent-foreground: #0b6d64;
+  --sidebar-border: rgba(28, 25, 23, 0.08);
   --sidebar-ring: #0f9b8e;
 
   --status-good: #067647;
@@ -104,30 +117,42 @@
   --status-serious: #c4320a;
   --status-critical: #b42318;
 
-  --series-1: #1d4e89;
-  --series-2: #0f9b8e;
-  --series-3: #7a8ba0;
-  --chart-1: var(--series-1);
-  --chart-2: var(--series-2);
-  --chart-3: var(--series-3);
-  --chart-4: #b98900;
-  --chart-5: #6b5ca5;
+  /*
+   * The six-tone accent family. teal/amber are deepened from their most
+   * vivid form (#0d8f84 / #b07d0a) so text-tint-teal/amber clears WCAG AA
+   * (4.5:1) as running badge text on a white card, not just as an icon glyph.
+   */
+  --tint-blue: #1a4d8f;
+  --tint-teal: #0b7a70;
+  --tint-plum: #6b5ca5;
+  --tint-amber: #966a09;
+  --tint-green: #067647;
+  --tint-red: #b42318;
+
+  --series-1: var(--tint-blue);
+  --series-2: var(--tint-teal);
+  --series-3: var(--tint-plum);
+  --chart-1: var(--tint-blue);
+  --chart-2: var(--tint-teal);
+  --chart-3: var(--tint-plum);
+  --chart-4: var(--tint-amber);
+  --chart-5: var(--tint-green);
 }
 
 .dark {
-  --background: #0b1017;
+  --background: #0b0f14;
   --foreground: #e8ecf2;
-  --card: #121821;
+  --card: #161a20;
   --card-foreground: #e8ecf2;
-  --popover: #121821;
+  --popover: #161a20;
   --popover-foreground: #e8ecf2;
   /* Navy is unreadable on a dark surface — lift it into a legible blue. */
-  --primary: #5b8fd0;
+  --primary: #6ba3e0;
   --primary-foreground: #08131f;
-  --secondary: #1b2430;
+  --secondary: #232830;
   --secondary-foreground: #e8ecf2;
-  --muted: #1b2430;
-  --muted-foreground: #94a3b3;
+  --muted: #232830;
+  --muted-foreground: #98a1ad;
   --accent: #10322f;
   --accent-foreground: #5fd4c6;
   --destructive: #f0715f;
@@ -136,12 +161,12 @@
   --input: rgba(232, 236, 242, 0.16);
   --ring: #2ec4b6;
 
-  --sidebar: #0f151d;
+  --sidebar: #0e1218;
   --sidebar-foreground: #e8ecf2;
-  --sidebar-primary: #5b8fd0;
+  --sidebar-primary: #6ba3e0;
   --sidebar-primary-foreground: #08131f;
-  --sidebar-accent: #1a2536;
-  --sidebar-accent-foreground: #b4cdec;
+  --sidebar-accent: #10322f;
+  --sidebar-accent-foreground: #5fd4c6;
   --sidebar-border: rgba(232, 236, 242, 0.1);
   --sidebar-ring: #2ec4b6;
 
@@ -151,14 +176,21 @@
   --status-serious: #ef8354;
   --status-critical: #f0715f;
 
-  --series-1: #6ba3e0;
-  --series-2: #2ec4b6;
-  --series-3: #9aabbd;
-  --chart-1: var(--series-1);
-  --chart-2: var(--series-2);
-  --chart-3: var(--series-3);
-  --chart-4: #d8a83c;
-  --chart-5: #9b8fdc;
+  --tint-blue: #6ba3e0;
+  --tint-teal: #2ec4b6;
+  --tint-plum: #9b8fdc;
+  --tint-amber: #d8a83c;
+  --tint-green: #45b97c;
+  --tint-red: #f0715f;
+
+  --series-1: var(--tint-blue);
+  --series-2: var(--tint-teal);
+  --series-3: var(--tint-plum);
+  --chart-1: var(--tint-blue);
+  --chart-2: var(--tint-teal);
+  --chart-3: var(--tint-plum);
+  --chart-4: var(--tint-amber);
+  --chart-5: var(--tint-green);
 }
 
 * {

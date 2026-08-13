@@ -4,9 +4,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EmptyState } from "@/components/common/empty-state";
 import { TrendingUp } from "lucide-react";
 import { formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { TopMover } from "@/lib/mock/dashboard";
 
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
+
+/** Podium tones for the top 3 rows; everything past that stays neutral. */
+const RANK_TONE = ["bg-tint-amber/15 text-tint-amber", "bg-tint-blue/12 text-tint-blue", "bg-tint-plum/12 text-tint-plum"];
 
 export function TopMoversList({ items }: { items: TopMover[] }) {
   return (
@@ -31,7 +35,12 @@ export function TopMoversList({ items }: { items: TopMover[] }) {
                 {items.map((item, i) => (
                   <TableRow key={item.productId} className="border-b border-border/50 hover:bg-muted/50 transition-colors group cursor-pointer">
                     <TableCell className="text-center py-2.5 px-2">
-                      <span className="inline-flex size-6 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                      <span
+                        className={cn(
+                          "inline-flex size-6 items-center justify-center rounded-md text-xs font-semibold transition-colors",
+                          RANK_TONE[i] ?? "bg-muted text-muted-foreground",
+                        )}
+                      >
                         {i + 1}
                       </span>
                     </TableCell>

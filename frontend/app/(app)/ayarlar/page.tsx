@@ -5,7 +5,6 @@ import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import {
   User,
-  Building,
   Bell,
   Shield,
   RefreshCw,
@@ -14,16 +13,13 @@ import {
   Monitor,
   AlertTriangle,
   ShoppingCart,
-  UserCog,
   Wallet,
   Clock,
   Palette,
-  Calendar,
   Coins,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { SubmitButton } from "@/components/common/submit-button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -45,39 +41,47 @@ import { useCurrency, type CurrencyCode } from "@/lib/currency-context";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useSettings } from "@/lib/settings-context";
 import { ROLE_LABELS, TIMEZONE_OPTIONS } from "@/lib/constants";
-import { RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { relativeTimeFromNow } from "@/lib/format";
 import { TINTS, type TintName } from "@/lib/tints";
 import type { Role } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
 
-const ROLE_ORDER: Role[] = ["yonetici", "satinalma", "depo"];
-
 /**
- * Selected-state treatment for a choice pill or card. Every tint resolves to
- * the same brand treatment — a settings screen shouldn't use a different hue
- * per option. Kept keyed by `TintName` so call sites don't have to change.
+ * Selected-state treatment for a choice pill or card — a bordered version of
+ * the matching `TINTS` chip, so options in the same group (theme, currency,
+ * role…) stay visually distinct from one another instead of collapsing onto
+ * one colour. Mirrors the tone grouping in `lib/tints.ts`.
  */
-const SELECTED_PILL = "border-primary/30 bg-primary/10 text-primary";
+const TONE_PILL = {
+  blue: "border-tint-blue/30 bg-tint-blue/10 text-tint-blue",
+  teal: "border-tint-teal/30 bg-tint-teal/10 text-tint-teal",
+  plum: "border-tint-plum/30 bg-tint-plum/10 text-tint-plum",
+  amber: "border-tint-amber/30 bg-tint-amber/12 text-tint-amber",
+  green: "border-tint-green/30 bg-tint-green/10 text-tint-green",
+  red: "border-tint-red/30 bg-tint-red/10 text-tint-red",
+  neutral: "border-primary/30 bg-primary/10 text-primary",
+} as const;
+
 const PILL: Record<TintName | "neutral", string> = {
-  brand: SELECTED_PILL,
-  neutral: SELECTED_PILL,
-  positive: SELECTED_PILL,
-  warning: SELECTED_PILL,
-  critical: SELECTED_PILL,
-  blue: SELECTED_PILL,
-  indigo: SELECTED_PILL,
-  violet: SELECTED_PILL,
-  fuchsia: SELECTED_PILL,
-  pink: SELECTED_PILL,
-  red: SELECTED_PILL,
-  orange: SELECTED_PILL,
-  amber: SELECTED_PILL,
-  yellow: SELECTED_PILL,
-  green: SELECTED_PILL,
-  teal: SELECTED_PILL,
-  cyan: SELECTED_PILL,
-  sky: SELECTED_PILL,
+  blue: TONE_PILL.blue,
+  teal: TONE_PILL.teal,
+  plum: TONE_PILL.plum,
+  amber: TONE_PILL.amber,
+  green: TONE_PILL.green,
+  red: TONE_PILL.red,
+  neutral: TONE_PILL.neutral,
+  brand: TONE_PILL.blue,
+  positive: TONE_PILL.green,
+  warning: TONE_PILL.amber,
+  critical: TONE_PILL.red,
+  indigo: TONE_PILL.blue,
+  sky: TONE_PILL.blue,
+  cyan: TONE_PILL.teal,
+  violet: TONE_PILL.plum,
+  fuchsia: TONE_PILL.plum,
+  pink: TONE_PILL.plum,
+  orange: TONE_PILL.amber,
+  yellow: TONE_PILL.amber,
 };
 
 /** Groups a set of `SectionCard`s under a labeled, colored category heading. */
@@ -123,19 +127,21 @@ function SectionCard({
   hint?: string;
 }) {
   return (
-    <Card className="py-5 gap-3">
-      <CardHeader className="px-5 pb-2">
-        <CardTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-foreground">
-          <div className={cn("flex size-9 items-center justify-center rounded-xl", TINTS[tint])}>
-            <Icon className="size-4" />
-          </div>
-          {title}
-        </CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 px-5 pt-2">{children}</CardContent>
+    <Card className="py-5 gap-3 flex flex-col justify-between h-full">
+      <div className="flex-1 flex flex-col">
+        <CardHeader className="px-5 pb-2">
+          <CardTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-foreground">
+            <div className={cn("flex size-9 items-center justify-center rounded-xl", TINTS[tint])}>
+              <Icon className="size-4" />
+            </div>
+            {title}
+          </CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="px-5 pt-2 flex-1 flex flex-col justify-between">{children}</CardContent>
+      </div>
       {(footer || hint) && (
-        <CardFooter className="justify-between px-5">
+        <CardFooter className="justify-between px-5 mt-auto pt-3">
           {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : <span />}
           {footer}
         </CardFooter>
@@ -152,6 +158,7 @@ function OptionCard({
   tint,
   selected,
   onClick,
+  compact = false,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -159,25 +166,30 @@ function OptionCard({
   tint: TintName | "neutral";
   selected: boolean;
   onClick: () => void;
+  compact?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-1 flex-col items-center gap-2 rounded-xl border p-3 text-center transition-all cursor-pointer",
+        "flex flex-1 flex-col items-center justify-center rounded-xl border text-center transition-all cursor-pointer",
+        compact ? "p-2 gap-1.5" : "p-3 gap-2",
         selected ? cn(PILL[tint], "shadow-xs") : "border-border/60 bg-card hover:bg-muted/50",
       )}
     >
       <div
         className={cn(
-          "flex size-9 items-center justify-center rounded-lg",
-          selected && tint !== "neutral" ? TINTS[tint] : selected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+          "flex items-center justify-center rounded-lg",
+          compact ? "size-7" : "size-9",
+          tint !== "neutral" ? cn(TINTS[tint], !selected && "opacity-55") : "bg-primary/15 text-primary",
         )}
       >
-        <Icon className="size-4" />
+        <Icon className={compact ? "size-3.5" : "size-4"} />
       </div>
-      <span className={cn("text-xs", selected ? "font-semibold" : "font-medium text-muted-foreground")}>{label}</span>
+      <span className={cn("text-xs", selected ? "font-semibold" : "font-medium text-muted-foreground")}>
+        {label}
+      </span>
       {sublabel && <span className="text-micro text-muted-foreground">{sublabel}</span>}
     </button>
   );
@@ -236,15 +248,13 @@ function passwordStrength(pw: string): { score: number; label: string; tone: "cr
 }
 
 export default function SettingsPage() {
-  const { name, initials, can, role, setRole } = useAuth();
+  const { name, initials, role } = useAuth();
   const {
-    company,
     userProfile,
     notifications,
     timezone,
     showKurus,
     defaultRange,
-    updateCompany,
     updateUserProfile,
     updateNotifications,
     setTimezone,
@@ -301,7 +311,7 @@ export default function SettingsPage() {
       {/* HESABIM */}
       <section className="space-y-3">
         <CategoryHeader icon={User} tint="blue" title="Hesabım" description="Profil bilgileriniz ve parola güvenliği." />
-        <div className="columns-1 gap-4 md:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start">
           <SectionCard
             icon={User}
             tint="blue"
@@ -309,22 +319,6 @@ export default function SettingsPage() {
             description="Kişisel bilgilerinizi buradan güncelleyebilirsiniz."
             hint="Değişiklikler anında otomatik kaydedilir."
           >
-            <div className="flex items-center gap-3">
-              <Avatar size="lg" className="ring-2 ring-primary/20">
-                <AvatarFallback className="bg-primary/10 text-primary font-semibold">{initials}</AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="text-sm font-medium text-foreground">{name}</p>
-                <span
-                  className={cn(
-                    "mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-micro font-medium",
-                    PILL[ROLE_TINTS[role]],
-                  )}
-                >
-                  {ROLE_LABELS[role]}
-                </span>
-              </div>
-            </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="firstName">Ad</Label>
@@ -363,17 +357,19 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
 
-          <form action={handleSecuritySave}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              toast.success("Parolanız başarıyla güncellendi.");
+              e.currentTarget.reset();
+            }}
+          >
             <SectionCard
               icon={Shield}
-              tint="red"
-              title="Güvenlik Ayarları"
-              description="Parolanızı değiştirin ve güvenlik tercihlerinizi yönetin."
-              footer={
-                <SubmitButton type="submit" variant="destructive" pending={securityGuard.pending} pendingLabel="Güncelleniyor…">
-                  Parolayı Güncelle
-                </SubmitButton>
-              }
+              tint="plum"
+              title="Güvenlik & Parola"
+              description="Hesap şifrenizi ve güvenlik tercihlerinizi güncelleyin."
+              footer={<SubmitButton pending={false} size="sm">Parolayı Güncelle</SubmitButton>}
             >
               <div className="space-y-2">
                 <Label htmlFor="currentPassword">Mevcut Parola</Label>
@@ -381,38 +377,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">Yeni Parola</Label>
-                <Input
-                  id="newPassword"
-                  name="newPassword"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-                {newPassword && (
-                  <div className="flex items-center gap-2">
-                    <Progress value={strength.score} className="flex-1">
-                      <ProgressTrack>
-                        <ProgressIndicator
-                          className={cn(
-                            strength.tone === "critical" && "bg-status-critical",
-                            strength.tone === "warning" && "bg-status-warning",
-                            strength.tone === "good" && "bg-status-good",
-                          )}
-                        />
-                      </ProgressTrack>
-                    </Progress>
-                    <span
-                      className={cn(
-                        "text-xs font-medium",
-                        strength.tone === "critical" && "text-status-critical",
-                        strength.tone === "warning" && "text-status-warning-foreground",
-                        strength.tone === "good" && "text-status-good",
-                      )}
-                    >
-                      {strength.label}
-                    </span>
-                  </div>
-                )}
+                <Input id="newPassword" name="newPassword" type="password" />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Yeni Parola (Tekrar)</Label>
@@ -424,21 +389,134 @@ export default function SettingsPage() {
       </section>
 
       {/* TERCİHLER */}
-      <section className="space-y-3">
+      <section className="space-y-4">
         <CategoryHeader
           icon={Palette}
           tint="fuchsia"
           title="Tercihler"
           description="Görünüm, bildirim ve para birimi ayarları."
         />
-        <div className="columns-1 gap-4 md:columns-2 xl:columns-3 [&>*]:mb-4 [&>*]:break-inside-avoid">
+
+        {/* Row 1: Görünüm & Saat Dilimi + Para Birimi (2 Side-by-Side Cards) */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <SectionCard
-            icon={Bell}
-            tint="amber"
-            title="Bildirim Tercihleri"
-            description="Hangi durumlarda bildirim almak istediğinizi seçin."
+            icon={Sun}
+            tint="indigo"
+            title="Görünüm & Bölge"
+            description="Arayüz teması ve saat dilimi ayarlarını yönetin."
             hint="Değişiklikler anında uygulanır."
           >
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-foreground">Arayüz Teması</Label>
+                {mounted ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    <OptionCard compact icon={Sun} label="Açık" tint="amber" selected={theme === "light"} onClick={() => setTheme("light")} />
+                    <OptionCard compact icon={Moon} label="Koyu" tint="indigo" selected={theme === "dark"} onClick={() => setTheme("dark")} />
+                    <OptionCard
+                      compact
+                      icon={Monitor}
+                      label="Sistem"
+                      tint="neutral"
+                      selected={theme === "system"}
+                      onClick={() => setTheme("system")}
+                    />
+                  </div>
+                ) : (
+                  <Skeleton className="h-[60px] w-full" />
+                )}
+              </div>
+
+              <div className="space-y-1.5 pt-3 pb-1">
+                <Label className="text-xs font-semibold text-foreground">Saat Dilimi</Label>
+                <Select value={timezone} onValueChange={(v) => v && setTimezone(v as string)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label ?? "Saat dilimi seçin"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIMEZONE_OPTIONS.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            icon={Wallet}
+            tint="green"
+            title="Para Birimi"
+            description="Fiyatlar, güncel kurlar üzerinden seçilen para birimine çevrilerek gösterilir."
+            hint="Değişiklikler anında uygulanır."
+          >
+            <div className="flex-1 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-foreground">Para Birimi</Label>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={refreshRates}
+                    disabled={isLoading}
+                    className="size-6"
+                    title="Kurları Merkez Bankası'ndan Güncelle"
+                  >
+                    <RefreshCw className={cn("size-3", isLoading && "animate-spin")} />
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {CURRENCY_OPTIONS.map((c) => (
+                    <OptionCard
+                      compact
+                      key={c.value}
+                      icon={() => <span className="text-sm font-semibold">{c.symbol}</span>}
+                      label={c.value.toUpperCase()}
+                      tint={c.tint}
+                      selected={currency === c.value}
+                      onClick={() => setCurrency(c.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-auto pt-4 flex flex-wrap items-center justify-between gap-2">
+                {rates && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-micro font-medium text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-2 py-1">
+                      <span className="font-semibold text-foreground">USD:</span> 1 $ = {rates.usd?.toFixed(2)} ₺
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-2 py-1">
+                      <span className="font-semibold text-foreground">EUR:</span> 1 € = {rates.eur?.toFixed(2)} ₺
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-2 py-1">
+                      <span className="font-semibold text-foreground">GBP:</span> 1 £ = {rates.gbp?.toFixed(2)} ₺
+                    </span>
+                  </div>
+                )}
+                {lastUpdated && (
+                  <p className="text-xs text-muted-foreground ml-auto">
+                    Kurlar {relativeTimeFromNow(lastUpdated)} güncellendi.
+                  </p>
+                )}
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+
+        {/* Row 2: Bildirim Tercihleri */}
+        <SectionCard
+          icon={Bell}
+          tint="amber"
+          title="Bildirim Tercihleri"
+          description="Hangi durumlarda bildirim almak istediğinizi seçin."
+          hint="Değişiklikler anında uygulanır."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {NOTIFICATION_ROWS.map((row) => {
               const checked = notifications[row.id];
               return (
@@ -474,221 +552,8 @@ export default function SettingsPage() {
                 </div>
               );
             })}
-          </SectionCard>
-
-          <SectionCard
-            icon={Sun}
-            tint="indigo"
-            title="Görünüm"
-            description="Arayüz temasını seçin."
-            hint="Değişiklikler anında uygulanır."
-          >
-            {mounted ? (
-              <div className="flex flex-wrap gap-2">
-                <OptionCard icon={Sun} label="Açık" tint="amber" selected={theme === "light"} onClick={() => setTheme("light")} />
-                <OptionCard icon={Moon} label="Koyu" tint="indigo" selected={theme === "dark"} onClick={() => setTheme("dark")} />
-                <OptionCard
-                  icon={Monitor}
-                  label="Sistem"
-                  tint="neutral"
-                  selected={theme === "system"}
-                  onClick={() => setTheme("system")}
-                />
-              </div>
-            ) : (
-              <Skeleton className="h-[74px] w-full" />
-            )}
-          </SectionCard>
-
-          <SectionCard
-            icon={Wallet}
-            tint="green"
-            title="Para Birimi"
-            description="Fiyatlar, güncel kurlar üzerinden seçilen para birimine çevrilerek gösterilir."
-            hint="Değişiklikler anında uygulanır."
-          >
-            <div className="flex items-center justify-between">
-              <Label>Para Birimi</Label>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={refreshRates}
-                disabled={isLoading}
-                className="size-6"
-                title="Kurları Merkez Bankası'ndan Güncelle"
-              >
-                <RefreshCw className={cn("size-3", isLoading && "animate-spin")} />
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {CURRENCY_OPTIONS.map((c) => (
-                <OptionCard
-                  key={c.value}
-                  icon={() => <span className="text-sm font-semibold">{c.symbol}</span>}
-                  label={c.value.toUpperCase()}
-                  tint={c.tint}
-                  selected={currency === c.value}
-                  onClick={() => setCurrency(c.value)}
-                />
-              ))}
-            </div>
-            {rates && currency !== "try" && (
-              <p className="text-xs font-medium text-primary">
-                Anlık Kur: 1 {currency.toUpperCase()} = {rates[currency]?.toFixed(4)} ₺
-              </p>
-            )}
-            {lastUpdated && (
-              <p className="text-xs text-muted-foreground">Kurlar {relativeTimeFromNow(lastUpdated)} güncellendi.</p>
-            )}
-            <div className="flex items-start gap-3 rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/50">
-              <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <Coins className="size-4" />
-              </div>
-              <div className="flex flex-1 items-start justify-between gap-3">
-                <div className="space-y-1 leading-none">
-                  <Label htmlFor="showKurus" className="cursor-pointer">
-                    ₺ Kuruşları Göster
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Kapalıyken TL tutarlar tam sayıya yuvarlanır (ör. ₺1.235 yerine ₺1.234,56).
-                  </p>
-                </div>
-                <Checkbox
-                  id="showKurus"
-                  checked={showKurus}
-                  onCheckedChange={(c) => setShowKurus(Boolean(c))}
-                  className="mt-0.5 shrink-0"
-                />
-              </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            icon={Clock}
-            tint="sky"
-            title="Saat Dilimi"
-            description="Sistem saat ve tarih formatlamasında kullanılır."
-            hint="Değişiklikler anında uygulanır."
-          >
-            <Select value={timezone} onValueChange={(v) => v && setTimezone(v as string)}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label ?? "Saat dilimi seçin"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {TIMEZONE_OPTIONS.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </SectionCard>
-
-          <SectionCard
-            icon={Calendar}
-            tint="cyan"
-            title="Panel Varsayılanı"
-            description="Panel her açıldığında seçili gelecek tarih aralığı."
-            hint="Değişiklikler anında uygulanır."
-          >
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(RANGE_LABELS) as DateRangePreset[]).map((r) => (
-                <OptionCard
-                  key={r}
-                  icon={Calendar}
-                  label={RANGE_LABELS[r]}
-                  tint="cyan"
-                  selected={defaultRange === r}
-                  onClick={() => setDefaultRange(r)}
-                />
-              ))}
-            </div>
-          </SectionCard>
-        </div>
-      </section>
-
-      {/* KURUMSAL & YETKİ */}
-      <section className="space-y-3">
-        <CategoryHeader
-          icon={Building}
-          tint="violet"
-          title="Kurumsal & Yetki"
-          description="Şirket bilgileri ve demo rol yönetimi."
-        />
-        <div className="columns-1 gap-4 md:columns-2 [&>*]:mb-4 [&>*]:break-inside-avoid">
-          <SectionCard
-            icon={UserCog}
-            tint="teal"
-            title="Yetki Rolü (demo)"
-            description="Tüm sitedeki yetkileri ve görünen menüleri anında değiştirir."
-            hint="Değişiklikler anında uygulanır."
-          >
-            <div className="flex flex-wrap gap-2">
-              {ROLE_ORDER.map((r) => (
-                <OptionCard
-                  key={r}
-                  icon={User}
-                  label={ROLE_LABELS[r]}
-                  tint={ROLE_TINTS[r]}
-                  selected={role === r}
-                  onClick={() => {
-                    setRole(r);
-                    toast.info("Yetki Rolü Değiştirildi", {
-                      description: `Aktif Rol: ${ROLE_LABELS[r]}`,
-                    });
-                  }}
-                />
-              ))}
-            </div>
-          </SectionCard>
-
-          {can("users.manage") && (
-            <SectionCard
-              icon={Building}
-              tint="violet"
-              title="Şirket Bilgileri"
-              description="Fatura ve resmi işlemler için kullanılacak şirket detayları."
-              hint="Değişiklikler anında otomatik kaydedilir."
-            >
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Şirket Adı</Label>
-                <Input
-                  id="companyName"
-                  value={company.companyName}
-                  onChange={(e) => updateCompany({ companyName: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="taxOffice">Vergi Dairesi</Label>
-                  <Input
-                    id="taxOffice"
-                    value={company.taxOffice}
-                    onChange={(e) => updateCompany({ taxOffice: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="taxNumber">Vergi Numarası</Label>
-                  <Input
-                    id="taxNumber"
-                    value={company.taxNumber}
-                    onChange={(e) => updateCompany({ taxNumber: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Açık Adres</Label>
-                <Input
-                  id="address"
-                  value={company.address}
-                  onChange={(e) => updateCompany({ address: e.target.value })}
-                />
-              </div>
-            </SectionCard>
-          )}
-        </div>
+          </div>
+        </SectionCard>
       </section>
     </div>
   );

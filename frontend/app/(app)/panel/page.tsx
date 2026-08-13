@@ -19,7 +19,6 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
-  X,
   Loader2,
   Check,
   Database,
@@ -32,7 +31,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { KpiPanel } from "@/components/dashboard/kpi-panel";
+import { KpiTablePanel } from "@/components/dashboard/kpi-table-panel";
 import { KpiTile } from "@/components/dashboard/kpi-tile";
 import { StockFlowChart } from "@/components/dashboard/stock-flow-chart";
 import { CategoryRadialChart } from "@/components/dashboard/category-radial-chart";
@@ -52,7 +54,7 @@ import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
 
 export default function PanelPage() {
-  const { company, defaultRange } = useSettings();
+  const { company, defaultRange, showKurus } = useSettings();
   const [range, setRange] = useState<DateRangePreset>(defaultRange);
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>(["all"]);
@@ -139,7 +141,7 @@ export default function PanelPage() {
         const filename = getCustomFilename("pdf", report.generatedAt);
         downloadBlob(await buildReportPdf(report, selectedSections), filename);
         toast.success("PDF Raporu Başarıyla İndirildi", {
-          description: `Seçilen bölümler tasarımlı PDF olarak kaydedildi.`,
+          description: `Seçilen bölümler PDF olarak kaydedildi.`,
         });
         setShowExportModal(false);
       } catch (err) {
@@ -197,61 +199,50 @@ export default function PanelPage() {
       ) : (
         <div className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <KpiPanel title="Stok Özeti" icon={Boxes}>
-              <KpiTile icon={Package} tint="blue" label="Toplam Stok Miktarı" value={`${formatNumber(view.kpis.onHandUnits)} Adet`} />
-              <KpiTile icon={Warehouse} tint="indigo" label="Toplam Depo" value={formatNumber(view.kpis.totalWarehouses)} />
-              <KpiTile icon={ArrowDownToLine} tint="green" label="Bugünkü Giriş" value={formatNumber(view.kpis.todayIn)} />
-              <KpiTile icon={ArrowUpFromLine} tint="orange" label="Bugünkü Çıkış" value={formatNumber(view.kpis.todayOut)} />
-            </KpiPanel>
+            <KpiTablePanel
+              title="Stok Özeti"
+              icon={Boxes}
+              items={[
+                { icon: Package, tint: "blue", label: "Toplam Stok Miktarı", value: `${formatNumber(view.kpis.onHandUnits)} Adet` },
+                { icon: Warehouse, tint: "indigo", label: "Toplam Depo", value: formatNumber(view.kpis.totalWarehouses) },
+                { icon: ArrowDownToLine, tint: "green", label: "Bugünkü Giriş", value: formatNumber(view.kpis.todayIn) },
+                { icon: ArrowUpFromLine, tint: "orange", label: "Bugünkü Çıkış", value: formatNumber(view.kpis.todayOut) },
+              ]}
+            />
 
-            <KpiPanel title="Satın Alma Özeti" icon={ShoppingCart}>
-              <KpiTile icon={ShoppingCart} tint="cyan" label="Açık Sipariş" value={formatNumber(view.kpis.openPurchaseOrders)} />
-              <KpiTile icon={Clock} tint="yellow" label="Bekleyen Teslimat" value={formatNumber(view.kpis.pendingDeliveries)} />
-              <KpiTile icon={Wallet} tint="teal" label="Toplam Tutar" value={formatCurrency(view.kpis.purchaseTotalValue, currency, rates?.[currency] || 1)} />
-              <KpiTile icon={XCircle} tint="red" label="İptal" value={formatNumber(view.kpis.cancelledOrders)} />
-            </KpiPanel>
+            <KpiTablePanel
+              title="Satın Alma Özeti"
+              icon={ShoppingCart}
+              items={[
+                { icon: ShoppingCart, tint: "cyan", label: "Açık Sipariş", value: formatNumber(view.kpis.openPurchaseOrders) },
+                { icon: Clock, tint: "yellow", label: "Bekleyen Teslimat", value: formatNumber(view.kpis.pendingDeliveries) },
+                { icon: Wallet, tint: "teal", label: "Toplam Tutar", value: formatCurrency(view.kpis.purchaseTotalValue, currency, rates?.[currency] || 1, showKurus) },
+                { icon: XCircle, tint: "red", label: "İptal", value: formatNumber(view.kpis.cancelledOrders) },
+              ]}
+            />
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Card className="py-5 gap-3">
-              <CardHeader className="px-5 pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-                  <Layers className="size-4 text-muted-foreground" />
-                  Envanter Özeti
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4 px-5 pt-2">
-                <KpiTile icon={Database} tint="sky" label="Eldeki Miktar" value={formatNumber(view.kpis.onHandUnits)} />
-                <KpiTile icon={Truck} tint="amber" label="Yolda" value={formatNumber(view.kpis.incomingUnits)} />
-              </CardContent>
-            </Card>
+          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <KpiTablePanel
+              title="Envanter & Tedarik Özeti"
+              icon={Database}
+              items={[
+                { icon: Database, tint: "sky", label: "Eldeki Miktar", value: `${formatNumber(view.kpis.onHandUnits)} Adet` },
+                { icon: Truck, tint: "amber", label: "Yol / Sevkiyat", value: `${formatNumber(view.kpis.incomingUnits)} Adet` },
+                { icon: Building2, tint: "pink", label: "Kayıtlı Tedarikçiler", value: formatNumber(view.kpis.totalSuppliers) },
+                { icon: Users, tint: "fuchsia", label: "Sistem Kullanıcıları", value: formatNumber(view.kpis.totalUsers) },
+              ]}
+            />
 
-            <Card className="py-5 gap-3">
-              <CardHeader className="px-5 pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-                  <Users className="size-4 text-muted-foreground" />
-                  Kullanıcı &amp; Tedarikçi
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4 px-5 pt-2">
-                <KpiTile icon={Users} tint="fuchsia" label="Toplam Kullanıcı" value={formatNumber(view.kpis.totalUsers)} />
-                <KpiTile icon={Building2} tint="pink" label="Toplam Tedarikçi" value={formatNumber(view.kpis.totalSuppliers)} />
-              </CardContent>
-            </Card>
-
-            <Card className="py-5 gap-3">
-              <CardHeader className="px-5 pb-2">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-                  <AlertTriangle className="size-4 text-muted-foreground" />
-                  Stok Durumu
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-3 gap-2 px-5 pt-2">
-                <KpiTile icon={AlertTriangle} tint="red" label="Kritik Stok" value={formatNumber(view.kpis.criticalStockCount)} />
-                <KpiTile icon={Layers} tint="violet" label="Kategori" value={formatNumber(view.kpis.categoryCount)} />
-                <KpiTile icon={Tag} tint="indigo" label="Ürün Çeşidi" value={`${formatNumber(view.kpis.productVariantCount)} Çeşit`} />
-              </CardContent>
-            </Card>
+            <KpiTablePanel
+              title="Katalog & Stok Sağlığı"
+              icon={Layers}
+              items={[
+                { icon: AlertTriangle, tint: "red", label: "Kritik Stok Uyarısı", value: formatNumber(view.kpis.criticalStockCount) },
+                { icon: Tag, tint: "indigo", label: "Toplam Ürün Çeşidi", value: `${formatNumber(view.kpis.productVariantCount)} Çeşit` },
+                { icon: Layers, tint: "violet", label: "Kategori Sayısı", value: formatNumber(view.kpis.categoryCount) },
+              ]}
+            />
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12 items-stretch">
@@ -272,118 +263,108 @@ export default function PanelPage() {
         </div>
       )}
 
-      {/* Export Selection & Format Modal */}
-      {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg bg-background shadow-2xl border border-border/80 rounded-2xl overflow-hidden">
-            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-border/60">
-              <div>
-                <CardTitle className="text-base font-semibold text-foreground">Dışa Aktarma Seçenekleri</CardTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  İndirmek istediğiniz içeriği seçin (birden fazla seçebilirsiniz).
-                </p>
+      <Dialog open={showExportModal} onOpenChange={setShowExportModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Dışa Aktarma Seçenekleri</DialogTitle>
+            <DialogDescription>
+              Rapora dahil edilecek bölümleri seçin, ardından dosya biçimini belirleyin.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 px-4">
+            {/* Step 1 — content selection */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-micro uppercase text-muted-foreground">Rapor Bölümleri</p>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {selectedSections.includes("all") ? ALL_SPECIFIC_IDS.length : selectedSections.length} /{" "}
+                  {ALL_SPECIFIC_IDS.length} seçili
+                </span>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 rounded-full text-muted-foreground hover:text-foreground"
-                onClick={() => setShowExportModal(false)}
-              >
-                <X className="size-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="p-5 space-y-5">
-              {/* Step 1: Select Content (Multi-select Checkboxes) */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
-                    1. İndirilecek İçerikleri Seçin
-                  </label>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    {selectedSections.includes("all")
-                      ? `${REPORT_SECTIONS.length - 1} / ${REPORT_SECTIONS.length - 1} seçili`
-                      : `${selectedSections.length} / ${REPORT_SECTIONS.length - 1} seçili`}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
-                  {REPORT_SECTIONS.map((sec) => {
-                    const isSelected = sec.id === "all"
+              <div className="grid max-h-52 grid-cols-1 gap-2 overflow-y-auto pr-1 custom-scrollbar sm:grid-cols-2">
+                {REPORT_SECTIONS.map((sec) => {
+                  const isSelected =
+                    sec.id === "all"
                       ? selectedSections.includes("all") || selectedSections.length === ALL_SPECIFIC_IDS.length
                       : selectedSections.includes("all") || selectedSections.includes(sec.id);
 
-                    return (
-                      <button
-                        key={sec.id}
-                        type="button"
-                        className={`flex items-start gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                  return (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() => toggleSection(sec.id)}
+                      className={cn(
+                        "flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 text-left transition-colors",
+                        isSelected
+                          ? "border-primary/40 bg-primary/5"
+                          : "border-border bg-card hover:bg-muted/50",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[3px] border",
                           isSelected
-                            ? "border-primary bg-primary/10 text-primary font-semibold shadow-xs"
-                            : "border-border/60 bg-card hover:bg-muted/50 text-foreground"
-                        }`}
-                        onClick={() => toggleSection(sec.id)}
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-muted-foreground/40",
+                        )}
                       >
-                        <div className={`size-4 rounded border flex items-center justify-center mt-0.5 shrink-0 ${
-                          isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"
-                        }`}>
-                          {isSelected && <Check className="size-3 stroke-[3]" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold leading-tight truncate">{sec.label}</p>
-                          <p className="text-micro text-muted-foreground leading-tight mt-0.5 line-clamp-1">{sec.desc}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {!hasSelection && (
-                  <p className="text-xs font-medium text-status-warning-foreground mt-2 flex items-center gap-1.5">
-                    <AlertTriangle className="size-3.5" />
-                    Lütfen indirmek için en az 1 içerik seçin.
-                  </p>
-                )}
+                        {isSelected && <Check className="size-3" />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium text-foreground">{sec.label}</span>
+                        <span className="mt-0.5 line-clamp-1 block text-micro text-muted-foreground">{sec.desc}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
+              {!hasSelection && (
+                <p className="mt-2 flex items-center gap-1.5 text-xs text-status-warning-foreground">
+                  <AlertTriangle className="size-3.5" />
+                  İndirmek için en az bir bölüm seçin.
+                </p>
+              )}
+            </div>
 
-              {/* Step 2: Select Format Actions (Excel & PDF) */}
-              <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 block">
-                  2. Dosya Formatını Seçin ve İndirin
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    disabled={exporting || !hasSelection}
-                    className="flex items-center gap-3.5 p-3.5 rounded-xl border border-border/70 bg-card hover:border-status-good hover:bg-status-good/90 transition-all text-left group cursor-pointer disabled:pointer-events-none disabled:opacity-40"
-                    onClick={exportExcel}
-                  >
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-good/100/10 text-status-good transition-transform shrink-0">
-                      {excelGuard.pending ? <Loader2 className="size-5 animate-spin" /> : <FileSpreadsheet className="size-5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground">Excel Tablosu (.xlsx)</p>
-                      <p className="text-xs text-muted-foreground">Auto-fit, BOLD & All Borders</p>
-                    </div>
-                  </button>
+            {/* Step 2 — file format */}
+            <div>
+              <p className="mb-2 text-micro uppercase text-muted-foreground">Dosya Biçimi</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={exporting || !hasSelection}
+                  onClick={exportExcel}
+                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    {excelGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-foreground">Excel</span>
+                    <span className="block text-xs text-muted-foreground">.xlsx çalışma kitabı</span>
+                  </span>
+                </button>
 
-                  <button
-                    type="button"
-                    disabled={exporting || !hasSelection}
-                    className="flex items-center gap-3.5 p-3.5 rounded-xl border border-border/70 bg-card hover:border-status-critical hover:bg-status-critical/100/5 transition-all text-left group cursor-pointer disabled:pointer-events-none disabled:opacity-40"
-                    onClick={exportPdf}
-                  >
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-status-critical/100/10 text-status-critical transition-transform shrink-0">
-                      {pdfGuard.pending ? <Loader2 className="size-5 animate-spin" /> : <FileText className="size-5" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground">PDF Raporu (.pdf)</p>
-                      <p className="text-xs text-muted-foreground">Tasarımlı Rapor Belgesi</p>
-                    </div>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={exporting || !hasSelection}
+                  onClick={exportPdf}
+                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    {pdfGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-foreground">PDF</span>
+                    <span className="block text-xs text-muted-foreground">Yazdırmaya hazır belge</span>
+                  </span>
+                </button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

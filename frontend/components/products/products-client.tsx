@@ -102,7 +102,7 @@ export function ProductsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { currency, rates } = useCurrency();
-  const { company } = useSettings();
+  const { company, showKurus } = useSettings();
   const { name } = useAuth();
 
   const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
@@ -466,8 +466,8 @@ export function ProductsClient() {
           const rate = rates?.[currency] || 1;
           return (
             <div className="tabular-nums">
-              <span className="font-medium text-foreground">{formatCurrency(row.original.salePrice, currency, rate)}</span>
-              <p className="text-xs text-muted-foreground">Alış {formatCurrency(row.original.purchasePrice, currency, rate)}</p>
+              <span className="font-medium text-foreground">{formatCurrency(row.original.salePrice, currency, rate, showKurus)}</span>
+              <p className="text-xs text-muted-foreground">Alış {formatCurrency(row.original.purchasePrice, currency, rate, showKurus)}</p>
             </div>
           );
         },
@@ -583,7 +583,7 @@ export function ProductsClient() {
                 variant="outline"
                 size="sm"
                 onClick={() => setImportOpen(true)}
-                className="gap-1.5 border-status-good text-status-good hover:bg-status-good/90 "
+                className="gap-1.5 border-status-good text-status-good hover:bg-status-good/10"
               >
                 <FileSpreadsheet className="size-4 text-status-good" />
                 İçe Aktar (Excel)
@@ -626,7 +626,7 @@ export function ProductsClient() {
         </Card>
         <Card className="py-5 gap-2">
           <CardContent className="px-5">
-            <KpiTile icon={Wallet} tint="green" label="Stok Değeri" value={formatCurrency(view?.stats.stockValue ?? 0, currency, rates?.[currency] || 1)} />
+            <KpiTile icon={Wallet} tint="green" label="Stok Değeri" value={formatCurrency(view?.stats.stockValue ?? 0, currency, rates?.[currency] || 1, showKurus)} />
           </CardContent>
         </Card>
       </div>
@@ -753,7 +753,7 @@ export function ProductsClient() {
               variant="outline"
               onClick={() => handleBulkStatus("aktif")}
               disabled={isBulkProcessing}
-              className="h-8 gap-1 text-xs border-status-good text-status-good hover:bg-status-good/90 "
+              className="h-8 gap-1 text-xs border-status-good text-status-good hover:bg-status-good/10"
             >
               <CheckCircle2 className="size-3.5 text-status-good" />
               Toplu Aktife Al

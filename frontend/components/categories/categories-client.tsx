@@ -47,6 +47,7 @@ import {
 import { CategoryFormSheet, type CategoryFormValues } from "@/components/categories/category-form-sheet";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useCurrency } from "@/lib/currency-context";
+import { useSettings } from "@/lib/settings-context";
 import { ApiError } from "@/lib/api/client";
 import {
   listCategoryTree,
@@ -66,7 +67,17 @@ const COL_VALUE = "w-32 shrink-0 text-right";
 const COL_CRITICAL = "w-24 shrink-0 flex justify-end";
 
 /** Right-aligned metric columns, shared by root and child rows. */
-function MetricCells({ node, currency, rate }: { node: CategoryNode; currency: string; rate: number }) {
+function MetricCells({
+  node,
+  currency,
+  rate,
+  showKurus,
+}: {
+  node: CategoryNode;
+  currency: string;
+  rate: number;
+  showKurus: boolean;
+}) {
   return (
     <>
       <div className={cn(COL_PRODUCTS, "hidden tabular-nums sm:block")}>
@@ -85,7 +96,7 @@ function MetricCells({ node, currency, rate }: { node: CategoryNode; currency: s
       </div>
       <div className={cn(COL_VALUE, "hidden tabular-nums lg:block")}>
         {node.totalValue > 0 ? (
-          <span className="text-foreground">{formatCurrency(node.totalValue, currency, rate)}</span>
+          <span className="text-foreground">{formatCurrency(node.totalValue, currency, rate, showKurus)}</span>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -152,6 +163,7 @@ function ActionsMenu({
 
 export function CategoriesClient() {
   const { currency, rates } = useCurrency();
+  const { showKurus } = useSettings();
   const rate = rates?.[currency] || 1;
 
   const [searchInput, setSearchInput] = useState("");
@@ -390,7 +402,7 @@ export function CategoriesClient() {
                         </Badge>
                       ) : null}
                     </div>
-                    <MetricCells node={root} currency={currency} rate={rate} />
+                    <MetricCells node={root} currency={currency} rate={rate} showKurus={showKurus} />
                     <div className="w-8 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <ActionsMenu
                         node={root}
@@ -421,7 +433,7 @@ export function CategoriesClient() {
                               {child.name}
                             </Link>
                           </div>
-                          <MetricCells node={child} currency={currency} rate={rate} />
+                          <MetricCells node={child} currency={currency} rate={rate} showKurus={showKurus} />
                           <div className="w-8 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <ActionsMenu
                               node={child}

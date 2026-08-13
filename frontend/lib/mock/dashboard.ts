@@ -47,8 +47,10 @@ export function isProductCritical(product: Product): boolean {
   return totalStockForProduct(product.id) < product.minStock;
 }
 
-export function getCriticalProducts(): Product[] {
-  return products.filter((p) => p.status === "aktif" && isProductCritical(p));
+export function getCriticalProducts(): (Product & { totalStock: number })[] {
+  return products
+    .filter((p) => p.status === "aktif" && isProductCritical(p))
+    .map((p) => ({ ...p, totalStock: totalStockForProduct(p.id) }));
 }
 
 export function getDashboardKpis(): DashboardKpis {

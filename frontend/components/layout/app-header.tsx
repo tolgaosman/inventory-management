@@ -7,8 +7,6 @@ import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@/lib/types";
 import { getCriticalProducts } from "@/lib/mock/dashboard";
-import { totalStockForProduct } from "@/lib/mock/data";
-import { GlobalSearch } from "./global-search";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,25 +24,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
 import { useSettings } from "@/lib/settings-context";
 
 const ROLE_ORDER: Role[] = ["yonetici", "satinalma", "depo"];
 
 export function AppHeader() {
   const { name, initials, role, setRole } = useAuth();
-  const { notifications } = useSettings();
+  const { notifications, userProfile } = useSettings();
   const criticalCount = notifications.notifyStock ? getCriticalProducts().length : 0;
 
   return (
     <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 md:px-6">
-      <div className="hidden flex-1 md:block" />
+      <div className="flex-1" />
 
-      <div className="flex flex-1 justify-center max-w-md w-full">
-        <GlobalSearch />
-      </div>
-
-      <div className="flex flex-1 items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
 
       <Popover>
         <PopoverTrigger render={<Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors" />}>
@@ -104,7 +97,7 @@ export function AppHeader() {
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         Mevcut{" "}
                         <span className="font-medium tabular-nums text-status-critical">
-                          {totalStockForProduct(p.id)}
+                          {p.totalStock}
                         </span>{" "}
                         · Minimum <span className="tabular-nums">{p.minStock}</span>
                       </p>

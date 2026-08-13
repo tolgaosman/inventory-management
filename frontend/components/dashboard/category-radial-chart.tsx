@@ -105,9 +105,11 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
               })}
             </svg>
 
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-              <span className="text-2xl font-semibold tabular-nums text-foreground">%{activePercent}</span>
-              <span className="mt-0.5 line-clamp-2 text-micro text-muted-foreground">{activeCat.name}</span>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+              <span className="text-xl font-bold tabular-nums text-foreground">%{activePercent}</span>
+              <span className="mt-0.5 max-w-[100px] line-clamp-2 text-micro leading-tight text-muted-foreground text-balance">
+                {activeCat.name}
+              </span>
             </div>
           </div>
         </div>
