@@ -49,14 +49,6 @@ import { useSettings } from "@/lib/settings-context";
 export default function PanelPage() {
   const { company, showKurus } = useSettings();
   const { range, warehouseId } = useDashboardFilter();
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [selectedSections, setSelectedSections] = useState<string[]>(["all"]);
-
-  useEffect(() => {
-    const handleOpen = () => setShowExportModal(true);
-    window.addEventListener("open-export-modal", handleOpen);
-    return () => window.removeEventListener("open-export-modal", handleOpen);
-  }, []);
 
   const { status, data, staleData, error, refetch } = useAsync(
     () => getDashboardData(range, warehouseId),
@@ -66,93 +58,6 @@ export default function PanelPage() {
 
   const { name, role } = useAuth();
   const { currency, rates } = useCurrency();
-  const excelGuard = useSubmitGuard();
-  const pdfGuard = useSubmitGuard();
-  const exporting = excelGuard.pending || pdfGuard.pending;
-  const hasSelection = selectedSections.length > 0;
-
-  const reportInput = () =>
-    buildReportData(range, `${name} (${ROLE_LABELS[role]})`, currency, rates?.[currency], company.companyName);
-
-  const toggleSection = (id: string) => {
-    if (id === "all") {
-      if (selectedSections.includes("all") || selectedSections.length === ALL_SPECIFIC_IDS.length) {
-        setSelectedSections([]);
-      } else {
-        setSelectedSections(["all"]);
-      }
-      return;
-    }
-
-    let current = selectedSections.includes("all")
-      ? [...ALL_SPECIFIC_IDS]
-      : [...selectedSections];
-
-    if (current.includes(id)) {
-      current = current.filter((s) => s !== id);
-    } else {
-      current.push(id);
-    }
-
-    if (current.length === ALL_SPECIFIC_IDS.length) {
-      setSelectedSections(["all"]);
-    } else {
-      setSelectedSections(current);
-    }
-  };
-
-  function getCustomFilename(ext: "xlsx" | "pdf", date: Date) {
-    let prefix = "stok-raporu";
-    if (selectedSections.length === 1 && selectedSections[0] !== "all") {
-      const section = REPORT_SECTIONS.find(s => s.id === selectedSections[0]);
-      if (section) {
-        prefix = slugify(section.label);
-      }
-    } else if (!selectedSections.includes("all")) {
-      prefix = "ozel-rapor";
-    }
-    return reportFilename(ext, date, prefix);
-  }
-
-  async function exportExcel() {
-    if (!hasSelection) return;
-    await excelGuard.guard(async () => {
-      try {
-        const report = reportInput();
-        const { buildReportExcel } = await import("@/lib/export/excel");
-        const filename = getCustomFilename("xlsx", report.generatedAt);
-        downloadBlob(buildReportExcel(report, selectedSections), filename);
-        toast.success("Excel Raporu Başarıyla İndirildi", {
-          description: `Seçilen bölümler Excel (.xlsx) olarak kaydedildi.`,
-        });
-        setShowExportModal(false);
-      } catch (err) {
-        toast.error("Excel raporu oluşturulamadı", {
-          description: err instanceof Error ? err.message : "Beklenmedik bir hata oluştu.",
-        });
-      }
-    });
-  }
-
-  async function exportPdf() {
-    if (!hasSelection) return;
-    await pdfGuard.guard(async () => {
-      try {
-        const report = reportInput();
-        const { buildReportPdf } = await import("@/lib/export/pdf");
-        const filename = getCustomFilename("pdf", report.generatedAt);
-        downloadBlob(await buildReportPdf(report, selectedSections), filename);
-        toast.success("PDF Raporu Başarıyla İndirildi", {
-          description: `Seçilen bölümler PDF olarak kaydedildi.`,
-        });
-        setShowExportModal(false);
-      } catch (err) {
-        toast.error("PDF raporu oluşturulamadı", {
-          description: err instanceof Error ? err.message : "Beklenmedik bir hata oluştu.",
-        });
-      }
-    });
-  }
 
   return (
     <div className="space-y-6">
@@ -231,113 +136,11 @@ export default function PanelPage() {
           </Section>
 
           <Section index={4}>
-            <CriticalStockList items={view.criticalProducts} onExport={() => setShowExportModal(true)} />
+            <CriticalStockList items={view.criticalProducts} />
           </Section>
         </div>
       )}
 
-      <Dialog open={showExportModal} onOpenChange={setShowExportModal}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Dışa Aktarma Seçenekleri</DialogTitle>
-            <DialogDescription>
-              Rapora dahil edilecek bölümleri seçin, ardından dosya biçimini belirleyin.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 px-4">
-            {/* Step 1 — content selection */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-micro uppercase text-muted-foreground">Rapor Bölümleri</p>
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {selectedSections.includes("all") ? ALL_SPECIFIC_IDS.length : selectedSections.length} /{" "}
-                  {ALL_SPECIFIC_IDS.length} seçili
-                </span>
-              </div>
-              <div className="grid max-h-52 grid-cols-1 gap-2 overflow-y-auto pr-1 custom-scrollbar sm:grid-cols-2">
-                {REPORT_SECTIONS.map((sec) => {
-                  const isSelected =
-                    sec.id === "all"
-                      ? selectedSections.includes("all") || selectedSections.length === ALL_SPECIFIC_IDS.length
-                      : selectedSections.includes("all") || selectedSections.includes(sec.id);
-
-                  return (
-                    <button
-                      key={sec.id}
-                      type="button"
-                      onClick={() => toggleSection(sec.id)}
-                      className={cn(
-                        "flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 text-left transition-colors",
-                        isSelected
-                          ? "border-primary/40 bg-primary/5"
-                          : "border-border bg-card hover:bg-muted/50",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-[3px] border",
-                          isSelected
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-muted-foreground/40",
-                        )}
-                      >
-                        {isSelected && <Check className="size-3" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-medium text-foreground">{sec.label}</span>
-                        <span className="mt-0.5 line-clamp-1 block text-micro text-muted-foreground">{sec.desc}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {!hasSelection && (
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-status-warning-foreground">
-                  <AlertTriangle className="size-3.5" />
-                  İndirmek için en az bir bölüm seçin.
-                </p>
-              )}
-            </div>
-
-            {/* Step 2 — file format */}
-            <div>
-              <p className="mb-2 text-micro uppercase text-muted-foreground">Dosya Biçimi</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <button
-                  type="button"
-                  disabled={exporting || !hasSelection}
-                  onClick={exportExcel}
-                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-40"
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    {excelGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-foreground">Excel</span>
-                    <span className="block text-xs text-muted-foreground">.xlsx çalışma kitabı</span>
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={exporting || !hasSelection}
-                  onClick={exportPdf}
-                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/50 disabled:pointer-events-none disabled:opacity-40"
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    {pdfGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-medium text-foreground">PDF</span>
-                    <span className="block text-xs text-muted-foreground">Yazdırmaya hazır belge</span>
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

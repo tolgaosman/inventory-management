@@ -13,7 +13,7 @@ export function isActive(pathname: string, href: string) {
 }
 
 const linkBase =
-  "flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-[12.5px] font-medium transition-colors ease-out-strong";
+  "flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-[13.5px] font-medium transition-colors ease-out-strong";
 /**
  * Active state matches the selected-row language used across the app
  * (`bg-primary/10 text-primary font-semibold`) with a clean button look.

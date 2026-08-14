@@ -90,8 +90,6 @@ export function ReportsClient() {
   const { name } = useAuth();
   const { company } = useSettings();
   const { currency, rates } = useCurrency();
-  const excelGuard = useSubmitGuard();
-  const pdfGuard = useSubmitGuard();
   const [range, setRange] = useState<DateRangePreset>("son-6-ay");
   const [tab, setTab] = useState<ReportTab>("urunler");
 
@@ -140,32 +138,7 @@ export function ReportsClient() {
     }));
   }, [filteredOrders]);
 
-  const report = useMemo(
-    () => buildReportData(range, name, currency, rate, company.companyName),
-    [range, name, currency, rate, company.companyName],
-  );
 
-  async function handleExcel() {
-    await excelGuard.guard(async () => {
-      try {
-        downloadBlob(buildReportExcel(report, ["all"]), reportFilename("xlsx"));
-        toast.success("Excel raporu hazır", { description: RANGE_LABELS[range] });
-      } catch {
-        toast.error("Excel oluşturulamadı");
-      }
-    });
-  }
-
-  async function handlePdf() {
-    await pdfGuard.guard(async () => {
-      try {
-        downloadBlob(await buildReportPdf(report, ["all"]), reportFilename("pdf"));
-        toast.success("PDF raporu hazır", { description: RANGE_LABELS[range] });
-      } catch {
-        toast.error("PDF oluşturulamadı");
-      }
-    });
-  }
 
   const rangeSelector = (
     <Select value={range} onValueChange={(v) => setRange(v as DateRangePreset)}>
@@ -193,14 +166,6 @@ export function ReportsClient() {
         actions={
           <>
             {rangeSelector}
-            <Button variant="outline" size="sm" onClick={handleExcel} disabled={excelGuard.pending}>
-              {excelGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
-              Excel
-            </Button>
-            <Button size="sm" onClick={handlePdf} disabled={pdfGuard.pending}>
-              {pdfGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
-              PDF
-            </Button>
           </>
         }
       />

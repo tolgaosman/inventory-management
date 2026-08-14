@@ -85,10 +85,6 @@ function DashboardFilters() {
         </SelectContent>
       </Select>
 
-      <Button variant="outline" size="sm" className="ml-2 h-9" onClick={() => window.dispatchEvent(new CustomEvent("open-export-modal"))}>
-        <Download className="size-4" />
-        Dışa Aktar
-      </Button>
     </div>
   );
 }

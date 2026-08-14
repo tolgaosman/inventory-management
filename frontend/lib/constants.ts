@@ -34,7 +34,7 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
   pasif: "Pasif",
 };
 
-export const PAGE_SIZE = 25;
+export const PAGE_SIZE = 20;
 
 export const TIMEZONE_OPTIONS: { value: string; label: string; iana: string }[] = [
   { value: "europe-istanbul", label: "(UTC+03:00) İstanbul", iana: "Europe/Istanbul" },

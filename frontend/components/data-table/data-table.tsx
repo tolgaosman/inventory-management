@@ -194,7 +194,7 @@ export function DataTable<T>({
               disabled={page >= pageCount}
               onClick={() => onPageChange(page + 1)}
             >
-              Sonraki
+              Sonraki Sayfa
               <ChevronRight className="size-4" />
             </Button>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useCurrency } from "@/lib/currency-context";
@@ -60,6 +60,8 @@ import {
   Boxes,
   FileSpreadsheet,
   FileText,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import {
@@ -80,6 +82,7 @@ import { downloadBlob, reportFilename } from "@/lib/export/download";
 import { WarehouseFormSheet } from "@/components/warehouses/warehouse-form-sheet";
 import { ApiError } from "@/lib/api/client";
 import type { Warehouse } from "@/lib/types";
+import { PAGE_SIZE } from "@/lib/constants";
 
 export function WarehousesClient() {
   const { currency, rates } = useCurrency();
@@ -90,6 +93,7 @@ export function WarehousesClient() {
   const [search, setSearch] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [page, setPage] = useState(1);
 
   // Modals state
   const [detailProduct, setDetailProduct] = useState<ProductStockMatrixRow | null>(null);
@@ -125,6 +129,18 @@ export function WarehousesClient() {
 
   const displayMatrix = matrix ?? staleMatrix;
   const isMatrixLoading = matrixStatus === "loading";
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, selectedWarehouseId, selectedCategoryId]);
+
+  const totalMatrixItems = displayMatrix?.length || 0;
+  const totalPages = Math.ceil(totalMatrixItems / PAGE_SIZE) || 1;
+  const paginatedMatrix = useMemo(() => {
+    if (!displayMatrix) return [];
+    return displayMatrix.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  }, [displayMatrix, page]);
 
   const { data: categories } = useAsync(listCategories, []);
 
@@ -440,7 +456,7 @@ export function WarehousesClient() {
       </div>
 
       {/* Main Stock Breakdown Matrix Section */}
-      <Card className="">
+      <Card className="pb-0">
         <CardHeader className="p-5 pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -575,8 +591,8 @@ export function WarehousesClient() {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : displayMatrix && displayMatrix.length > 0 ? (
-                displayMatrix.map((row) => (
+              ) : paginatedMatrix && paginatedMatrix.length > 0 ? (
+                paginatedMatrix.map((row) => (
                   <TableRow key={row.productId} className="border-b border-border/40 transition-colors hover:bg-muted/50">
                     {/* Product & SKU */}
                     <TableCell>
@@ -682,6 +698,36 @@ export function WarehousesClient() {
             </TableBody>
           </Table>
         </CardContent>
+        {!isMatrixLoading && totalMatrixItems > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-muted/10 p-4 text-sm text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">
+                {formatNumber((page - 1) * PAGE_SIZE + 1)}–{formatNumber(Math.min(page * PAGE_SIZE, totalMatrixItems))}
+              </span>{" "}
+              / {formatNumber(totalMatrixItems)} kayıt · Sayfa {page} / {totalPages}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <ChevronLeft className="size-4" />
+                Önceki
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages}
+                onClick={() => setPage(page + 1)}
+              >
+                Sonraki Sayfa
+                <ChevronRight className="size-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Product Warehouse Breakdown Detail Modal */}

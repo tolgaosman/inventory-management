@@ -3,7 +3,22 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Truck, Package, MapPin, Search, Plus, MoreHorizontal, Eye, Pencil, Trash2, X } from "lucide-react";
+import {
+  Truck,
+  Package,
+  MapPin,
+  Search,
+  Plus,
+  MoreHorizontal,
+  Eye,
+  Pencil,
+  Trash2,
+  X,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Loader2,
+} from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
@@ -33,15 +48,25 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { SupplierFormSheet } from "@/components/suppliers/supplier-form-sheet";
 import { useAsync } from "@/lib/hooks/use-async";
+import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
+import { useAuth } from "@/lib/auth";
+import { useCurrency } from "@/lib/currency-context";
 import { listSuppliers, createSupplier, updateSupplier, deleteSupplier, type SupplierQuery } from "@/lib/api/catalog";
 import { ApiError } from "@/lib/api/client";
 import { formatNumber } from "@/lib/format";
 import { PAGE_SIZE } from "@/lib/constants";
 import type { Supplier } from "@/lib/types";
+import { buildReportData } from "@/lib/export/report-data";
+import { buildReportExcel } from "@/lib/export/excel";
+import { buildReportPdf } from "@/lib/export/pdf";
+import { downloadBlob, reportFilename } from "@/lib/export/download";
 
 type SupplierRow = Supplier & { productCount: number };
 
 export function SuppliersClient() {
+  const { name, role } = useAuth();
+  const { currency, rates } = useCurrency();
+
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -49,6 +74,8 @@ export function SuppliersClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | undefined>(undefined);
   const [deleting, setDeleting] = useState<SupplierRow | undefined>(undefined);
+
+  const exportGuard = useSubmitGuard();
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 300);
@@ -78,6 +105,24 @@ export function SuppliersClient() {
     const cityCount = new Set(rows.map((s) => s.city)).size;
     return { totalCount: view?.total ?? 0, totalProducts, cityCount };
   }, [view]);
+
+  async function handleExport(type: "excel" | "pdf") {
+    await exportGuard.guard(async () => {
+      try {
+        const report = buildReportData("bu-yil", `${name} (${role})`, currency, rates?.[currency]);
+        const date = new Date();
+        if (type === "excel") {
+          downloadBlob(buildReportExcel(report, ["suppliers"]), reportFilename("xlsx", date, "tedarikci-raporu"));
+          toast.success("Excel raporu indirildi");
+        } else {
+          downloadBlob(await buildReportPdf(report, ["suppliers"]), reportFilename("pdf", date, "tedarikci-raporu"));
+          toast.success("PDF raporu indirildi");
+        }
+      } catch {
+        toast.error(type === "excel" ? "Excel oluşturulamadı" : "PDF oluşturulamadı");
+      }
+    });
+  }
 
   async function handleSaved(values: Omit<Supplier, "id">) {
     try {
@@ -208,18 +253,38 @@ export function SuppliersClient() {
           title="Tedarikçi Yönetimi"
           description="Ürünlerinizi tedarik ettiğiniz firmalar ve iletişim bilgileri."
           actions={
-            <Can permission="suppliers.manage">
-              <Button
-                size="sm"
-                onClick={() => {
-                  setEditing(undefined);
-                  setFormOpen(true);
-                }}
-              >
-                <Plus className="size-4" />
-                Yeni Tedarikçi
-              </Button>
-            </Can>
+            <>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button variant="outline" size="sm" disabled={exportGuard.pending}>
+                      {exportGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                      Dışa Aktar
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport("excel")}>
+                    <FileSpreadsheet className="size-4 text-status-good" /> Excel (.xlsx)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                    <FileText className="size-4 text-status-critical" /> PDF (.pdf)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Can permission="suppliers.manage">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setEditing(undefined);
+                    setFormOpen(true);
+                  }}
+                >
+                  <Plus className="size-4" />
+                  Yeni Tedarikçi
+                </Button>
+              </Can>
+            </>
           }
         />
 
