@@ -25,6 +25,17 @@ export function isToday(iso: string): boolean {
   return d === today;
 }
 
+/** First moment of the range window, aligned with getMonthlyFlow's bucketing. */
+function rangeStart(months: number): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
+}
+
+function movementMatchesWarehouse(m: StockMovement, warehouseId?: string): boolean {
+  if (!warehouseId) return true;
+  return m.warehouseId === warehouseId || m.targetWarehouseId === warehouseId;
+}
+
 export interface DashboardKpis {
   totalProducts: number;
   totalWarehouses: number;
@@ -35,6 +46,7 @@ export interface DashboardKpis {
   pendingDeliveries: number;
   purchaseTotalValue: number;
   cancelledOrders: number;
+  totalPurchaseOrders: number;
   onHandUnits: number;
   incomingUnits: number;
   totalUsers: number;
@@ -53,8 +65,13 @@ export function getCriticalProducts(): (Product & { totalStock: number })[] {
     .map((p) => ({ ...p, totalStock: totalStockForProduct(p.id) }));
 }
 
-export function getDashboardKpis(): DashboardKpis {
-  const todayMovements = stockMovements.filter((m) => isToday(m.createdAt));
+export function getDashboardKpis(opts: { months?: number; warehouseId?: string } = {}): DashboardKpis {
+  const { months = 6, warehouseId } = opts;
+
+  const scopedMovements = stockMovements.filter((m) => movementMatchesWarehouse(m, warehouseId));
+  const scopedStockLevels = warehouseId ? stockLevels.filter((s) => s.warehouseId === warehouseId) : stockLevels;
+
+  const todayMovements = scopedMovements.filter((m) => isToday(m.createdAt));
   const todayIn = todayMovements
     .filter((m) => m.type === "giris")
     .reduce((sum, m) => sum + m.quantity, 0);
@@ -62,17 +79,22 @@ export function getDashboardKpis(): DashboardKpis {
     .filter((m) => m.type === "cikis")
     .reduce((sum, m) => sum + m.quantity, 0);
 
-  const openPurchaseOrders = purchaseOrders.filter(
+  // Purchase orders have no warehouse dimension in the schema, so they only
+  // respect the date range, never the warehouse filter.
+  const since = rangeStart(months).getTime();
+  const scopedPurchaseOrders = purchaseOrders.filter((po) => new Date(po.createdAt).getTime() >= since);
+
+  const openPurchaseOrders = scopedPurchaseOrders.filter(
     (po) => po.status === "ordered" || po.status === "partially_received",
   ).length;
-  const pendingDeliveries = purchaseOrders.filter((po) => po.status === "partially_received").length;
-  const purchaseTotalValue = purchaseOrders
+  const pendingDeliveries = scopedPurchaseOrders.filter((po) => po.status === "partially_received").length;
+  const purchaseTotalValue = scopedPurchaseOrders
     .filter((po) => po.status !== "cancelled" && po.status !== "draft")
     .reduce((sum, po) => sum + po.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0), 0);
-  const cancelledOrders = purchaseOrders.filter((po) => po.status === "cancelled").length;
+  const cancelledOrders = scopedPurchaseOrders.filter((po) => po.status === "cancelled").length;
 
-  const onHandUnits = stockLevels.reduce((sum, s) => sum + s.quantity, 0);
-  const incomingUnits = purchaseOrders
+  const onHandUnits = scopedStockLevels.reduce((sum, s) => sum + s.quantity, 0);
+  const incomingUnits = scopedPurchaseOrders
     .filter((po) => po.status === "ordered" || po.status === "partially_received")
     .reduce(
       (sum, po) => sum + po.items.reduce((s, i) => s + (i.quantity - i.receivedQuantity), 0),
@@ -81,7 +103,7 @@ export function getDashboardKpis(): DashboardKpis {
 
   return {
     totalProducts: products.length,
-    totalWarehouses: warehouses.length,
+    totalWarehouses: warehouseId ? 1 : warehouses.length,
     criticalStockCount: getCriticalProducts().length,
     todayIn,
     todayOut,
@@ -89,6 +111,7 @@ export function getDashboardKpis(): DashboardKpis {
     pendingDeliveries,
     purchaseTotalValue,
     cancelledOrders,
+    totalPurchaseOrders: scopedPurchaseOrders.length,
     onHandUnits,
     incomingUnits,
     totalUsers: users.length,
@@ -99,7 +122,7 @@ export function getDashboardKpis(): DashboardKpis {
 }
 
 /** Monthly inbound/outbound totals for the last `months` months. */
-export function getMonthlyFlow(months = 9): MonthlyFlow[] {
+export function getMonthlyFlow(months = 9, warehouseId?: string): MonthlyFlow[] {
   const now = new Date();
   const buckets = new Map<string, MonthlyFlow>();
   const order: string[] = [];
@@ -112,6 +135,7 @@ export function getMonthlyFlow(months = 9): MonthlyFlow[] {
   }
 
   for (const m of stockMovements) {
+    if (!movementMatchesWarehouse(m, warehouseId)) continue;
     const d = new Date(m.createdAt);
     const key = `${d.getFullYear()}-${d.getMonth()}`;
     const bucket = buckets.get(key);
@@ -124,16 +148,19 @@ export function getMonthlyFlow(months = 9): MonthlyFlow[] {
 }
 
 /** Unit distribution across top-level categories, for the radial chart. */
-export function getCategoryShares(): CategoryShare[] {
+export function getCategoryShares(warehouseId?: string): CategoryShare[] {
   const topLevel = categories.filter((c) => c.parentId === null);
   const shares: CategoryShare[] = topLevel.map((top) => {
     const descendantIds = new Set([
       top.id,
       ...categories.filter((c) => c.parentId === top.id).map((c) => c.id),
     ]);
-    const units = products
-      .filter((p) => descendantIds.has(p.categoryId))
-      .reduce((sum, p) => sum + totalStockForProduct(p.id), 0);
+    const categoryProducts = products.filter((p) => descendantIds.has(p.categoryId));
+    const units = warehouseId
+      ? stockLevels
+          .filter((s) => s.warehouseId === warehouseId && categoryProducts.some((p) => p.id === s.productId))
+          .reduce((sum, s) => sum + s.quantity, 0)
+      : categoryProducts.reduce((sum, p) => sum + totalStockForProduct(p.id), 0);
     return { categoryId: top.id, name: top.name, units };
   });
   return shares.sort((a, b) => b.units - a.units);
@@ -146,8 +173,9 @@ export interface WarehouseStockTotal {
   capacity: number;
 }
 
-export function getWarehouseStockTotals(): WarehouseStockTotal[] {
-  return warehouses
+export function getWarehouseStockTotals(warehouseId?: string): WarehouseStockTotal[] {
+  const scoped = warehouseId ? warehouses.filter((w) => w.id === warehouseId) : warehouses;
+  return scoped
     .map((wh) => ({
       warehouseId: wh.id,
       name: wh.name,
@@ -157,8 +185,34 @@ export function getWarehouseStockTotals(): WarehouseStockTotal[] {
     .sort((a, b) => b.units - a.units);
 }
 
-export function getRecentMovements(limit = 15): StockMovement[] {
-  return stockMovements.slice(0, limit);
+export interface EnrichedMovement extends StockMovement {
+  productName: string;
+  productImageUrl?: string;
+  warehouseName: string;
+  targetWarehouseName?: string;
+  userName: string;
+}
+
+function enrichMovement(m: StockMovement): EnrichedMovement {
+  const product = products.find((p) => p.id === m.productId);
+  const warehouse = warehouses.find((w) => w.id === m.warehouseId);
+  const targetWarehouse = m.targetWarehouseId ? warehouses.find((w) => w.id === m.targetWarehouseId) : undefined;
+  const user = users.find((u) => u.id === m.userId);
+  return {
+    ...m,
+    productName: product?.name ?? "Bilinmeyen ürün",
+    productImageUrl: product?.imageUrl,
+    warehouseName: warehouse?.name ?? "Bilinmeyen depo",
+    targetWarehouseName: targetWarehouse?.name,
+    userName: user?.name ?? "Bilinmeyen kullanıcı",
+  };
+}
+
+export function getRecentMovements(limit = 15, warehouseId?: string): EnrichedMovement[] {
+  return stockMovements
+    .filter((m) => movementMatchesWarehouse(m, warehouseId))
+    .slice(0, limit)
+    .map(enrichMovement);
 }
 
 export interface TopMover {
@@ -170,9 +224,10 @@ export interface TopMover {
   imageUrl?: string;
 }
 
-export function getTopMovers(limit = 15): TopMover[] {
+export function getTopMovers(limit = 15, warehouseId?: string): TopMover[] {
   const byProduct = new Map<string, { count: number; qty: number }>();
   for (const m of stockMovements) {
+    if (!movementMatchesWarehouse(m, warehouseId)) continue;
     const cur = byProduct.get(m.productId) ?? { count: 0, qty: 0 };
     cur.count += 1;
     cur.qty += m.quantity;
@@ -192,4 +247,10 @@ export function getTopMovers(limit = 15): TopMover[] {
     })
     .sort((a, b) => b.totalQuantity - a.totalQuantity)
     .slice(0, limit);
+}
+
+/** Critical-stock summary for the header notification popover. */
+export function getCriticalStockSummary(limit = 5): { total: number; items: (Product & { totalStock: number })[] } {
+  const items = getCriticalProducts();
+  return { total: items.length, items: items.slice(0, limit) };
 }

@@ -19,11 +19,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SubmitButton } from "@/components/common/submit-button";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useAuth } from "@/lib/auth";
-import { createStockIn, createStockOut, createTransfer, getStockQuantity } from "@/lib/api/movements";
+import { createStockIn, createStockOut, createTransfer } from "@/lib/api/movements";
 import { ApiError } from "@/lib/api/client";
 import { MOVEMENT_REASON_LABELS } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
+import { useWarehouseQuantity } from "@/lib/hooks/use-warehouse-quantity";
 import type { MovementReason, Product } from "@/lib/types";
 
 export type StockMovementMode = "giris" | "cikis" | "transfer";
@@ -58,28 +59,6 @@ interface StockMovementSheetProps {
   warehouses: WarehouseOption[];
   suppliers?: SupplierOption[];
   onDone: () => void;
-}
-
-/** Live "mevcut miktar" for the currently selected warehouse, refetched whenever it changes. */
-function useWarehouseQuantity(productId: string | undefined, warehouseId: string) {
-  const [quantity, setQuantity] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!productId || !warehouseId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setQuantity(null);
-      return;
-    }
-    let cancelled = false;
-    getStockQuantity(productId, warehouseId).then((qty) => {
-      if (!cancelled) setQuantity(qty);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [productId, warehouseId]);
-
-  return quantity;
 }
 
 export function StockMovementSheet({

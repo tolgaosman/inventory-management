@@ -43,7 +43,7 @@ export function MiniCalendar() {
   const paddingArray = Array.from({ length: firstDayIndex }, (_, i) => i);
 
   return (
-    <div className="m-3 p-2 text-sidebar-foreground select-none shrink-0 border-t border-sidebar-border/60 pt-3">
+    <div className="p-3 text-popover-foreground select-none shrink-0">
       <div className="flex items-center justify-between mb-2 px-1">
         <span className="text-xs font-medium text-sidebar-foreground">
           {MONTH_NAMES[month]} {year}

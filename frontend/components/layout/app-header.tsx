@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, ChevronDown, LogOut, Settings, UserCog, AlertTriangle } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Bell, ChevronDown, LogOut, Settings, UserCog, AlertTriangle, Warehouse, CalendarRange, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/constants";
 import type { Role } from "@/lib/types";
-import { getCriticalProducts } from "@/lib/mock/dashboard";
+import { getCriticalStockNotifications, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
+import { listWarehouses } from "@/lib/api/catalog";
+import { useAsync } from "@/lib/hooks/use-async";
+import { useDashboardFilter } from "@/lib/dashboard-filter-context";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +21,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,14 +33,79 @@ import { useSettings } from "@/lib/settings-context";
 
 const ROLE_ORDER: Role[] = ["yonetici", "satinalma", "depo"];
 
+function DashboardFilters() {
+  const { range, setRange, warehouseId, setWarehouseId } = useDashboardFilter();
+  const { data: warehouses } = useAsync(() => listWarehouses(), []);
+
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        value={warehouseId ?? "all"}
+        onValueChange={(v) => setWarehouseId(!v || v === "all" ? undefined : v)}
+      >
+        <SelectTrigger className="w-[200px]">
+          <Warehouse className="size-3.5 text-muted-foreground shrink-0" />
+          <SelectValue>
+            {warehouseId ? warehouses?.find((w) => w.id === warehouseId)?.name ?? "Depo" : "Tüm Depolar"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Tüm Depolar</SelectItem>
+          {warehouses?.map((w) => (
+            <SelectItem key={w.id} value={w.id}>
+              {w.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Select
+        value={range}
+        onValueChange={(v) => {
+          const preset = v as DateRangePreset;
+          setRange(preset);
+          toast.info("Tarih Filtresi Güncellendi", {
+            description: `Seçilen dönem: ${RANGE_LABELS[preset]}`,
+          });
+        }}
+      >
+        <SelectTrigger className="w-[140px]">
+          <CalendarRange className="size-3.5 text-muted-foreground shrink-0" />
+          <SelectValue>{RANGE_LABELS[range]}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(RANGE_LABELS) as DateRangePreset[]).map((r) => (
+            <SelectItem key={r} value={r}>
+              {RANGE_LABELS[r]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <Button variant="outline" size="sm" className="ml-2 h-9" onClick={() => window.dispatchEvent(new CustomEvent("open-export-modal"))}>
+        <Download className="size-4" />
+        Dışa Aktar
+      </Button>
+    </div>
+  );
+}
+
 export function AppHeader() {
   const { name, initials, role, setRole } = useAuth();
   const { notifications, userProfile } = useSettings();
-  const criticalCount = notifications.notifyStock ? getCriticalProducts().length : 0;
+  const pathname = usePathname();
+  const isPanel = pathname?.replace(/\/$/, "") === "/panel";
+
+  const { data: notif } = useAsync(
+    () => (notifications.notifyStock ? getCriticalStockNotifications(5) : Promise.resolve({ total: 0, items: [] })),
+    [notifications.notifyStock],
+  );
+  const criticalCount = notif?.total ?? 0;
+  const criticalItems = notif?.items ?? [];
 
   return (
     <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 md:px-6">
-      <div className="flex-1" />
+      <div className="flex-1">{isPanel && <DashboardFilters />}</div>
 
       <div className="flex items-center justify-end gap-2">
 
@@ -81,9 +151,7 @@ export function AppHeader() {
                 <p className="mt-0.5 text-xs text-muted-foreground">Tüm ürünler güvenli stok seviyesinde.</p>
               </div>
             ) : (
-              getCriticalProducts()
-                .slice(0, 5)
-                .map((p) => (
+              criticalItems.map((p) => (
                   <Link
                     key={p.id}
                     href={`/urunler/${p.id}`}

@@ -1,9 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
@@ -16,41 +16,38 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-/** Shared row chrome: an accent rail on the left marks the active item. */
-const rowBase =
-  "group relative flex items-center gap-2.5 rounded-md py-2 pr-3 pl-3 text-sm transition-colors before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:transition-colors";
-const rowActive =
-  "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:bg-sidebar-primary";
-const rowIdle =
-  "text-sidebar-foreground/75 before:bg-transparent hover:bg-sidebar-accent/50 hover:text-sidebar-foreground";
+const linkBase = "flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors text-[13px] font-medium";
+const linkActive = "bg-primary text-primary-foreground";
+const linkIdle = "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground";
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const active = isActive(pathname, item.href);
+function SidebarLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
-    <Link href={item.href} className={cn(rowBase, active ? rowActive : rowIdle)}>
-      <item.icon className="size-4 shrink-0" />
+    <Link href={item.href} className={cn(linkBase, active ? linkActive : linkIdle)}>
+      <item.icon className="size-3.5 shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
   );
 }
 
-function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
-  const [open, setOpen] = useState(() => item.children?.some((c) => isActive(pathname, c.href)) ?? false);
-  const active = isActive(pathname, item.href);
+function SidebarGroup({ item, pathname }: { item: NavItem; pathname: string }) {
+  const active = isActive(pathname, item.href) || (item.children?.some((c) => isActive(pathname, c.href)) ?? false);
+  const [open, setOpen] = useState(active);
 
   return (
-    <div>
-      <button
+    <div className="flex w-full flex-col gap-0.5">
+      <button 
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(rowBase, "w-full", active ? rowActive : rowIdle)}
+        onClick={() => setOpen(!open)}
+        className={cn(linkBase, linkIdle, "justify-between", active && !open && "text-primary")}
       >
-        <item.icon className="size-4 shrink-0" />
-        <span className="flex-1 truncate text-left">{item.label}</span>
-        <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")} />
+        <div className="flex items-center gap-3">
+          <item.icon className="size-3.5 shrink-0" />
+          <span className="truncate">{item.label}</span>
+        </div>
+        <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", open ? "rotate-180" : "")} />
       </button>
       {open && (
-        <div className="mt-0.5 ml-[26px] flex flex-col gap-0.5 border-l border-sidebar-border pl-2.5">
+        <div className="flex flex-col gap-0.5 pl-8 pr-2 pt-0.5">
           {item.children!.map((child) => {
             const childActive = pathname === child.href;
             return (
@@ -58,13 +55,13 @@ function NavGroup({ item, pathname }: { item: NavItem; pathname: string }) {
                 key={child.href}
                 href={child.href}
                 className={cn(
-                  "rounded-md px-2.5 py-1.5 text-sm transition-colors",
+                  "flex items-center gap-3 rounded-md px-3 py-1.5 text-[13px] transition-colors",
                   childActive
-                    ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/65 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground",
+                    ? "bg-accent font-medium text-foreground"
+                    : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground",
                 )}
               >
-                {child.label}
+                <span className="truncate">{child.label}</span>
               </Link>
             );
           })}
@@ -86,27 +83,27 @@ export function AppSidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col justify-between border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border py-2 px-4">
-          <Image src={siteLogo} alt="Stok Yönetimi" className="h-11 w-auto object-contain dark:hidden" priority />
+        <Link href="/panel" className="flex items-center justify-center h-16 shrink-0 border-b border-sidebar-border/50">
+          <Image src={siteLogo} alt="Stok Yönetimi" className="h-10 w-auto object-contain dark:hidden" priority />
           <Image
             src={siteDarkLogo}
             alt="Stok Yönetimi"
-            className="hidden h-11 w-auto object-contain dark:block"
+            className="hidden h-10 w-auto object-contain dark:block"
             priority
           />
-        </div>
+        </Link>
 
-        <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4 custom-scrollbar">
+        <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-6 custom-scrollbar">
           {sections.map((section) => (
-            <div key={section.label} className="space-y-1">
-              <p className="px-3 pb-1 text-micro tracking-wide text-sidebar-foreground/45 uppercase">
+            <div key={section.label} className="flex flex-col gap-1">
+              <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
                 {section.label}
-              </p>
+              </div>
               {section.items.map((item) =>
                 item.children ? (
-                  <NavGroup key={item.href} item={item} pathname={pathname} />
+                  <SidebarGroup key={item.href} item={item} pathname={pathname} />
                 ) : (
-                  <NavLink key={item.href} item={item} pathname={pathname} />
+                  <SidebarLink key={item.href} item={item} active={isActive(pathname, item.href)} />
                 ),
               )}
             </div>
@@ -114,7 +111,9 @@ export function AppSidebar() {
         </nav>
       </div>
 
-      <MiniCalendar />
+      <div className="flex shrink-0 flex-col px-2 pb-4">
+        <MiniCalendar />
+      </div>
     </aside>
   );
 }

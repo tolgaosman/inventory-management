@@ -23,12 +23,12 @@ export function TopMoversList({ items }: { items: TopMover[] }) {
           <EmptyState icon={TrendingUp} title="Hareket verisi yok" />
         ) : (
           <div className="max-h-[340px] overflow-y-auto custom-scrollbar">
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow className="border-b border-border/70 hover:bg-transparent">
-                  <TableHead className="w-12 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">#</TableHead>
+                  <TableHead className="w-10 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">#</TableHead>
                   <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ürün Adı</TableHead>
-                  <TableHead className="text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Toplam İşlem</TableHead>
+                  <TableHead className="w-24 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Toplam</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -47,14 +47,14 @@ export function TopMoversList({ items }: { items: TopMover[] }) {
                     <TableCell className="py-2.5 px-2 min-w-0">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <ProductImageThumbnail src={item.imageUrl} alt={item.name} size="xs" />
-                        <Link href={`/urunler/${item.productId}`} className="block truncate text-xs sm:text-sm font-semibold hover:underline text-foreground">
+                        <Link href={`/urunler/${item.productId}`} className="block truncate text-xs sm:text-[13px] font-semibold hover:underline text-foreground">
                           {item.name}
                         </Link>
                       </div>
                     </TableCell>
                     <TableCell className="text-right py-2.5 px-2">
                       <span className="text-xs font-semibold text-foreground bg-muted/70 px-2.5 py-1 rounded-md inline-block">
-                        {formatNumber(item.totalQuantity)} işlem
+                        {formatNumber(item.totalQuantity)}
                       </span>
                     </TableCell>
                   </TableRow>

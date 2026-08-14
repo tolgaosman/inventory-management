@@ -1,5 +1,6 @@
 import {
   getCategoryShares,
+  getCriticalStockSummary,
   getDashboardKpis,
   getMonthlyFlow,
   getRecentMovements,
@@ -26,20 +27,24 @@ export const RANGE_LABELS: Record<DateRangePreset, string> = {
   "bu-yil": "Bu Yıl",
 };
 
-export async function getDashboardData(range: DateRangePreset = "son-6-ay") {
+export async function getDashboardData(range: DateRangePreset = "son-6-ay", warehouseId?: string) {
   const months = MONTHS_BY_RANGE[range];
   return delay(
     {
-      kpis: getDashboardKpis(),
-      monthlyFlow: getMonthlyFlow(Math.max(months, 5)),
-      categoryShares: getCategoryShares(),
-      warehouseTotals: getWarehouseStockTotals(),
-      recentMovements: getRecentMovements(8),
-      topMovers: getTopMovers(6),
+      kpis: getDashboardKpis({ months, warehouseId }),
+      monthlyFlow: getMonthlyFlow(Math.max(months, 5), warehouseId),
+      categoryShares: getCategoryShares(warehouseId),
+      warehouseTotals: getWarehouseStockTotals(warehouseId),
+      recentMovements: getRecentMovements(8, warehouseId),
+      topMovers: getTopMovers(6, warehouseId),
       criticalProducts: getCriticalProducts()
         .slice(0, 6)
         .map((p) => ({ ...p, totalStock: totalStockForProduct(p.id) })),
     },
     500,
   );
+}
+
+export async function getCriticalStockNotifications(limit = 5) {
+  return delay(getCriticalStockSummary(limit), 300);
 }

@@ -1,65 +1,98 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Package,
   Warehouse,
   ArrowDownToLine,
   ArrowUpFromLine,
-  ShoppingCart,
-  Clock,
-  Wallet,
-  XCircle,
-  Boxes,
-  Truck,
-  Users,
   AlertTriangle,
-  Layers,
   Download,
   FileSpreadsheet,
   FileText,
   Loader2,
   Check,
-  Database,
+  Truck,
+  Users,
   Building2,
   Tag,
+  Layers,
+  Database,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { ErrorState } from "@/components/common/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { KpiPanel } from "@/components/dashboard/kpi-panel";
-import { KpiTablePanel } from "@/components/dashboard/kpi-table-panel";
-import { KpiTile } from "@/components/dashboard/kpi-tile";
-import { StockFlowChart } from "@/components/dashboard/stock-flow-chart";
+import { KpiStrip } from "@/components/dashboard/kpi-strip";
+import { KpiMetaBar } from "@/components/dashboard/kpi-meta-bar";
+import { PurchaseHeroCard } from "@/components/dashboard/purchase-hero-card";
 import { CategoryRadialChart } from "@/components/dashboard/category-radial-chart";
 import { WarehouseStockBars } from "@/components/dashboard/warehouse-stock-bars";
 import { CriticalStockList } from "@/components/dashboard/critical-stock-list";
 import { RecentMovementsTable } from "@/components/dashboard/recent-movements-table";
 import { TopMoversList } from "@/components/dashboard/top-movers-list";
+import { StockFlowChart } from "@/components/dashboard/stock-flow-chart";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useAuth } from "@/lib/auth";
+import { useDashboardFilter } from "@/lib/dashboard-filter-context";
 import { ROLE_LABELS, REPORT_SECTIONS, ALL_SPECIFIC_IDS } from "@/lib/constants";
-import { getDashboardData, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
+import { getDashboardData } from "@/lib/api/dashboard";
 import { buildReportData } from "@/lib/export/report-data";
 import { downloadBlob, reportFilename, slugify } from "@/lib/export/download";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
 
+/**
+ * Entrance stagger for a dashboard section.
+ *
+ * CSS animations fire on mount only, and this subtree mounts exactly once:
+ * `useAsync` keeps `staleData` during a refetch, so a warehouse/date filter
+ * change re-renders in place instead of remounting. The intro therefore plays
+ * on first load and never replays on filter changes, which is the difference
+ * between one authored moment and the same entrance firing at every keystroke.
+ * `animationFillMode: backwards` holds the pre-animation state during the
+ * delay so nothing flashes in before its turn.
+ */
+function Section({
+  index,
+  className,
+  children,
+}: {
+  index: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn("animate-in fade-in slide-in-from-bottom-2 duration-[260ms] ease-out-strong", className)}
+      style={{ animationDelay: `${index * 40}ms`, animationFillMode: "backwards" }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function PanelPage() {
-  const { company, defaultRange, showKurus } = useSettings();
-  const [range, setRange] = useState<DateRangePreset>(defaultRange);
+  const { company, showKurus } = useSettings();
+  const { range, warehouseId } = useDashboardFilter();
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedSections, setSelectedSections] = useState<string[]>(["all"]);
 
-  const { status, data, staleData, error, refetch } = useAsync(() => getDashboardData(range), [range]);
+  useEffect(() => {
+    const handleOpen = () => setShowExportModal(true);
+    window.addEventListener("open-export-modal", handleOpen);
+    return () => window.removeEventListener("open-export-modal", handleOpen);
+  }, []);
+
+  const { status, data, staleData, error, refetch } = useAsync(
+    () => getDashboardData(range, warehouseId),
+    [range, warehouseId],
+  );
   const view = data ?? staleData;
 
   const { name, role } = useAuth();
@@ -157,39 +190,6 @@ export default function PanelPage() {
       <PageHeader
         title="Panel"
         description="Şirket genelinde stok, satın alma ve depo özetini görün."
-        actions={
-          <>
-            <Select
-              value={range}
-              onValueChange={(v) => {
-                const preset = v as DateRangePreset;
-                setRange(preset);
-                toast.info("Tarih Filtresi Güncellendi", {
-                  description: `Seçilen dönem: ${RANGE_LABELS[preset]}`,
-                });
-              }}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue>{RANGE_LABELS[range]}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(RANGE_LABELS) as DateRangePreset[]).map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {RANGE_LABELS[r]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowExportModal(true)}
-            >
-              <Download className="size-4" />
-              Dışa Aktar
-            </Button>
-          </>
-        }
       />
 
       {status === "error" && !view ? (
@@ -197,69 +197,73 @@ export default function PanelPage() {
       ) : !view ? (
         <DashboardSkeleton />
       ) : (
-        <div className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <KpiTablePanel
-              title="Stok Özeti"
-              icon={Boxes}
-              items={[
-                { icon: Package, tint: "blue", label: "Toplam Stok Miktarı", value: `${formatNumber(view.kpis.onHandUnits)} Adet` },
-                { icon: Warehouse, tint: "indigo", label: "Toplam Depo", value: formatNumber(view.kpis.totalWarehouses) },
-                { icon: ArrowDownToLine, tint: "green", label: "Bugünkü Giriş", value: formatNumber(view.kpis.todayIn) },
-                { icon: ArrowUpFromLine, tint: "orange", label: "Bugünkü Çıkış", value: formatNumber(view.kpis.todayOut) },
-              ]}
-            />
+        <div className={cn("space-y-4", status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity")}>
+          <Section index={0}>
+          <KpiStrip
+            items={[
+              { icon: Package, tint: "blue", label: "Toplam Ürün", value: formatNumber(view.kpis.totalProducts) },
+              { icon: Warehouse, tint: "teal", label: "Toplam Depo", value: formatNumber(view.kpis.totalWarehouses) },
+              {
+                icon: AlertTriangle,
+                tint: "red",
+                label: "Kritik Stok",
+                value: formatNumber(view.kpis.criticalStockCount),
+                emphasize: view.kpis.criticalStockCount > 0,
+              },
+              { icon: ArrowDownToLine, tint: "green", label: "Bugünkü Giriş", value: formatNumber(view.kpis.todayIn) },
+              { icon: ArrowUpFromLine, tint: "amber", label: "Bugünkü Çıkış", value: formatNumber(view.kpis.todayOut) },
+            ]}
+          />
+          </Section>
 
-            <KpiTablePanel
-              title="Satın Alma Özeti"
-              icon={ShoppingCart}
-              items={[
-                { icon: ShoppingCart, tint: "cyan", label: "Açık Sipariş", value: formatNumber(view.kpis.openPurchaseOrders) },
-                { icon: Clock, tint: "yellow", label: "Bekleyen Teslimat", value: formatNumber(view.kpis.pendingDeliveries) },
-                { icon: Wallet, tint: "teal", label: "Toplam Tutar", value: formatCurrency(view.kpis.purchaseTotalValue, currency, rates?.[currency] || 1, showKurus) },
-                { icon: XCircle, tint: "red", label: "İptal", value: formatNumber(view.kpis.cancelledOrders) },
-              ]}
-            />
-          </div>
+          <Section index={1}>
+          <KpiMetaBar
+            items={[
+              { icon: Database, tint: "blue", label: "Eldeki Miktar", value: `${formatNumber(view.kpis.onHandUnits)} adet` },
+              { icon: Truck, tint: "amber", label: "Yol / Sevkiyat", value: `${formatNumber(view.kpis.incomingUnits)} adet` },
+              { icon: Building2, tint: "plum", label: "Kayıtlı Tedarikçi", value: formatNumber(view.kpis.totalSuppliers) },
+              { icon: Users, tint: "teal", label: "Sistem Kullanıcısı", value: formatNumber(view.kpis.totalUsers) },
+              { icon: Layers, tint: "plum", label: "Kategori Sayısı", value: formatNumber(view.kpis.categoryCount) },
+              { icon: Tag, tint: "blue", label: "Ürün Çeşidi", value: formatNumber(view.kpis.productVariantCount) },
+            ]}
+          />
+          </Section>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <KpiTablePanel
-              title="Envanter & Tedarik Özeti"
-              icon={Database}
-              items={[
-                { icon: Database, tint: "sky", label: "Eldeki Miktar", value: `${formatNumber(view.kpis.onHandUnits)} Adet` },
-                { icon: Truck, tint: "amber", label: "Yol / Sevkiyat", value: `${formatNumber(view.kpis.incomingUnits)} Adet` },
-                { icon: Building2, tint: "pink", label: "Kayıtlı Tedarikçiler", value: formatNumber(view.kpis.totalSuppliers) },
-                { icon: Users, tint: "fuchsia", label: "Sistem Kullanıcıları", value: formatNumber(view.kpis.totalUsers) },
-              ]}
-            />
-
-            <KpiTablePanel
-              title="Katalog & Stok Sağlığı"
-              icon={Layers}
-              items={[
-                { icon: AlertTriangle, tint: "red", label: "Kritik Stok Uyarısı", value: formatNumber(view.kpis.criticalStockCount) },
-                { icon: Tag, tint: "indigo", label: "Toplam Ürün Çeşidi", value: `${formatNumber(view.kpis.productVariantCount)} Çeşit` },
-                { icon: Layers, tint: "violet", label: "Kategori Sayısı", value: formatNumber(view.kpis.categoryCount) },
-              ]}
-            />
-          </div>
-
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-12 items-stretch">
-            <div className="lg:col-span-7 flex flex-col">
-              <StockFlowChart data={view.monthlyFlow} />
+          <Section index={2} className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-stretch">
+            <div className="lg:col-span-4">
+              <PurchaseHeroCard
+                data={{
+                  cancelledOrders: view.kpis.cancelledOrders,
+                  pendingDeliveries: view.kpis.pendingDeliveries,
+                  openPurchaseOrders: view.kpis.openPurchaseOrders,
+                  totalPurchaseOrders: view.kpis.totalPurchaseOrders,
+                  purchaseTotalValueLabel: formatCurrency(view.kpis.purchaseTotalValue, currency, rates?.[currency] || 1, showKurus),
+                }}
+              />
             </div>
-            <div className="lg:col-span-5 flex flex-col">
+            <div className="lg:col-span-4">
               <CategoryRadialChart shares={view.categoryShares} />
             </div>
-          </div>
+            <div className="lg:col-span-4 lg:row-span-2">
+              <RecentMovementsTable items={view.recentMovements} />
+            </div>
+            <div className="lg:col-span-8">
+              <StockFlowChart data={view.monthlyFlow} />
+            </div>
+          </Section>
 
-          <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-2">
-            <WarehouseStockBars data={view.warehouseTotals} />
-            <CriticalStockList items={view.criticalProducts} />
-            <RecentMovementsTable items={view.recentMovements} />
-            <TopMoversList items={view.topMovers} />
-          </div>
+          <Section index={3} className="grid grid-cols-1 gap-4 lg:grid-cols-12 items-stretch">
+            <div className="lg:col-span-7">
+              <WarehouseStockBars data={view.warehouseTotals} />
+            </div>
+            <div className="lg:col-span-5">
+              <TopMoversList items={view.topMovers} />
+            </div>
+          </Section>
+
+          <Section index={4}>
+            <CriticalStockList items={view.criticalProducts} onExport={() => setShowExportModal(true)} />
+          </Section>
         </div>
       )}
 
@@ -372,19 +376,23 @@ export default function PanelPage() {
 function DashboardSkeleton() {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Skeleton className="h-[188px] rounded-xl" />
-        <Skeleton className="h-[188px] rounded-xl" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-[68px] rounded-xl" />
+        ))}
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Skeleton className="h-[132px] rounded-xl" />
-        <Skeleton className="h-[132px] rounded-xl" />
-        <Skeleton className="h-[132px] rounded-xl" />
+      <Skeleton className="h-[52px] rounded-xl" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <Skeleton className="h-[210px] rounded-xl lg:col-span-4" />
+        <Skeleton className="h-[210px] rounded-xl lg:col-span-4" />
+        <Skeleton className="h-[432px] rounded-xl lg:col-span-4 lg:row-span-2" />
+        <Skeleton className="h-[210px] rounded-xl lg:col-span-8" />
       </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Skeleton className="h-[380px] rounded-xl lg:col-span-2" />
-        <Skeleton className="h-[380px] rounded-xl" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <Skeleton className="h-[360px] rounded-xl lg:col-span-7" />
+        <Skeleton className="h-[360px] rounded-xl lg:col-span-5" />
       </div>
+      <Skeleton className="h-[320px] rounded-xl" />
     </div>
   );
 }

@@ -127,21 +127,21 @@ function SectionCard({
   hint?: string;
 }) {
   return (
-    <Card className="py-5 gap-3 flex flex-col justify-between h-full">
-      <div className="flex-1 flex flex-col">
-        <CardHeader className="px-5 pb-2">
+    <Card className="gap-0 flex flex-col justify-between h-full overflow-hidden">
+      <div className="flex-1 flex flex-col pt-5 pb-4">
+        <CardHeader className="px-6 pb-3">
           <CardTitle className="flex items-center gap-2.5 text-base font-semibold tracking-tight text-foreground">
             <div className={cn("flex size-9 items-center justify-center rounded-xl", TINTS[tint])}>
               <Icon className="size-4" />
             </div>
             {title}
           </CardTitle>
-          <CardDescription>{description}</CardDescription>
+          <CardDescription className="text-xs text-muted-foreground pt-0.5">{description}</CardDescription>
         </CardHeader>
-        <CardContent className="px-5 pt-2 flex-1 flex flex-col justify-between">{children}</CardContent>
+        <CardContent className="px-6 pt-1 flex-1 flex flex-col justify-between">{children}</CardContent>
       </div>
       {(footer || hint) && (
-        <CardFooter className="justify-between px-5 mt-auto pt-3">
+        <CardFooter className="h-12 min-h-[48px] max-h-[48px] py-0 px-6 flex items-center justify-between bg-muted/40 border-t border-border/50 mt-auto shrink-0">
           {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : <span />}
           {footer}
         </CardFooter>
@@ -311,7 +311,7 @@ export default function SettingsPage() {
       {/* HESABIM */}
       <section className="space-y-3">
         <CategoryHeader icon={User} tint="blue" title="Hesabım" description="Profil bilgileriniz ve parola güvenliği." />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-start">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-stretch">
           <SectionCard
             icon={User}
             tint="blue"
@@ -319,41 +319,43 @@ export default function SettingsPage() {
             description="Kişisel bilgilerinizi buradan güncelleyebilirsiniz."
             hint="Değişiklikler anında otomatik kaydedilir."
           >
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">Ad</Label>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="firstName">Ad</Label>
+                  <Input
+                    id="firstName"
+                    value={userProfile.firstName}
+                    onChange={(e) => updateUserProfile({ firstName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="lastName">Soyad</Label>
+                  <Input
+                    id="lastName"
+                    value={userProfile.lastName}
+                    onChange={(e) => updateUserProfile({ lastName: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">E-posta Adresi</Label>
                 <Input
-                  id="firstName"
-                  value={userProfile.firstName}
-                  onChange={(e) => updateUserProfile({ firstName: e.target.value })}
+                  id="email"
+                  type="email"
+                  value={userProfile.email}
+                  onChange={(e) => updateUserProfile({ email: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Soyad</Label>
+              <div className="space-y-1.5">
+                <Label htmlFor="phone">Telefon Numarası</Label>
                 <Input
-                  id="lastName"
-                  value={userProfile.lastName}
-                  onChange={(e) => updateUserProfile({ lastName: e.target.value })}
+                  id="phone"
+                  type="tel"
+                  value={userProfile.phone}
+                  onChange={(e) => updateUserProfile({ phone: e.target.value })}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">E-posta Adresi</Label>
-              <Input
-                id="email"
-                type="email"
-                value={userProfile.email}
-                onChange={(e) => updateUserProfile({ email: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Telefon Numarası</Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={userProfile.phone}
-                onChange={(e) => updateUserProfile({ phone: e.target.value })}
-              />
             </div>
           </SectionCard>
 
@@ -363,6 +365,7 @@ export default function SettingsPage() {
               toast.success("Parolanız başarıyla güncellendi.");
               e.currentTarget.reset();
             }}
+            className="h-full"
           >
             <SectionCard
               icon={Shield}
@@ -371,17 +374,19 @@ export default function SettingsPage() {
               description="Hesap şifrenizi ve güvenlik tercihlerinizi güncelleyin."
               footer={<SubmitButton pending={false} size="sm">Parolayı Güncelle</SubmitButton>}
             >
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">Mevcut Parola</Label>
-                <Input id="currentPassword" name="currentPassword" type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="newPassword">Yeni Parola</Label>
-                <Input id="newPassword" name="newPassword" type="password" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Yeni Parola (Tekrar)</Label>
-                <Input id="confirmPassword" name="confirmPassword" type="password" />
+              <div className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="currentPassword">Mevcut Parola</Label>
+                  <Input id="currentPassword" name="currentPassword" type="password" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="newPassword">Yeni Parola</Label>
+                  <Input id="newPassword" name="newPassword" type="password" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirmPassword">Yeni Parola (Tekrar)</Label>
+                  <Input id="confirmPassword" name="confirmPassword" type="password" />
+                </div>
               </div>
             </SectionCard>
           </form>
