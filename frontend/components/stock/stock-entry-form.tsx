@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowDownToLine, ArrowUpFromLine, type LucideIcon } from "lucide-react";
+import { TINTS, type TintName } from "@/lib/tints";
+import { cn } from "@/lib/utils";
+import { PanelCard } from "@/components/common/panel-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,9 +39,9 @@ interface SupplierOption {
 }
 
 const MODE_META = {
-  giris: { title: "Stok Girişi", icon: ArrowDownToLine, cta: "Girişi Kaydet" },
-  cikis: { title: "Stok Çıkışı", icon: ArrowUpFromLine, cta: "Çıkışı Kaydet" },
-} as const;
+  giris: { title: "Stok Girişi", icon: ArrowDownToLine, cta: "Girişi Kaydet", tint: "positive" },
+  cikis: { title: "Stok Çıkışı", icon: ArrowUpFromLine, cta: "Çıkışı Kaydet", tint: "critical" },
+} as const satisfies Record<string, { title: string; icon: LucideIcon; cta: string; tint: TintName }>;
 
 export function StockEntryForm({
   mode,
@@ -149,15 +151,21 @@ export function StockEntryForm({
     Boolean(productId) && Boolean(warehouseId) && qtyNumber > 0 && !insufficientStock;
 
   return (
-    <Card className="py-5 gap-3">
-      <CardHeader className="px-5 pb-0">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
-          <meta.icon className="size-4 text-muted-foreground" />
+    <PanelCard
+      className="h-auto self-start"
+      bodyClassName="flex-none"
+      title={
+        <span className="flex items-center gap-2.5">
+          {/* Tinted chip rather than a grey icon: giriş reads positive,
+              çıkış reads critical, matching the KPI card above it. */}
+          <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-lg", TINTS[meta.tint])}>
+            <meta.icon className="size-4" />
+          </span>
           {meta.title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-5">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        </span>
+      }
+    >
+        <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-2">
             <Label>Depo</Label>
             <Select
@@ -251,7 +259,7 @@ export function StockEntryForm({
                 <Select value={supplierId} onValueChange={(v) => setSupplierId((v as string) ?? "")}>
                   <SelectTrigger className="w-full">
                     <SelectValue>
-                      {supplierId ? suppliers.find((s) => s.id === supplierId)?.name : "Tedarikçi seçin"}
+                       {supplierId ? suppliers.find((s) => s.id === supplierId)?.name : "Tedarikçi seçin"}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -268,7 +276,7 @@ export function StockEntryForm({
 
           <div className="space-y-2">
             <Label htmlFor="note">Açıklama (opsiyonel)</Label>
-            <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+            <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={1} />
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
@@ -280,7 +288,6 @@ export function StockEntryForm({
             </SubmitButton>
           </div>
         </form>
-      </CardContent>
-    </Card>
+    </PanelCard>
   );
 }

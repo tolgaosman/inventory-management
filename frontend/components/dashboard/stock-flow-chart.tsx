@@ -1,201 +1,194 @@
 "use client";
 
-import { LineChart, Line, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  ComposedChart,
+  Line,
+  Bar,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { BarChart3 } from "lucide-react";
 import type { MonthlyFlow } from "@/lib/types";
 import { formatNumber, formatSigned } from "@/lib/format";
-import { ChartCard } from "@/components/charts/chart-card";
 import { EmptyState } from "@/components/common/empty-state";
+import { PanelCard } from "@/components/common/panel-card";
+import {
+  CHART_GRID,
+  CHART_LINE_WIDTH,
+  CHART_X_AXIS,
+  CHART_Y_AXIS,
+  ChartLegend,
+  ChartTooltip,
+  chartActiveDot,
+} from "@/components/charts/chart-primitives";
 
-function CustomTooltip({
-  active,
-  payload,
-}: {
-  active?: boolean;
-  payload?: any[];
-  label?: string;
-}) {
+/**
+ * The flow triad. These are token references, not hexes: `--series-2` already
+ * lifts to a legible blue in dark mode, which is why this chart no longer needs
+ * a duplicated `dark:hidden` / `hidden dark:block` line pair for the outbound
+ * series.
+ */
+const SERIES = {
+  inbound: "var(--series-1)",
+  outbound: "var(--series-2)",
+  net: "var(--series-3)",
+} as const;
+
+const LEGEND = [
+  { label: "Giriş Hacmi", color: SERIES.inbound },
+  { label: "Çıkış Hacmi", color: SERIES.outbound },
+  { label: "Net Hareket", color: SERIES.net },
+];
+
+function FlowTooltip({ active, payload }: { active?: boolean; payload?: { payload: FlowDatum }[] }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
-  const net = d.inbound - d.outbound;
+
   return (
-    <div className="rounded-lg border border-border bg-popover p-3 text-xs text-popover-foreground shadow-soft">
-      <p className="mb-1.5 font-semibold">{d.month}</p>
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-6">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="size-2 rounded-full bg-chart-1" />
-            Stok Girişi
-          </span>
-          <span className="font-medium tabular-nums">+{formatNumber(d.inbound)}</span>
-        </div>
-        <div className="flex items-center justify-between gap-6">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="size-2 rounded-full bg-chart-2" />
-            Stok Çıkışı
-          </span>
-          <span className="font-medium tabular-nums">−{formatNumber(d.outbound)}</span>
-        </div>
-        <div className="flex items-center justify-between gap-6 border-t border-border pt-1.5 font-medium">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="size-2 rounded-full bg-chart-3" />
-            Net Hareket
-          </span>
-          <span className="tabular-nums">{formatSigned(net)}</span>
-        </div>
-      </div>
-    </div>
+    <ChartTooltip
+      title={d.month}
+      rows={[
+        { label: "Giriş", color: SERIES.inbound, value: formatNumber(d.inbound) },
+        { label: "Çıkış", color: SERIES.outbound, value: formatNumber(d.displayOutbound) },
+        { label: "Net", color: SERIES.net, value: formatSigned(d.net), divider: true },
+      ]}
+    />
   );
 }
 
-function Legend({ totalIn, totalOut }: { totalIn: number; totalOut: number }) {
-  return (
-    <div className="flex items-center gap-4 text-xs">
-      <span className="flex items-center gap-1.5 text-muted-foreground">
-        <span className="size-2 rounded-full bg-chart-1" />
-        Giriş
-        <span className="font-medium tabular-nums text-foreground">+{formatNumber(totalIn)}</span>
-      </span>
-      <span className="flex items-center gap-1.5 text-muted-foreground">
-        <span className="size-2 rounded-full bg-chart-2" />
-        Çıkış
-        <span className="font-medium tabular-nums text-foreground">−{formatNumber(totalOut)}</span>
-      </span>
-      <span className="flex items-center gap-1.5 text-muted-foreground">
-        <span className="size-2 rounded-full bg-chart-3" />
-        Net
-        <span className="font-medium tabular-nums text-foreground">{formatSigned(totalIn - totalOut)}</span>
-      </span>
-    </div>
-  );
+interface FlowDatum extends MonthlyFlow {
+  displayOutbound: number;
+  net: number;
+  bgRange: [number, number];
 }
 
 export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
+  const isEmpty = !data || data.length === 0 || data.every((d) => d.inbound === 0 && d.outbound === 0);
+
   const displayData = (data ?? []).map((d) => ({
     ...d,
-    displayOutbound: -d.outbound,
+    displayOutbound: Math.abs(d.outbound), // Chart all as positive curves to match aesthetic
     net: d.inbound - d.outbound,
   }));
-  const isEmpty = displayData.every((d) => d.inbound === 0 && d.outbound === 0);
 
-  const totalIn = displayData.reduce((s, d) => s + d.inbound, 0);
-  const totalOut = displayData.reduce((s, d) => s + d.outbound, 0);
-
-  // Find peaks to show the glowing circles
-  let maxInIndex = 0;
-  let maxOutIndex = 0;
-  let maxNetIndex = 0;
-  displayData.forEach((d, i) => {
-    if (d.inbound > displayData[maxInIndex].inbound) maxInIndex = i;
-    if (Math.abs(d.displayOutbound) > Math.abs(displayData[maxOutIndex].displayOutbound)) maxOutIndex = i;
-    if (Math.abs(d.net) > Math.abs(displayData[maxNetIndex].net)) maxNetIndex = i;
-  });
-
-  const renderCustomDot = (props: any, peakIndex: number) => {
-    const { cx, cy, value, index, stroke } = props;
-    if (index === peakIndex) {
-      return (
-        <g key={`dot-${index}`}>
-          <circle cx={cx} cy={cy} r={22} fill={stroke} filter={`drop-shadow(0px 0px 8px ${stroke})`} opacity={0.3} />
-          <circle cx={cx} cy={cy} r={20} fill={stroke} />
-          <text x={cx} y={cy} textAnchor="middle" dy={4} fill="white" fontSize={13} fontWeight="bold">
-            {value > 0 ? formatNumber(value) : value < 0 ? `-${formatNumber(Math.abs(value))}` : 0}
-          </text>
-        </g>
-      );
-    }
-    return <circle key={`dot-${index}`} cx={cx} cy={cy} r={4.5} fill="#0b1121" stroke={stroke} strokeWidth={2.5} />;
-  };
-
-  const tableView = (
-    <div className="overflow-x-auto custom-scrollbar">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left text-xs font-medium text-muted-foreground uppercase">
-            <th className="pb-2 font-medium">Ay</th>
-            <th className="pb-2 text-right font-medium">Giriş</th>
-            <th className="pb-2 text-right font-medium">Çıkış</th>
-            <th className="pb-2 text-right font-medium">Net</th>
-          </tr>
-        </thead>
-        <tbody>
-          {displayData.map((d) => (
-            <tr key={d.month} className="border-b border-border/60 last:border-0">
-              <td className="py-2 font-medium text-foreground">{d.month}</td>
-              <td className="py-2 text-right tabular-nums text-foreground">+{formatNumber(d.inbound)}</td>
-              <td className="py-2 text-right tabular-nums text-foreground">−{formatNumber(Math.abs(d.displayOutbound))}</td>
-              <td className="py-2 text-right font-medium tabular-nums text-foreground">
-                {formatSigned(d.net)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+  // Calculate scales for background bars
+  const maxVal = Math.max(
+    0,
+    ...displayData.map((d) => Math.max(d.inbound, d.displayOutbound, Math.abs(d.net)))
   );
+  const minVal = Math.min(0, ...displayData.map((d) => d.net));
+
+  const yMax = maxVal === 0 ? 100 : Math.ceil(maxVal * 1.1);
+  const yMin = minVal < 0 ? Math.floor(minVal * 1.1) : 0;
+
+  const enhancedData: FlowDatum[] = displayData.map((d) => ({
+    ...d,
+    bgRange: [yMin, yMax], // Defines the top and bottom of the background bar
+  }));
+
+  // Share of months that closed net-positive — the one number the headline shows.
+  const healthyMonths = displayData.filter((d) => d.net >= 0).length;
+  const healthPercent = displayData.length > 0 ? Math.round((healthyMonths / displayData.length) * 100) : 0;
+
+  if (isEmpty) {
+    return (
+      <PanelCard variant="hero">
+        <EmptyState
+          icon={BarChart3}
+          title="Veri Bulunamadı"
+          description="Seçili tarih aralığında stok girişi veya çıkışı bulunamadı."
+        />
+      </PanelCard>
+    );
+  }
 
   return (
-    <ChartCard
-      title="Stok Hareketleri"
-      description="Aylık giriş ve çıkış hacmi"
-      legend={<Legend totalIn={totalIn} totalOut={totalOut} />}
-      tableView={isEmpty ? undefined : tableView}
-      className="h-full"
-    >
-      {isEmpty ? (
-        <EmptyState icon={BarChart3} title="Bu dönem için hareket verisi yok" description="Seçili tarih aralığında stok girişi veya çıkışı bulunamadı." />
-      ) : (
-      <div className="h-[280px] w-full pt-4">
+    <PanelCard variant="hero">
+      <div className="mb-8 flex flex-col items-start justify-between gap-6 sm:flex-row">
+        <div className="space-y-1.5">
+          <h3 className="text-xl font-bold tracking-tight text-muted-foreground">Stok Sağlığı</h3>
+          <div className="flex items-center gap-4">
+            <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-foreground">
+              {healthPercent}
+              <span className="ml-0.5 text-2xl font-semibold text-muted-foreground">%</span>
+            </span>
+            {/* Ten ticks, filled to the health percentage — a compact read of the
+                same number for anyone scanning rather than reading. */}
+            <div className="flex h-8 items-end gap-1.5 pb-1">
+              {Array.from({ length: 10 }).map((_, i) => {
+                const filled = i < Math.round(healthPercent / 10);
+                return (
+                  <div
+                    key={i}
+                    className="w-1.5 rounded-full"
+                    style={{
+                      height: filled ? "100%" : "40%",
+                      backgroundColor: filled ? SERIES.inbound : "var(--muted)",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <ChartLegend items={LEGEND} className="mt-2" />
+      </div>
+
+      <div className="min-h-[260px] w-full flex-1">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={displayData} margin={{ top: 20, right: 20, left: -10, bottom: 0 }}>
-            <CartesianGrid vertical={true} horizontal={true} stroke="var(--border)" />
-            <XAxis
-              dataKey="month"
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-              tickMargin={12}
-            />
+          <ComposedChart data={enhancedData} margin={{ top: 10, right: 0, left: -16, bottom: 12 }}>
+            <CartesianGrid {...CHART_GRID} />
+            <XAxis dataKey="month" {...CHART_X_AXIS} />
             <YAxis
-              tickLine={false}
-              axisLine={false}
-              width={56}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-              tickFormatter={(v: number) => formatNumber(v)}
+              {...CHART_Y_AXIS}
+              domain={[yMin, yMax]}
+              width={64}
+              tickFormatter={(v) => (v === 0 ? "0" : formatNumber(v))}
             />
-            <Tooltip
-              content={<CustomTooltip />}
-              cursor={{ stroke: "var(--muted-foreground)", strokeOpacity: 0.4, strokeDasharray: "3 3" }}
+            <Tooltip content={<FlowTooltip />} cursor={false} />
+
+            {/* Decorative column track behind each month, so sparse months still
+                read as a slot rather than empty space. */}
+            <Bar
+              dataKey="bgRange"
+              fill="var(--muted)"
+              opacity={0.4}
+              radius={[6, 6, 6, 6]}
+              barSize={10}
+              isAnimationActive={false}
             />
 
             <Line
-              type="monotone"
+              type="linear"
               dataKey="inbound"
-              stroke="var(--chart-1)"
-              strokeWidth={2.5}
-              dot={(props) => renderCustomDot(props, maxInIndex)}
-              activeDot={{ r: 6, fill: "var(--chart-1)", stroke: "var(--card)", strokeWidth: 2 }}
+              stroke={SERIES.inbound}
+              strokeWidth={CHART_LINE_WIDTH}
+              dot={false}
+              activeDot={chartActiveDot(SERIES.inbound)}
             />
             <Line
-              type="monotone"
+              type="linear"
               dataKey="displayOutbound"
-              stroke="var(--chart-2)"
-              strokeWidth={2.5}
-              dot={(props) => renderCustomDot(props, maxOutIndex)}
-              activeDot={{ r: 6, fill: "var(--chart-2)", stroke: "var(--card)", strokeWidth: 2 }}
+              stroke={SERIES.outbound}
+              strokeWidth={CHART_LINE_WIDTH}
+              dot={false}
+              activeDot={chartActiveDot(SERIES.outbound)}
             />
             <Line
-              type="monotone"
+              type="linear"
               dataKey="net"
-              stroke="var(--chart-3)"
-              strokeWidth={2.5}
-              dot={(props) => renderCustomDot(props, maxNetIndex)}
-              activeDot={{ r: 6, fill: "var(--chart-3)", stroke: "var(--card)", strokeWidth: 2 }}
+              stroke={SERIES.net}
+              strokeWidth={CHART_LINE_WIDTH}
+              dot={false}
+              activeDot={chartActiveDot(SERIES.net)}
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
-      )}
-    </ChartCard>
+    </PanelCard>
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, Package, CalendarDays } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { KpiTile } from "@/components/dashboard/kpi-tile";
+import { StatGrid } from "@/components/common/stat-card";
+import { Section, SectionStack } from "@/components/common/section";
 import { CriticalStockList } from "@/components/dashboard/critical-stock-list";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
@@ -37,18 +37,6 @@ const MODE_META = {
 export function StockMovementPage({ mode }: { mode: "giris" | "cikis" }) {
   const meta = MODE_META[mode];
   const [page, setPage] = useState(1);
-  const formRef = useRef<HTMLDivElement>(null);
-  const [formHeight, setFormHeight] = useState<number>();
-
-  useEffect(() => {
-    const el = formRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      setFormHeight(entries[0].contentRect.height);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   const { data, staleData, status, refetch } = useAsync(
     () =>
@@ -87,63 +75,63 @@ export function StockMovementPage({ mode }: { mode: "giris" | "cikis" }) {
       <div className="space-y-6">
         <PageHeader title={MOVEMENT_TYPE_LABELS[mode]} description={meta.description} />
 
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-          <Card className="py-5 gap-2">
-            <CardContent className="px-5">
-              <KpiTile
-                icon={meta.icon}
-                tint={meta.tint}
-                label="Bugünkü Toplam"
-                value={`${formatNumber(todayUnits)} adet`}
-              />
-            </CardContent>
-          </Card>
-          <Card className="py-5 gap-2">
-            <CardContent className="px-5">
-              <KpiTile icon={CalendarDays} tint="blue" label="Bu Ay Toplam" value={`${formatNumber(monthUnits)} adet`} />
-            </CardContent>
-          </Card>
-          <Card className="py-5 gap-2 col-span-2 lg:col-span-1">
-            <CardContent className="px-5">
-              <KpiTile icon={Package} tint="neutral" label="Bugünkü Kayıt Sayısı" value={formatNumber(todayCount)} />
-            </CardContent>
-          </Card>
-        </div>
+        <SectionStack className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
+          <Section index={0}>
+            <StatGrid
+              className="grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1"
+              items={[
+                {
+                  icon: meta.icon,
+                  tint: meta.tint,
+                  label: "Bugünkü Toplam",
+                  value: `${formatNumber(todayUnits)} adet`,
+                },
+                { icon: CalendarDays, tint: "blue", label: "Bu Ay Toplam", value: `${formatNumber(monthUnits)} adet` },
+                { icon: Package, tint: "neutral", label: "Bugünkü Kayıt Sayısı", value: formatNumber(todayCount) },
+              ]}
+            />
+          </Section>
 
-        <div className="grid gap-4 lg:grid-cols-2 items-start">
-          <div ref={formRef}>
+          {/*
+            The form stays at its natural (shorter) height via `self-start`;
+            the movements list stretches to fill the row on its own.
+          */}
+          <Section index={1} className="grid items-stretch gap-4 lg:grid-cols-[5fr_7fr] xl:grid-cols-[4fr_8fr]">
             <StockEntryForm
               mode={mode}
               warehouses={warehouses ?? []}
               suppliers={supplierResult?.rows ?? []}
               onDone={handleDone}
             />
-          </div>
-          <div style={formHeight ? { height: formHeight } : undefined}>
-            {mode === "giris" ? (
-              <CriticalStockList items={getCriticalProducts()} />
-            ) : (
-              <RecentSideMovementsList
-                movements={statsResult?.rows.slice(0, 10) ?? []}
-                products={productResult?.rows ?? []}
-              />
-            )}
-          </div>
-        </div>
+            <RecentSideMovementsList
+              mode={mode}
+              movements={statsResult?.rows.slice(0, 10) ?? []}
+              products={productResult?.rows ?? []}
+            />
+          </Section>
 
-        <RecentMovementsCard
-          mode={mode}
-          movements={tableResult?.rows ?? []}
-          total={tableResult?.total ?? 0}
-          page={page}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPage}
-          loading={status === "loading" && !view}
-          products={productResult?.rows ?? []}
-          warehouses={warehouses ?? []}
-          suppliers={supplierResult?.rows ?? []}
-          users={users ?? []}
-        />
+          <Section index={2}>
+            <RecentMovementsCard
+              mode={mode}
+              movements={tableResult?.rows ?? []}
+              total={tableResult?.total ?? 0}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              loading={status === "loading" && !view}
+              products={productResult?.rows ?? []}
+              warehouses={warehouses ?? []}
+              suppliers={supplierResult?.rows ?? []}
+              users={users ?? []}
+            />
+          </Section>
+
+          {mode === "giris" && (
+            <Section index={3}>
+              <CriticalStockList items={getCriticalProducts()} />
+            </Section>
+          )}
+        </SectionStack>
       </div>
     </Can>
   );

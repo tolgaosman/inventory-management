@@ -22,7 +22,7 @@ export function PurchaseHeroCard({ data }: { data: PurchaseHeroData }) {
   const maxValue = Math.max(...bars.map((b) => data[b.key]), 1);
 
   return (
-    <Card className="flex h-full flex-col justify-between overflow-hidden border border-border/50 bg-card p-5 shadow-sm">
+    <Card className="flex h-full flex-col justify-between overflow-hidden border-border bg-card p-5 shadow-soft">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h3 className="text-base font-semibold tracking-tight text-foreground">Satın Alma Özeti</h3>
@@ -34,7 +34,7 @@ export function PurchaseHeroCard({ data }: { data: PurchaseHeroData }) {
       </div>
 
       <div className="mt-6 flex flex-1 items-end gap-2 h-[140px] px-2">
-        {bars.map((b, i) => {
+        {bars.map((b) => {
           const heightPercent = Math.max((data[b.key] / maxValue) * 100, 8);
           return (
             <div key={b.key} className="group relative flex flex-1 flex-col items-center justify-end h-full">
@@ -50,16 +50,19 @@ export function PurchaseHeroCard({ data }: { data: PurchaseHeroData }) {
                 {/* Actual Bar Fill */}
                 <div 
                   className="absolute bottom-0 left-0 w-full rounded-full transition-all duration-700 ease-out"
-                  style={{ 
+                  style={{
                     height: `${heightPercent}%`,
                     backgroundColor: b.color,
-                    boxShadow: `0 0 12px ${b.color}40` // Subtle glow
+                    // Subtle glow. Must be color-mix, not a `${color}40` alpha
+                    // suffix — b.color is a var() reference, and string-appending
+                    // to it produces an invalid colour that silently drops the glow.
+                    boxShadow: `0 0 12px color-mix(in srgb, ${b.color} 25%, transparent)`,
                   }}
                 />
               </div>
 
               {/* Label */}
-              <span className="mt-3 text-[11px] font-medium text-muted-foreground">
+              <span className="mt-3 text-micro text-muted-foreground">
                 {b.label}
               </span>
               <span className="mt-0.5 text-sm font-bold text-foreground tabular-nums">
@@ -71,15 +74,15 @@ export function PurchaseHeroCard({ data }: { data: PurchaseHeroData }) {
       </div>
 
       <div className="mt-6 flex items-center justify-between gap-3 border-t border-border/50 pt-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
           <div className="flex size-6 items-center justify-center rounded-md bg-muted">
             <Wallet className="size-3.5" />
           </div>
           Toplam Tutar
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-base font-bold tabular-nums text-foreground">{data.purchaseTotalValueLabel}</span>
-          <ArrowUpRight className="size-4 text-emerald-500" />
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-base font-bold tabular-nums text-foreground">{data.purchaseTotalValueLabel}</span>
+          <ArrowUpRight className="size-4 shrink-0 text-status-good" />
         </div>
       </div>
     </Card>

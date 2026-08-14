@@ -14,9 +14,7 @@ import {
   AlertTriangle,
   ShoppingCart,
   Wallet,
-  Clock,
   Palette,
-  Coins,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { SubmitButton } from "@/components/common/submit-button";
@@ -34,13 +32,12 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
-import { useAuth } from "@/lib/auth";
+import { Section, SectionStack } from "@/components/common/section";
 import { cn } from "@/lib/utils";
 import { useCurrency, type CurrencyCode } from "@/lib/currency-context";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useSettings } from "@/lib/settings-context";
-import { ROLE_LABELS, TIMEZONE_OPTIONS } from "@/lib/constants";
+import { TIMEZONE_OPTIONS } from "@/lib/constants";
 import { relativeTimeFromNow } from "@/lib/format";
 import { TINTS, type TintName } from "@/lib/tints";
 import type { Role } from "@/lib/types";
@@ -248,19 +245,8 @@ function passwordStrength(pw: string): { score: number; label: string; tone: "cr
 }
 
 export default function SettingsPage() {
-  const { name, initials, role } = useAuth();
-  const {
-    userProfile,
-    notifications,
-    timezone,
-    showKurus,
-    defaultRange,
-    updateUserProfile,
-    updateNotifications,
-    setTimezone,
-    setShowKurus,
-    setDefaultRange,
-  } = useSettings();
+  const { userProfile, notifications, timezone, updateUserProfile, updateNotifications, setTimezone } =
+    useSettings();
 
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, rates, isLoading, lastUpdated, refreshRates } = useCurrency();
@@ -308,8 +294,9 @@ export default function SettingsPage() {
     <div className="space-y-8">
       <PageHeader title="Ayarlar" description="Sistem tercihlerinizi ve hesap bilgilerinizi yönetin." />
 
+      <SectionStack className="space-y-8">
       {/* HESABIM */}
-      <section className="space-y-3">
+      <Section index={0} className="space-y-3">
         <CategoryHeader icon={User} tint="blue" title="Hesabım" description="Profil bilgileriniz ve parola güvenliği." />
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 items-stretch">
           <SectionCard
@@ -391,10 +378,10 @@ export default function SettingsPage() {
             </SectionCard>
           </form>
         </div>
-      </section>
+      </Section>
 
       {/* TERCİHLER */}
-      <section className="space-y-4">
+      <Section index={1} className="space-y-4">
         <CategoryHeader
           icon={Palette}
           tint="fuchsia"
@@ -559,7 +546,8 @@ export default function SettingsPage() {
             })}
           </div>
         </SectionCard>
-      </section>
+      </Section>
+      </SectionStack>
     </div>
   );
 }

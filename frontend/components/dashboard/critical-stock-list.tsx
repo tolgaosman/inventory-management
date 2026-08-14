@@ -96,8 +96,10 @@ export function CriticalStockList({
   }
 
   return (
-    <Card className="py-5">
-      <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 px-5 pb-2">
+    // Kept on the base Card rather than PanelCard: the bulk-action bar sits
+    // between the header and the body, which PanelCard has no slot for.
+    <Card className="flex h-full flex-col">
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 pb-2">
         <div className="flex items-center gap-2">
           <CardTitle className="text-base font-semibold tracking-tight text-foreground">Kritik Stok Uyarıları</CardTitle>
           {selected.size > 0 && (
@@ -107,17 +109,17 @@ export function CriticalStockList({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div className="relative w-full sm:w-[180px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Ürün, SKU veya marka ara…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-[180px] pl-8"
+              className="w-full pl-8"
             />
           </div>
           <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "all")}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-full sm:w-[140px]">
               <SelectValue>{categoryId === "all" ? "Tüm Kategoriler" : categoryName(categoryId)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -130,7 +132,7 @@ export function CriticalStockList({
             </SelectContent>
           </Select>
           <Select value={supplierId} onValueChange={(v) => setSupplierId(v ?? "all")}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="w-full sm:w-[150px]">
               <SelectValue>{supplierId === "all" ? "Tüm Tedarikçiler" : supplierName(supplierId)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -169,7 +171,7 @@ export function CriticalStockList({
       </CardHeader>
 
       {selected.size > 0 && (
-        <div className="mx-5 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/60 px-3 py-2">
+        <div className="mx-(--card-spacing) flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/60 px-3 py-2">
           <span className="text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">{selected.size}</span> ürün seçildi
           </span>
@@ -196,7 +198,7 @@ export function CriticalStockList({
           </div>
         </div>
       )}
-      <CardContent className="px-5 pt-1">
+      <CardContent className="min-h-0 flex-1 pt-1">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-micro text-muted-foreground">Tüm depolar geneli (depo seçiciden etkilenmez)</p>
           <Link href="/urunler?stockStatus=kritik" className="text-xs font-medium text-primary hover:underline">
@@ -215,21 +217,13 @@ export function CriticalStockList({
                   <TableHead className="w-10 px-2 text-center">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Tümünü seç" />
                   </TableHead>
-                  <TableHead className="px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ürün</TableHead>
-                  {shows("supplier") && (
-                    <TableHead className="px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tedarikçi</TableHead>
-                  )}
-                  {shows("category") && (
-                    <TableHead className="px-4 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kategori</TableHead>
-                  )}
-                  {shows("price") && (
-                    <TableHead className="px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Alış Fiyatı</TableHead>
-                  )}
-                  <TableHead className="px-4 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mevcut / Min</TableHead>
-                  {shows("value") && (
-                    <TableHead className="px-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stok Değeri</TableHead>
-                  )}
-                  <TableHead className="px-4 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Durum</TableHead>
+                  <TableHead>Ürün</TableHead>
+                  {shows("supplier") && <TableHead>Tedarikçi</TableHead>}
+                  {shows("category") && <TableHead>Kategori</TableHead>}
+                  {shows("price") && <TableHead className="text-right">Alış Fiyatı</TableHead>}
+                  <TableHead className="text-center">Mevcut / Min</TableHead>
+                  {shows("value") && <TableHead className="text-right">Stok Değeri</TableHead>}
+                  <TableHead className="text-center">Durum</TableHead>
                   <TableHead className="w-10 px-2 text-center" />
                 </TableRow>
               </TableHeader>

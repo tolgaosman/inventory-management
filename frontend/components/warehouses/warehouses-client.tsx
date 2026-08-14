@@ -12,8 +12,10 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
-import { KpiTile } from "@/components/dashboard/kpi-tile";
+import { StatGrid } from "@/components/common/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -266,7 +268,7 @@ export function WarehousesClient() {
         title="Depo Yönetimi & Stok Matrisi"
         description="Şirketinizin tüm lokasyonlardaki depolarını ve ürünlerin depo bazlı stok dağılımlarını canlı yönetin."
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -291,57 +293,44 @@ export function WarehousesClient() {
                 Yeni Depo Ekle
               </Button>
             </Can>
-          </div>
+          </>
         }
       />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="py-4 gap-2">
-          <CardContent className="px-5">
-            <KpiTile
-              icon={WarehouseIcon}
-              tint="indigo"
-              label="Toplam Depo Sayısı"
-              value={formatNumber(summaryMetrics.totalCount)}
-            />
-          </CardContent>
-        </Card>
-        <Card className="py-4 gap-2">
-          <CardContent className="px-5">
-            <KpiTile
-              icon={Package}
-              tint="blue"
-              label="Toplanan Stok Adedi"
-              value={`${formatNumber(summaryMetrics.totalUnits)} Adet`}
-            />
-          </CardContent>
-        </Card>
-        <Card className="py-4 gap-2">
-          <CardContent className="px-5">
-            <KpiTile
-              icon={Boxes}
-              tint="teal"
-              label="Depolardaki Envanter Değeri"
-              value={formatCurrency(summaryMetrics.totalValue, currency, rates?.[currency] || 1, showKurus)}
-            />
-          </CardContent>
-        </Card>
-        <Card className="py-4 gap-2">
-          <CardContent className="px-5">
-            <KpiTile
-              icon={Layers}
-              tint="violet"
-              label="Ortalama Doluluk Oranı"
-              value={`% ${summaryMetrics.avgCapacity}`}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <StatGrid
+        className="grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        items={[
+          {
+            icon: WarehouseIcon,
+            tint: "plum",
+            label: "Toplam Depo Sayısı",
+            value: formatNumber(summaryMetrics.totalCount),
+          },
+          {
+            icon: Package,
+            tint: "blue",
+            label: "Toplanan Stok Adedi",
+            value: `${formatNumber(summaryMetrics.totalUnits)} Adet`,
+          },
+          {
+            icon: Boxes,
+            tint: "teal",
+            label: "Depolardaki Envanter Değeri",
+            value: formatCurrency(summaryMetrics.totalValue, currency, rates?.[currency] || 1, showKurus),
+          },
+          {
+            icon: Layers,
+            tint: "amber",
+            label: "Ortalama Doluluk Oranı",
+            value: `% ${summaryMetrics.avgCapacity}`,
+          },
+        ]}
+      />
 
       {/* Warehouses Card Overview Grid */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold tracking-tight text-foreground flex items-center gap-2">
             <Building2 className="size-4 text-primary" />
             Aktif Depo Lokasyonları
@@ -353,19 +342,7 @@ export function WarehousesClient() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {whStatus === "loading" && !warehouses
-            ? Array.from({ length: 5 }).map((_, i) => (
-                <Card key={i} className="border-border/70 animate-pulse">
-                  <CardHeader className="p-4 pb-2">
-                    <div className="h-4 w-16 rounded bg-muted mb-2" />
-                    <div className="h-4 w-32 rounded bg-muted" />
-                  </CardHeader>
-                  <CardContent className="p-4 pt-2 space-y-3">
-                    <div className="h-3 w-full rounded bg-muted" />
-                    <div className="h-3 w-full rounded bg-muted" />
-                    <div className="h-3 w-full rounded bg-muted" />
-                  </CardContent>
-                </Card>
-              ))
+            ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[168px] rounded-xl" />)
             : warehouses?.map((wh) => {
             const isSelected = selectedWarehouseId === wh.id;
             return (
@@ -489,7 +466,7 @@ export function WarehousesClient() {
               </div>
 
               <Select value={selectedWarehouseId} onValueChange={(val) => setSelectedWarehouseId(val || "all")}>
-                <SelectTrigger className="w-full sm:w-auto sm:min-w-[210px] text-micro sm:text-xs h-9 whitespace-nowrap">
+                <SelectTrigger className="w-full sm:w-auto sm:min-w-[180px] sm:max-w-[240px] text-micro sm:text-xs h-9">
                   <SelectValue>
                     {selectedWarehouseId === "all"
                       ? "Tüm Depolar"
@@ -507,7 +484,7 @@ export function WarehousesClient() {
               </Select>
 
               <Select value={selectedCategoryId} onValueChange={(val) => setSelectedCategoryId(val || "all")}>
-                <SelectTrigger className="w-full sm:w-auto sm:min-w-[210px] text-micro sm:text-xs h-9 whitespace-nowrap">
+                <SelectTrigger className="w-full sm:w-auto sm:min-w-[180px] sm:max-w-[240px] text-micro sm:text-xs h-9">
                   <SelectValue>
                     {selectedCategoryId === "all"
                       ? "Tüm Kategoriler"
@@ -527,128 +504,163 @@ export function WarehousesClient() {
           </div>
         </CardHeader>
 
-        <CardContent className="p-0 overflow-x-auto custom-scrollbar">
-          <table className="w-full text-xs text-left min-w-[900px]">
-            <thead className="bg-muted/40 text-muted-foreground uppercase text-micro font-semibold border-y border-border/60">
-              <tr>
-                <th className="py-3 px-4 min-w-[220px]">Ürün &amp; Kod (SKU)</th>
-                <th className="py-3 px-3 min-w-[130px]">Kategori</th>
+        <CardContent className="p-0">
+          {/*
+            Warehouse columns are dynamic, so this can't be a TanStack DataTable
+            — but it can still use the shared Table primitives, which is where
+            the header treatment, cell padding and hover state come from.
+
+            table-fixed + explicit % widths (summing to 100) keep the matrix
+            inside the card at any warehouse count, instead of the old
+            sum-of-min-widths approach which forced horizontal scroll on
+            anything narrower than ~1240px. The warehouse columns split the
+            leftover percentage evenly, so adding a 6th warehouse shrinks
+            every column instead of widening the table.
+          */}
+          <Table className="table-fixed w-full text-xs">
+            <TableHeader>
+              <TableRow className="border-y border-border/60 bg-muted/40 hover:bg-muted/40">
+                <TableHead style={{ width: "22%" }}>Ürün &amp; Kod (SKU)</TableHead>
+                <TableHead style={{ width: "7%" }}>Kategori</TableHead>
                 {warehouses?.map((w) => {
                   const isSelected = selectedWarehouseId === w.id;
                   return (
-                    <th
+                    <TableHead
                       key={w.id}
+                      style={{ width: `${42 / Math.max(warehouses.length, 1)}%` }}
+                      title={w.name}
                       className={cn(
-                        "py-3 px-3 text-center min-w-[110px] transition-colors",
-                        isSelected && "bg-primary/10 font-semibold text-primary border-x border-primary/20"
+                        "text-center transition-colors",
+                        isSelected && "border-x border-primary/20 bg-primary/10 text-primary",
                       )}
                     >
-                      <div className="font-semibold">{w.city}</div>
-                      <div className="text-micro opacity-80 font-normal line-clamp-1">{w.name}</div>
-                    </th>
+                      <div className="truncate">{w.city}</div>
+                    </TableHead>
                   );
                 })}
-                <th className="py-3 px-3 text-center min-w-[110px]">Toplam Stok</th>
-                <th className="py-3 px-3 text-right min-w-[120px]">Stok Değeri</th>
-                <th className="py-3 px-4 text-center min-w-[110px]">İşlem</th>
-              </tr>
-            </thead>
-            <tbody className={cn("divide-y divide-border/40 transition-opacity duration-200", isMatrixLoading && "opacity-50 pointer-events-none")}>
+                <TableHead style={{ width: "10%" }} className="text-center">Toplam Stok</TableHead>
+                <TableHead style={{ width: "10%" }} className="text-right">Stok Değeri</TableHead>
+                <TableHead style={{ width: "9%" }} className="text-center">İşlem</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody
+              className={cn(
+                "transition-opacity duration-200",
+                isMatrixLoading && "pointer-events-none opacity-50",
+              )}
+            >
               {isMatrixLoading && !displayMatrix ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    <td className="py-3 px-4"><div className="h-4 bg-muted rounded w-32 mb-1" /><div className="h-3 bg-muted rounded w-20" /></td>
-                    <td className="py-3 px-3"><div className="h-4 bg-muted rounded w-20" /></td>
+                  <TableRow key={i} className="border-b border-border/40 hover:bg-transparent">
+                    <TableCell>
+                      <Skeleton className="mb-1 h-4 w-32" />
+                      <Skeleton className="h-3 w-20" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-4 w-20" />
+                    </TableCell>
                     {warehouses?.map((w) => (
-                      <td key={w.id} className="py-3 px-3 text-center"><div className="h-5 bg-muted rounded w-14 mx-auto" /></td>
+                      <TableCell key={w.id} className="text-center">
+                        <Skeleton className="mx-auto h-5 w-14" />
+                      </TableCell>
                     ))}
-                    <td className="py-3 px-3 text-center"><div className="h-4 bg-muted rounded w-16 mx-auto" /></td>
-                    <td className="py-3 px-3 text-right"><div className="h-4 bg-muted rounded w-20 ml-auto" /></td>
-                    <td className="py-3 px-4 text-center"><div className="h-7 bg-muted rounded w-16 mx-auto" /></td>
-                  </tr>
+                    <TableCell className="text-center">
+                      <Skeleton className="mx-auto h-4 w-16" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Skeleton className="ml-auto h-4 w-20" />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Skeleton className="mx-auto h-7 w-16" />
+                    </TableCell>
+                  </TableRow>
                 ))
               ) : displayMatrix && displayMatrix.length > 0 ? (
                 displayMatrix.map((row) => (
-                  <tr key={row.productId} className="hover:bg-muted/30 transition-colors">
+                  <TableRow key={row.productId} className="border-b border-border/40 transition-colors hover:bg-muted/50">
                     {/* Product & SKU */}
-                    <td className="py-3 px-4">
+                    <TableCell>
                       <div className="flex items-center gap-2.5">
                         <ProductImageThumbnail src={row.imageUrl} alt={row.productName} size="xs" />
-                        <div>
-                          <div className="font-semibold text-foreground text-xs leading-tight">
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-semibold leading-tight text-foreground" title={row.productName}>
                             {row.productName}
                           </div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="font-mono text-micro text-muted-foreground">{row.sku}</span>
-                            <span className="text-micro text-muted-foreground">({row.brand})</span>
+                          <div className="mt-0.5 flex items-center gap-1.5 overflow-hidden">
+                            <span className="shrink-0 font-mono text-micro text-muted-foreground">{row.sku}</span>
+                            <span className="truncate text-micro text-muted-foreground">({row.brand})</span>
                           </div>
                         </div>
                       </div>
-                    </td>
+                    </TableCell>
 
                     {/* Category */}
-                    <td className="py-3 px-3 text-muted-foreground whitespace-nowrap">
+                    <TableCell className="truncate text-muted-foreground" title={row.categoryName}>
                       {row.categoryName}
-                    </td>
+                    </TableCell>
 
                     {/* Warehouse Individual Stocks */}
                     {warehouses?.map((w) => {
                       const qty = row.stocksByWarehouse[w.id] ?? 0;
                       const isSelected = selectedWarehouseId === w.id;
                       return (
-                        <td
+                        <TableCell
                           key={w.id}
                           className={cn(
-                            "py-3 px-3 text-center transition-colors",
-                            isSelected && "bg-primary/5 border-x border-primary/10"
+                            "text-center transition-colors",
+                            isSelected && "border-x border-primary/10 bg-primary/5",
                           )}
                         >
                           {qty > 0 ? (
                             <Badge
                               variant="outline"
                               className={cn(
-                                "font-semibold border-status-good px-2.5 py-0.5 text-xs select-none pointer-events-none",
+                                "pointer-events-none select-none border-status-good px-1.5 py-0.5 text-xs font-semibold tabular-nums",
                                 isSelected
-                                  ? "bg-primary/15 text-primary border-primary/30"
-                                  : "bg-status-good/10 text-status-good"
+                                  ? "border-primary/30 bg-primary/15 text-primary"
+                                  : "bg-status-good/10 text-status-good",
                               )}
                             >
-                              {qty} Adet
+                              {qty}
                             </Badge>
                           ) : (
-                            <span className="text-muted-foreground/40 font-mono text-micro">-</span>
+                            <span className="font-mono text-micro text-muted-foreground/40">-</span>
                           )}
-                        </td>
+                        </TableCell>
                       );
                     })}
 
                     {/* Total Stock */}
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                    <TableCell className="text-center">
                       <div className="flex flex-col items-center justify-center">
-                        <div className="font-semibold text-foreground text-xs">
-                          {formatNumber(row.totalStock)} Adet
+                        <div className="truncate text-xs font-semibold tabular-nums text-foreground">
+                          {formatNumber(row.totalStock)}
                         </div>
                         {row.isCritical && (
-                          <Badge variant="destructive" className="mt-0.5 text-micro px-1.5 py-0 h-4 inline-flex items-center justify-center">
-                            <AlertTriangle className="mr-0.5 size-2.5" /> Kritik (&lt;{row.minStock})
+                          <Badge
+                            variant="destructive"
+                            className="mt-0.5 inline-flex h-4 items-center justify-center px-1.5 py-0 text-micro"
+                            title={`Minimum stok: ${row.minStock}`}
+                          >
+                            <AlertTriangle className="mr-0.5 size-2.5" /> Kritik
                           </Badge>
                         )}
                       </div>
-                    </td>
+                    </TableCell>
 
                     {/* Total Value */}
-                    <td className="py-3 px-3 text-right font-semibold text-foreground whitespace-nowrap">
+                    <TableCell className="truncate text-right font-semibold tabular-nums text-foreground">
                       {formatCurrency(row.totalValue, currency, rates?.[currency] || 1, showKurus)}
-                    </td>
+                    </TableCell>
 
                     {/* Action */}
-                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                    <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Can permission="products.manage">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-7 px-2 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="h-7 px-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={row.status === "pasif"}
                             title={row.status === "pasif" ? "Pasif durumdaki ürünlerde stok transferi yapılamaz." : "Stok Transfer Et"}
                             onClick={() => openTransferModal(row)}
@@ -657,18 +669,18 @@ export function WarehousesClient() {
                           </Button>
                         </Can>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               ) : (
-                <tr>
-                  <td colSpan={5 + (warehouses?.length || 0)} className="py-12 text-center text-muted-foreground">
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5 + (warehouses?.length || 0)} className="py-12 text-center text-muted-foreground">
                     Arama kriterlerinize uygun stok kaydı bulunamadı.
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
@@ -891,7 +903,7 @@ export function WarehousesClient() {
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
               disabled={deleteGuard.pending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive-solid"
               onClick={handleDelete}
             >
               Sil

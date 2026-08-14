@@ -97,11 +97,7 @@ export function DataTable<T>({
                     return (
                       <TableHead
                         key={header.id}
-                        className={cn(
-                          "h-11 whitespace-nowrap px-4 text-xs font-medium tracking-wide text-muted-foreground uppercase",
-                          meta?.className,
-                          meta?.headClassName,
-                        )}
+                        className={cn(meta?.className, meta?.headClassName)}
                       >
                         {header.isPlaceholder ? null : sortable ? (
                           <button

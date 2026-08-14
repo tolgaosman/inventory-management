@@ -30,6 +30,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useSettings } from "@/lib/settings-context";
+import { HeaderBreadcrumb, MobileNav } from "./header-nav";
 
 const ROLE_ORDER: Role[] = ["yonetici", "satinalma", "depo"];
 
@@ -38,7 +39,9 @@ function DashboardFilters() {
   const { data: warehouses } = useAsync(() => listWarehouses(), []);
 
   return (
-    <div className="flex items-center gap-2">
+    // Scrolls rather than overflows: the two selects plus the export button are
+    // wider than a phone header.
+    <div className="flex min-w-0 items-center gap-2 overflow-x-auto custom-scrollbar">
       <Select
         value={warehouseId ?? "all"}
         onValueChange={(v) => setWarehouseId(!v || v === "all" ? undefined : v)}
@@ -92,7 +95,7 @@ function DashboardFilters() {
 
 export function AppHeader() {
   const { name, initials, role, setRole } = useAuth();
-  const { notifications, userProfile } = useSettings();
+  const { notifications } = useSettings();
   const pathname = usePathname();
   const isPanel = pathname?.replace(/\/$/, "") === "/panel";
 
@@ -105,9 +108,14 @@ export function AppHeader() {
 
   return (
     <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 md:px-6">
-      <div className="flex-1">{isPanel && <DashboardFilters />}</div>
+      {/* Left slot: the dashboard owns it for its filters; every other route
+          gets a breadcrumb rather than dead space. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <MobileNav />
+        {isPanel ? <DashboardFilters /> : <HeaderBreadcrumb />}
+      </div>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex shrink-0 items-center justify-end gap-2">
 
       <Popover>
         <PopoverTrigger render={<Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors" />}>

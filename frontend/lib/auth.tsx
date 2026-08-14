@@ -15,12 +15,13 @@ export type Permission =
   | "purchase.view"
   | "purchase.manage"
   | "suppliers.view"
+  | "suppliers.manage"
   | "reports.view"
   | "users.manage";
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   depo: ["products.view", "stock.in", "stock.out", "stock.transfer"],
-  satinalma: ["products.view", "purchase.view", "purchase.manage", "suppliers.view"],
+  satinalma: ["products.view", "purchase.view", "purchase.manage", "suppliers.view", "suppliers.manage"],
   yonetici: [
     "products.view",
     "products.manage",
@@ -31,6 +32,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "purchase.view",
     "purchase.manage",
     "suppliers.view",
+    "suppliers.manage",
     "reports.view",
     "users.manage",
   ],

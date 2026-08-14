@@ -86,7 +86,7 @@ export function MiniCalendar() {
             <div key={day} className="flex items-center justify-center h-6">
               <span
                 className={cn(
-                  "flex size-6 items-center justify-center rounded-md text-micro transition-colors",
+                  "flex size-6 items-center justify-center rounded-md text-micro tabular-nums transition-colors",
                   isToday
                     ? "bg-sidebar-primary font-semibold text-sidebar-primary-foreground"
                     : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground",

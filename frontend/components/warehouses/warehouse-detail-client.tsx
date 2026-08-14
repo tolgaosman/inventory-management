@@ -187,37 +187,37 @@ export function WarehouseDetailClient({ id }: { id: string }) {
       </div>
 
       <div className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Boxes className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Stok Adedi</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">{formatNumber(detail.units)}</p>
+                <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatNumber(detail.units)}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Package className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Ürün Çeşidi</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">{formatNumber(detail.productCount)}</p>
+                <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatNumber(detail.productCount)}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-status-good/10 text-status-good">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-status-good/10 text-status-good">
                 <Wallet className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Envanter Değeri</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">
+                <p className="truncate text-lg font-semibold tabular-nums text-foreground">
                   {formatCurrency(detail.totalValue, currency, rates?.[currency] || 1, showKurus)}
                 </p>
               </div>
@@ -248,8 +248,10 @@ export function WarehouseDetailClient({ id }: { id: string }) {
               <dl className="divide-y divide-border/60">
                 {fields.map((f) => (
                   <div key={f.label} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <dt className="text-muted-foreground">{f.label}</dt>
-                    <dd className="font-medium text-foreground text-right">{f.value}</dd>
+                    <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
+                    <dd className="min-w-0 truncate text-right font-medium text-foreground" title={typeof f.value === "string" ? f.value : undefined}>
+                      {f.value}
+                    </dd>
                   </div>
                 ))}
               </dl>
@@ -390,7 +392,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive-solid"
               onClick={handleDelete}
             >
               Sil

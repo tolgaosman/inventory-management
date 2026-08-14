@@ -3,35 +3,29 @@ import { SlidersHorizontal } from "lucide-react";
 import type { CategoryShare } from "@/lib/types";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Card } from "@/components/ui/card";
+import { HeroChip, PanelCard } from "@/components/common/panel-card";
 import { PieChart, Pie, Cell, Sector, ResponsiveContainer } from "recharts";
+import type { PieSectorShapeProps } from "recharts/types/polar/Pie";
 
-// Vibrant pastel blue/green/turquoise palette that pops against the dark background
+/**
+ * Slice palette. These are surface-relative, not theme-relative: the donut
+ * always sits on `--surface-inverse`, which is dark in both themes, so the
+ * slices barely move between them. They are deliberately not `--chart-*`,
+ * which is validated against a white card and would disappear here.
+ */
 const SLICE_COLORS = [
-  "#ffffff", // Crisp White for the largest slice
-  "#7dd3fc", // Light Sky Blue
-  "#67e8f9", // Light Cyan/Turquoise
-  "#6ee7b7", // Light Emerald/Green
+  "var(--slice-1)", // Crisp white for the largest slice
+  "var(--slice-2)", // Light sky blue
+  "var(--slice-3)", // Light cyan / turquoise
+  "var(--slice-4)", // Light emerald
 ];
 
-const renderActiveShape = (props: any) => {
-  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
-  return (
-    <g>
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={innerRadius}
-        outerRadius={outerRadius + 8}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-        cornerRadius={8}
-        className="drop-shadow-lg transition-all duration-300"
-      />
-    </g>
-  );
-};
+/**
+ * The geometry Recharts hands the `shape` render prop. `PieSectorShapeProps`
+ * leaves every field optional and doesn't know about our payload, so this
+ * narrows it to what the active-slice grow-out actually reads.
+ */
+type SliceShapeProps = PieSectorShapeProps & { payload?: { categoryId?: string } };
 
 export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);
@@ -64,16 +58,18 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
   const activeCat = categories.find((c) => c.categoryId === hoveredCategory);
 
   return (
-    <Card className="relative flex h-full flex-col overflow-hidden border-0 bg-sidebar-primary p-5 text-white shadow-lg">
-      <div className="relative z-10 flex items-center justify-between">
-        <span className="text-xl font-medium text-white">Stok Dağılımı</span>
-        <div className="flex size-8 items-center justify-center rounded-lg bg-white/10 backdrop-blur-sm">
-          <SlidersHorizontal className="size-4 text-white/90" />
-        </div>
-      </div>
-
+    <PanelCard
+      variant="inverse"
+      title="Stok Dağılımı"
+      className="relative"
+      actions={
+        <HeroChip>
+          <SlidersHorizontal className="size-4 text-surface-inverse-foreground/90" />
+        </HeroChip>
+      }
+    >
       {categories.length === 0 ? (
-        <div className="relative z-10 flex flex-1 items-center justify-center py-10 text-center text-sm text-white/75">
+        <div className="relative z-10 flex flex-1 items-center justify-center py-10 text-center text-sm text-surface-inverse-foreground/75">
           Henüz kategori stok verisi yok.
         </div>
       ) : (
@@ -95,7 +91,7 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
                     className="size-3.5 rounded-full shadow-sm" 
                     style={{ backgroundColor: c.color }}
                   />
-                  <span className="text-[13px] font-medium leading-snug text-white/90 truncate">
+                  <span className="text-[13px] font-medium leading-snug text-surface-inverse-foreground/90 truncate">
                     {c.name}
                   </span>
                 </div>
@@ -117,8 +113,26 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
                   dataKey="units"
                   stroke="none"
                   cornerRadius={8}
-                  activeIndex={hoveredCategory ? slices.findIndex(s => s.categoryId === hoveredCategory) : -1}
-                  activeShape={renderActiveShape}
+                  shape={(props: SliceShapeProps) => {
+                    const isHovered =
+                      hoveredCategory === props.payload.categoryId || props.isActive;
+                    return (
+                      <Sector
+                        cx={props.cx}
+                        cy={props.cy}
+                        innerRadius={props.innerRadius}
+                        outerRadius={props.outerRadius + (isHovered ? 8 : 0)}
+                        startAngle={props.startAngle}
+                        endAngle={props.endAngle}
+                        fill={props.fill}
+                        cornerRadius={8}
+                        className={cn(
+                          "transition-all duration-300",
+                          isHovered ? "drop-shadow-lg" : ""
+                        )}
+                      />
+                    );
+                  }}
                   onMouseEnter={(_, index) => setHoveredCategory(slices[index].categoryId)}
                   onMouseLeave={() => setHoveredCategory(null)}
                 >
@@ -136,16 +150,16 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
             
             {/* Center Content inside the Donut */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[26px] font-bold tabular-nums text-white leading-none drop-shadow-md">
+              <span className="text-[26px] font-bold tabular-nums text-surface-inverse-foreground leading-none drop-shadow-md">
                 {formatNumber(activeCat ? activeCat.units : totalUnits)}
               </span>
-              <span className="text-[10px] text-white/80 uppercase mt-1.5 font-semibold text-center px-4 max-w-[130px] leading-tight">
+              <span className="text-micro text-surface-inverse-foreground/80 uppercase mt-1.5 font-semibold text-center px-4 max-w-[130px] leading-tight">
                 {activeCat ? activeCat.name : "Toplam Stok"}
               </span>
             </div>
           </div>
         </div>
       )}
-    </Card>
+    </PanelCard>
   );
 }

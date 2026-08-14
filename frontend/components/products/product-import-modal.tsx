@@ -320,7 +320,7 @@ export function ProductImportModal({
         {/* Header */}
         <DialogHeader className="p-6 pb-4 border-b border-border bg-card">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-tint-green/10 text-tint-green shrink-0">
               <FileSpreadsheet className="size-5" />
             </div>
             <div>
@@ -336,9 +336,9 @@ export function ProductImportModal({
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
           {/* Template Info Card */}
-          <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 dark:bg-emerald-950/20">
+          <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-tint-green/20 bg-tint-green/5">
             <div className="flex items-start gap-3 min-w-0">
-              <FileText className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+              <FileText className="size-4 text-tint-green shrink-0 mt-0.5" />
               <div className="space-y-0.5 min-w-0">
                 <p className="text-xs font-semibold text-foreground">Excel Şablon Formatı</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -351,7 +351,7 @@ export function ProductImportModal({
               variant="outline"
               size="sm"
               onClick={handleDownloadTemplate}
-              className="gap-1.5 shrink-0 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-700 text-xs h-8"
+              className="gap-1.5 shrink-0 border-tint-green/30 text-tint-green hover:bg-tint-green/10 text-xs h-8"
             >
               <Download className="size-3.5" />
               Şablon İndir (.xlsx)
@@ -371,8 +371,8 @@ export function ProductImportModal({
               className={cn(
                 "group flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl transition-all cursor-pointer text-center",
                 isDragging
-                  ? "border-emerald-500 bg-emerald-500/10"
-                  : "border-border/80 hover:border-emerald-500/60 hover:bg-muted/40"
+                  ? "border-tint-green bg-tint-green/10"
+                  : "border-border/80 hover:border-tint-green/60 hover:bg-muted/40"
               )}
             >
               <input
@@ -382,7 +382,7 @@ export function ProductImportModal({
                 onChange={handleFileChange}
                 className="hidden"
               />
-              <div className="size-11 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <div className="size-11 rounded-xl bg-tint-green/10 text-tint-green flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
                 <Upload className="size-5" />
               </div>
               <p className="text-sm font-semibold text-foreground">
@@ -395,7 +395,7 @@ export function ProductImportModal({
           ) : (
             <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-xs">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="size-10 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <div className="size-10 rounded-lg bg-tint-green/10 text-tint-green flex items-center justify-center shrink-0">
                   <FileType className="size-5" />
                 </div>
                 <div className="min-w-0">
@@ -432,7 +432,7 @@ export function ProductImportModal({
           {/* Parsed Results Preview */}
           {isParsing && (
             <div className="flex items-center justify-center py-8 text-xs text-muted-foreground gap-2.5">
-              <Loader2 className="size-4 animate-spin text-emerald-600" />
+              <Loader2 className="size-4 animate-spin text-tint-green" />
               Excel verileri analiz ediliyor...
             </div>
           )}
@@ -442,7 +442,7 @@ export function ProductImportModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-semibold text-foreground">Önizleme ({parsedRows.length} Satır)</span>
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
+                  <Badge variant="outline" className="bg-tint-green/10 text-tint-green border-tint-green/30">
                     {validCount} Geçerli
                   </Badge>
                   {invalidCount > 0 && (
@@ -471,8 +471,8 @@ export function ProductImportModal({
                       <TableRow key={idx} className={!row.isValid ? "bg-destructive/5" : undefined}>
                         <TableCell className="py-2">
                           {row.isValid ? (
-                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-micro py-0">
-                              <CheckCircle2 className="size-3 mr-1 text-emerald-600 dark:text-emerald-400" />
+                            <Badge variant="outline" className="bg-tint-green/10 text-tint-green border-tint-green/30 text-micro py-0">
+                              <CheckCircle2 className="size-3 mr-1 text-tint-green" />
                               Geçerli
                             </Badge>
                           ) : (
@@ -506,7 +506,7 @@ export function ProductImportModal({
             size="sm"
             onClick={handleImportSubmit}
             disabled={validCount === 0 || isImporting || isParsing}
-            className="h-9 px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5 shadow-xs"
+            className="h-9 px-4 text-xs bg-tint-green text-white hover:bg-tint-green/90 font-medium gap-1.5 shadow-xs"
           >
             {isImporting ? (
               <>

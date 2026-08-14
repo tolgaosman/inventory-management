@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/data-table/data-table";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import { formatNumber, formatDateTime } from "@/lib/format";
@@ -137,24 +136,23 @@ export function RecentMovementsCard({
   );
 
   return (
-    <Card className="py-5 gap-3">
-      <CardHeader className="px-5 pb-0">
-        <CardTitle className="text-base font-semibold tracking-tight">
-          Son {mode === "giris" ? "Girişler" : "Çıkışlar"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="px-5">
-        <DataTable
-          columns={columns}
-          data={movements}
-          total={total}
-          page={page}
-          pageSize={pageSize}
-          onPageChange={onPageChange}
-          loading={loading}
-          emptyTitle={mode === "giris" ? "Henüz stok girişi yok" : "Henüz stok çıkışı yok"}
-        />
-      </CardContent>
-    </Card>
+    // No Card wrapper: DataTable already declares its own bordered surface, and
+    // the design language forbids nesting a card in a card. A plain heading over
+    // the table gives the same reading order without the second box.
+    <section className="space-y-3">
+      <h2 className="text-base font-semibold tracking-tight text-foreground">
+        Son {mode === "giris" ? "Girişler" : "Çıkışlar"}
+      </h2>
+      <DataTable
+        columns={columns}
+        data={movements}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        onPageChange={onPageChange}
+        loading={loading}
+        emptyTitle={mode === "giris" ? "Henüz stok girişi yok" : "Henüz stok çıkışı yok"}
+      />
+    </section>
   );
 }

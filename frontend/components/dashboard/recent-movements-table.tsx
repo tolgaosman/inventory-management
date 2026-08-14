@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, History } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PanelCard } from "@/components/common/panel-card";
 import { MovementTypeBadge } from "@/components/common/status-badge";
 import { EmptyState } from "@/components/common/empty-state";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
@@ -11,19 +11,19 @@ export function RecentMovementsTable({ items }: { items: EnrichedMovement[] }) {
   const [featured, ...rest] = items;
 
   return (
-    <Card className="flex h-full flex-col py-5">
-      <CardHeader className="flex-row items-center justify-between px-5 pb-2">
-        <CardTitle className="text-base font-semibold tracking-tight text-foreground">Son Stok Hareketleri</CardTitle>
+    <PanelCard
+      title="Son Stok Hareketleri"
+      actions={
         <Link
           href="/stok/hareketler"
-          className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
         >
           Tümünü gör
           <ArrowUpRight className="size-3.5" />
         </Link>
-      </CardHeader>
-      <CardContent className="flex-1 min-h-0 px-5">
-        {items.length === 0 ? (
+      }
+    >
+      {items.length === 0 ? (
           <EmptyState icon={History} title="Henüz stok hareketi yok" />
         ) : (
           <div className="flex h-full flex-col gap-3">
@@ -95,7 +95,6 @@ export function RecentMovementsTable({ items }: { items: EnrichedMovement[] }) {
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+    </PanelCard>
   );
 }

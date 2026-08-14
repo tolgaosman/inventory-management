@@ -40,8 +40,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { KpiTile } from "@/components/dashboard/kpi-tile";
-import { cn } from "@/lib/utils";
+import { StatGrid } from "@/components/common/stat-card";
+import { Section, SectionStack } from "@/components/common/section";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -603,36 +603,27 @@ export function ProductsClient() {
         }
       />
 
-      <div
-        className={cn(
-          "grid grid-cols-2 gap-4 lg:grid-cols-4",
-          status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity",
-        )}
-      >
-        <Card className="py-5 gap-2">
-          <CardContent className="px-5">
-            <KpiTile icon={Package} tint="blue" label="Toplam Ürün" value={formatNumber(view?.stats.total ?? 0)} />
-          </CardContent>
-        </Card>
-        <Card className="py-5 gap-2">
-          <CardContent className="px-5">
-            <KpiTile icon={AlertTriangle} tint="red" label="Kritik Stok" value={formatNumber(view?.stats.critical ?? 0)} />
-          </CardContent>
-        </Card>
-        <Card className="py-5 gap-2">
-          <CardContent className="px-5">
-            <KpiTile icon={CircleDot} tint="amber" label="Pasif Ürün" value={formatNumber(view?.stats.passive ?? 0)} />
-          </CardContent>
-        </Card>
-        <Card className="py-5 gap-2">
-          <CardContent className="px-5">
-            <KpiTile icon={Wallet} tint="green" label="Stok Değeri" value={formatCurrency(view?.stats.stockValue ?? 0, currency, rates?.[currency] || 1, showKurus)} />
-          </CardContent>
-        </Card>
-      </div>
+      <SectionStack className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
+      <Section index={0}>
+      <StatGrid
+        className="grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        items={[
+          { icon: Package, tint: "blue", label: "Toplam Ürün", value: formatNumber(view?.stats.total ?? 0) },
+          { icon: AlertTriangle, tint: "red", label: "Kritik Stok", value: formatNumber(view?.stats.critical ?? 0) },
+          { icon: CircleDot, tint: "amber", label: "Pasif Ürün", value: formatNumber(view?.stats.passive ?? 0) },
+          {
+            icon: Wallet,
+            tint: "green",
+            label: "Stok Değeri",
+            value: formatCurrency(view?.stats.stockValue ?? 0, currency, rates?.[currency] || 1, showKurus),
+          },
+        ]}
+      />
+      </Section>
 
-      <Card className="py-5 gap-3">
-        <CardContent className="space-y-3 px-5">
+      <Section index={1}>
+      <Card>
+        <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative min-w-[220px] flex-1">
               <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -738,6 +729,7 @@ export function ProductsClient() {
           </div>
         </CardContent>
       </Card>
+      </Section>
 
       {selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-4 rounded-xl border border-primary/30 bg-primary/10 dark:bg-primary/15 shadow-soft animate-in fade-in slide-in-from-top-1 duration-200">
@@ -747,7 +739,7 @@ export function ProductsClient() {
             </Badge>
             <span>Ürün Seçildi</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               size="sm"
               variant="outline"
@@ -810,6 +802,7 @@ export function ProductsClient() {
         </div>
       )}
 
+      <Section index={2}>
       <DataTable
         columns={columns}
         data={view?.rows ?? []}
@@ -826,6 +819,8 @@ export function ProductsClient() {
         emptyTitle="Henüz ürün yok"
         emptyDescription="Katalogda henüz bir ürün bulunmuyor."
       />
+      </Section>
+      </SectionStack>
 
       <ProductImportModal
         open={importOpen}
@@ -859,7 +854,7 @@ export function ProductsClient() {
           <AlertDialogFooter>
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive-solid"
               onClick={handleDelete}
             >
               Sil
@@ -879,7 +874,7 @@ export function ProductsClient() {
           <AlertDialogFooter>
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              variant="destructive-solid"
               onClick={handleBulkDeleteSubmit}
               disabled={isBulkProcessing}
             >

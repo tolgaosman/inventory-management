@@ -49,10 +49,63 @@
   /* Readable ink for text sitting on a tinted warning chip. */
   --color-status-warning-foreground: var(--status-warning-foreground);
 
+  /*
+   * KPI / status tints. Every icon chip and rank badge in the app resolves to
+   * one of these via lib/tints.ts. Deleting them silently renders every chip
+   * colorless — they compile to color-mix() against an undefined variable.
+   */
+  --color-tint-blue: var(--tint-blue);
+  --color-tint-teal: var(--tint-teal);
+  --color-tint-plum: var(--tint-plum);
+  --color-tint-amber: var(--tint-amber);
+  --color-tint-green: var(--tint-green);
+  --color-tint-red: var(--tint-red);
+
+  /*
+   * Brand triad, lifted out of the dashboard's hardcoded hexes. These are an
+   * identity palette, not a semantic status — hence their own namespace.
+   *
+   * RULE: --brand-* are for MARKS (strokes, fills, swatches, bars).
+   *       --brand-*-ink are for GLYPHS and text. #41c0d3 on white is ~2.1:1
+   *       and #f5b72f is ~1.9:1 — neither clears WCAG AA as text. Same
+   *       discipline as --status-warning-foreground.
+   */
+  --color-brand-turquoise: var(--brand-turquoise);
+  --color-brand-turquoise-ink: var(--brand-turquoise-ink);
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-ink: var(--brand-navy-ink);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-ink: var(--brand-gold-ink);
+
   /* Chart series (validated against a white surface — see project palette) */
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
+
+  /*
+   * Inverse surface: a card that stays dark in BOTH themes. Do not reach for
+   * --sidebar-primary for this — it lifts to a light blue in dark mode, which
+   * is how the donut hero ended up as white text on pale blue.
+   */
+  --color-surface-inverse: var(--surface-inverse);
+  --color-surface-inverse-foreground: var(--surface-inverse-foreground);
+  --color-surface-inverse-muted: var(--surface-inverse-muted);
+  --color-surface-inverse-border: var(--surface-inverse-border);
+
+  /*
+   * Donut slices. Surface-relative, not theme-relative: they always sit on
+   * --surface-inverse. Deliberately not folded into --chart-*, which is
+   * validated against a white card and would vanish on navy.
+   */
+  --color-slice-1: var(--slice-1);
+  --color-slice-2: var(--slice-2);
+  --color-slice-3: var(--slice-3);
+  --color-slice-4: var(--slice-4);
+
+  /* Motion. Referenced by button/badge/select/tabs/progress and the dashboard
+   * section stagger — an undefined ease-* utility emits nothing in Tailwind v4,
+   * so every one of those transitions silently falls back to browser default. */
+  --ease-out-strong: cubic-bezier(0.2, 0, 0, 1);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -104,14 +157,46 @@
   --status-serious: #c4320a;
   --status-critical: #b42318;
 
-  --series-1: #1d4e89;
-  --series-2: #0f9b8e;
-  --series-3: #7a8ba0;
-  --chart-1: #0ea5e9;
-  --chart-2: #1a4d8f;
-  --chart-3: #10b981;
-  --chart-4: #06b6d4;
-  --chart-5: #3b82f6;
+  /*
+   * Tints are held at their more vivid form so text-tint-teal / text-tint-amber
+   * clear WCAG AA on a white card.
+   */
+  --tint-blue: #1a4d8f;
+  --tint-teal: #0b7a70;
+  --tint-plum: #6b5ca5;
+  --tint-amber: #966a09;
+  --tint-green: #067647;
+  --tint-red: #b42318;
+
+  --brand-turquoise: #41c0d3;
+  --brand-turquoise-ink: #0b6f7d;
+  --brand-navy: #083e6b;
+  --brand-navy-ink: #083e6b;
+  --brand-gold: #f5b72f;
+  --brand-gold-ink: #8a6108;
+
+  --surface-inverse: #083e6b;
+  --surface-inverse-foreground: #ffffff;
+  --surface-inverse-muted: rgba(255, 255, 255, 0.1);
+  --surface-inverse-border: rgba(255, 255, 255, 0.16);
+
+  --slice-1: #ffffff;
+  --slice-2: #7dd3fc;
+  --slice-3: #67e8f9;
+  --slice-4: #6ee7b7;
+
+  /* The flow triad. --brand-* is the source; --series-* is the alias layer
+   * charts read from, so a new 3-series chart matches the dashboard for free. */
+  --series-1: var(--brand-turquoise);
+  --series-2: var(--brand-navy);
+  --series-3: var(--brand-gold);
+
+  /* Five-way categorical, drawn from the tint family so bars match KPI chips. */
+  --chart-1: var(--tint-blue);
+  --chart-2: var(--tint-teal);
+  --chart-3: var(--tint-plum);
+  --chart-4: var(--tint-amber);
+  --chart-5: var(--tint-green);
 }
 
 .dark {
@@ -151,14 +236,41 @@
   --status-serious: #ef8354;
   --status-critical: #f0715f;
 
-  --series-1: #6ba3e0;
-  --series-2: #2ec4b6;
-  --series-3: #9aabbd;
-  --chart-1: #38bdf8;
-  --chart-2: #5b8fd0;
-  --chart-3: #34d399;
-  --chart-4: #22d3ee;
-  --chart-5: #60a5fa;
+  --tint-blue: #6ba3e0;
+  --tint-teal: #2ec4b6;
+  --tint-plum: #9b8fdc;
+  --tint-amber: #d8a83c;
+  --tint-green: #45b97c;
+  --tint-red: #f0715f;
+
+  /* Marks stay near their light values (they sit on charts, not on the page);
+   * the -ink variants lift further so text clears AA on #0b1017. */
+  --brand-turquoise: #5ccfe0;
+  --brand-turquoise-ink: #5ccfe0;
+  --brand-navy: #4f83b6;
+  --brand-navy-ink: #8fb8e0;
+  --brand-gold: #f7c65a;
+  --brand-gold-ink: #f7c65a;
+
+  --surface-inverse: #0a2c4a;
+  --surface-inverse-foreground: #eaf2fa;
+  --surface-inverse-muted: rgba(255, 255, 255, 0.08);
+  --surface-inverse-border: rgba(255, 255, 255, 0.12);
+
+  --slice-1: #eef6ff;
+  --slice-2: #7dd3fc;
+  --slice-3: #67e8f9;
+  --slice-4: #6ee7b7;
+
+  --series-1: var(--brand-turquoise);
+  --series-2: var(--brand-navy);
+  --series-3: var(--brand-gold);
+
+  --chart-1: var(--tint-blue);
+  --chart-2: var(--tint-teal);
+  --chart-3: var(--tint-plum);
+  --chart-4: var(--tint-amber);
+  --chart-5: var(--tint-green);
 }
 
 * {
@@ -188,6 +300,23 @@ body {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.4),
     0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * Elevation for the inverse hero card. A bare shadow-lg is black-on-black in
+ * dark mode (invisible) — same class of bug the .dark .shadow-soft override
+ * above exists to fix.
+ */
+@utility shadow-hero {
+  box-shadow:
+    0 8px 24px -8px rgba(8, 62, 107, 0.28),
+    0 2px 6px rgba(16, 24, 40, 0.06);
+}
+
+.dark .shadow-hero {
+  box-shadow:
+    0 8px 28px -10px rgba(0, 0, 0, 0.6),
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 /*

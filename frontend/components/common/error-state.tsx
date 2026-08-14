@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StatePanel } from "@/components/common/state-panel";
 
 export function ErrorState({
   title = "İşlem tamamlanamadı",
@@ -11,19 +12,18 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-destructive/25 bg-destructive/5 px-6 py-16 text-center">
-      <div className="flex size-10 items-center justify-center rounded-md bg-destructive/10 text-destructive">
-        <AlertTriangle className="size-5" />
-      </div>
-      <div className="space-y-1">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        {message ? <p className="text-sm text-muted-foreground max-w-sm">{message}</p> : null}
-      </div>
-      {onRetry ? (
-        <Button size="sm" variant="outline" onClick={onRetry} className="mt-1">
-          Tekrar dene
-        </Button>
-      ) : null}
-    </div>
+    <StatePanel
+      icon={AlertTriangle}
+      tone="destructive"
+      title={title}
+      description={message}
+      action={
+        onRetry ? (
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            Tekrar dene
+          </Button>
+        ) : null
+      }
+    />
   );
 }

@@ -53,8 +53,7 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: History,
         permission: "stock.in",
         children: [
-          { label: "Stok Girişi", href: "/stok/giris", icon: ArrowDownToLine, permission: "stock.in" },
-          { label: "Stok Çıkışı", href: "/stok/cikis", icon: ArrowUpFromLine, permission: "stock.out" },
+          { label: "Giriş / Çıkış İşlemleri", href: "/stok/islem", icon: ArrowLeftRight, permission: "stock.in" },
           { label: "Transfer", href: "/stok/transfer", icon: ArrowLeftRight, permission: "stock.transfer" },
           { label: "Hareket Geçmişi", href: "/stok/hareketler", icon: History, permission: "stock.in" },
         ],

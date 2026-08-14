@@ -1,22 +1,29 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { TINTS } from "@/lib/tints";
+import { TINTS, type TintName } from "@/lib/tints";
 
 export interface KpiMetaItem {
   icon: LucideIcon;
-  tint?: keyof typeof TINTS;
+  tint?: TintName;
   label: string;
   value: string;
 }
 
 /**
- * Secondary KPI pills — every metric that used to live in the "Envanter &
- * Tedarik Özeti" / "Katalog & Stok Sağlığı" table cards, kept visible in a
- * single scrollable row instead of disappearing during the redesign.
+ * Secondary metrics in a single scrollable row.
+ *
+ * The counterpart to `StatGrid`: use that for the handful of numbers a page is
+ * about, and this for the long tail that still needs to be visible but doesn't
+ * deserve a card each.
  */
-export function KpiMetaBar({ items }: { items: KpiMetaItem[] }) {
+export function KpiMetaBar({ items, className }: { items: KpiMetaItem[]; className?: string }) {
   return (
-    <div className="flex items-stretch gap-2 overflow-x-auto custom-scrollbar rounded-xl border border-border bg-card px-3 py-2.5">
+    <div
+      className={cn(
+        "flex items-stretch gap-2 overflow-x-auto custom-scrollbar rounded-xl border border-border bg-card px-3 py-2.5",
+        className,
+      )}
+    >
       {items.map((item, idx) => {
         const Icon = item.icon;
         const tintKey = item.tint || "blue";

@@ -8,7 +8,6 @@ import {
   ArrowDownToLine,
   ArrowUpFromLine,
   AlertTriangle,
-  Download,
   FileSpreadsheet,
   FileText,
   Loader2,
@@ -23,11 +22,11 @@ import {
 import { PageHeader } from "@/components/common/page-header";
 import { ErrorState } from "@/components/common/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { KpiStrip } from "@/components/dashboard/kpi-strip";
-import { KpiMetaBar } from "@/components/dashboard/kpi-meta-bar";
+import { Section } from "@/components/common/section";
+import { StatGrid } from "@/components/common/stat-card";
+import { KpiMetaBar } from "@/components/common/kpi-meta-bar";
 import { PurchaseHeroCard } from "@/components/dashboard/purchase-hero-card";
 import { CategoryRadialChart } from "@/components/dashboard/category-radial-chart";
 import { WarehouseStockBars } from "@/components/dashboard/warehouse-stock-bars";
@@ -46,36 +45,6 @@ import { downloadBlob, reportFilename, slugify } from "@/lib/export/download";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
-
-/**
- * Entrance stagger for a dashboard section.
- *
- * CSS animations fire on mount only, and this subtree mounts exactly once:
- * `useAsync` keeps `staleData` during a refetch, so a warehouse/date filter
- * change re-renders in place instead of remounting. The intro therefore plays
- * on first load and never replays on filter changes, which is the difference
- * between one authored moment and the same entrance firing at every keystroke.
- * `animationFillMode: backwards` holds the pre-animation state during the
- * delay so nothing flashes in before its turn.
- */
-function Section({
-  index,
-  className,
-  children,
-}: {
-  index: number;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cn("animate-in fade-in slide-in-from-bottom-2 duration-[260ms] ease-out-strong", className)}
-      style={{ animationDelay: `${index * 40}ms`, animationFillMode: "backwards" }}
-    >
-      {children}
-    </div>
-  );
-}
 
 export default function PanelPage() {
   const { company, showKurus } = useSettings();
@@ -199,7 +168,7 @@ export default function PanelPage() {
       ) : (
         <div className={cn("space-y-4", status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity")}>
           <Section index={0}>
-          <KpiStrip
+          <StatGrid
             items={[
               { icon: Package, tint: "blue", label: "Toplam Ürün", value: formatNumber(view.kpis.totalProducts) },
               { icon: Warehouse, tint: "teal", label: "Toplam Depo", value: formatNumber(view.kpis.totalWarehouses) },

@@ -164,7 +164,7 @@ export function ProductDetailClient({ id }: { id: string }) {
               <ZoomIn className="size-6" />
             </div>
           </button>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <PageHeader
               title={product.name}
               description={`${product.sku} · ${product.categoryName}`}
@@ -223,15 +223,15 @@ export function ProductDetailClient({ id }: { id: string }) {
       </div>
 
       <div className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Boxes className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Toplam Stok</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">
+                <p className="truncate text-lg font-semibold tabular-nums text-foreground">
                   {formatNumber(product.totalStock)} <span className="text-xs font-normal text-muted-foreground">{product.unit}</span>
                 </p>
               </div>
@@ -249,12 +249,12 @@ export function ProductDetailClient({ id }: { id: string }) {
           </Card>
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-status-good/10 text-status-good">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-status-good/10 text-status-good">
                 <Wallet className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Stok Değeri</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus)}</p>
+                <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus)}</p>
               </div>
             </CardContent>
           </Card>
@@ -272,8 +272,10 @@ export function ProductDetailClient({ id }: { id: string }) {
               <dl className="divide-y divide-border/60">
                 {fields.map((f) => (
                   <div key={f.label} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <dt className="text-muted-foreground">{f.label}</dt>
-                    <dd className="font-medium text-foreground">{f.value}</dd>
+                    <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
+                    <dd className="min-w-0 truncate text-right font-medium text-foreground" title={typeof f.value === "string" ? f.value : undefined}>
+                      {f.value}
+                    </dd>
                   </div>
                 ))}
               </dl>
