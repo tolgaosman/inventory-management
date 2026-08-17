@@ -10,7 +10,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
         <div className="flex min-w-0 flex-1 flex-col">
           <AppHeader />
           <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-[1400px] space-y-6">{children}</div>
+            <div className="mx-auto w-full space-y-6">{children}</div>
           </main>
         </div>
       </div>

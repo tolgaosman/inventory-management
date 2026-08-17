@@ -66,7 +66,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Yönetim",
     items: [
       { label: "Raporlar", href: "/raporlar", icon: BarChart3, permission: "reports.view" },
-
+      { label: "Kullanıcılar", href: "/kullanicilar", icon: Users, permission: "users.manage" },
       { label: "Ayarlar", href: "/ayarlar", icon: Settings },
     ],
   },

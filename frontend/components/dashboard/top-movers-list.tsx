@@ -24,7 +24,7 @@ export function TopMoversList({ items }: { items: TopMover[] }) {
               <TableRow className="border-b border-border/70 hover:bg-transparent">
                 <TableHead className="w-10 px-2 text-center">#</TableHead>
                 <TableHead className="px-2">Ürün Adı</TableHead>
-                <TableHead className="w-24 px-2 text-right">Toplam</TableHead>
+                <TableHead className="w-24 px-2 text-center">Toplam</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -48,7 +48,7 @@ export function TopMoversList({ items }: { items: TopMover[] }) {
                       </Link>
                     </div>
                   </TableCell>
-                  <TableCell className="px-2 text-right">
+                  <TableCell className="px-2 text-center">
                     <span className="text-xs font-semibold tabular-nums text-foreground bg-muted/70 px-2.5 py-1 rounded-md inline-block">
                       {formatNumber(item.totalQuantity)}
                     </span>

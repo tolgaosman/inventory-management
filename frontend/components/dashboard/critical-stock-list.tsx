@@ -119,7 +119,7 @@ export function CriticalStockList({
             />
           </div>
           <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "all")}>
-            <SelectTrigger className="w-full sm:w-[140px]">
+            <SelectTrigger className="w-full sm:w-fit sm:min-w-[140px]">
               <SelectValue>{categoryId === "all" ? "Tüm Kategoriler" : categoryName(categoryId)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -132,7 +132,7 @@ export function CriticalStockList({
             </SelectContent>
           </Select>
           <Select value={supplierId} onValueChange={(v) => setSupplierId(v ?? "all")}>
-            <SelectTrigger className="w-full sm:w-[150px]">
+            <SelectTrigger className="w-full sm:w-fit sm:min-w-[150px]">
               <SelectValue>{supplierId === "all" ? "Tüm Tedarikçiler" : supplierName(supplierId)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -218,13 +218,13 @@ export function CriticalStockList({
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} aria-label="Tümünü seç" />
                   </TableHead>
                   <TableHead>Ürün</TableHead>
-                  {shows("supplier") && <TableHead>Tedarikçi</TableHead>}
-                  {shows("category") && <TableHead>Kategori</TableHead>}
-                  {shows("price") && <TableHead className="text-right">Alış Fiyatı</TableHead>}
+                  {shows("supplier") && <TableHead className="text-center">Tedarikçi</TableHead>}
+                  {shows("category") && <TableHead className="text-center">Kategori</TableHead>}
+                  {shows("price") && <TableHead className="text-center">Alış Fiyatı</TableHead>}
                   <TableHead className="text-center">Mevcut / Min</TableHead>
-                  {shows("value") && <TableHead className="text-right">Stok Değeri</TableHead>}
+                  {shows("value") && <TableHead className="text-center">Stok Değeri</TableHead>}
                   <TableHead className="text-center">Durum</TableHead>
-                  <TableHead className="w-10 px-2 text-center" />
+                  <TableHead className="w-14 pl-2 pr-5 text-right" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -245,17 +245,17 @@ export function CriticalStockList({
                       </div>
                     </TableCell>
                     {shows("supplier") && (
-                      <TableCell className="px-4 py-3 text-left">
+                      <TableCell className="px-4 py-3 text-center">
                         <span className="text-xs text-muted-foreground">{supplierName(p.supplierId)}</span>
                       </TableCell>
                     )}
                     {shows("category") && (
-                      <TableCell className="px-4 py-3 text-left">
+                      <TableCell className="px-4 py-3 text-center">
                         <span className="text-xs text-muted-foreground">{categoryName(p.categoryId)}</span>
                       </TableCell>
                     )}
                     {shows("price") && (
-                      <TableCell className="px-4 py-3 text-right">
+                      <TableCell className="px-4 py-3 text-center">
                         <span className="text-xs tabular-nums text-foreground">
                           {formatCurrency(p.purchasePrice, currency, rates?.[currency] || 1, showKurus)}
                         </span>
@@ -267,7 +267,7 @@ export function CriticalStockList({
                       </span>
                     </TableCell>
                     {shows("value") && (
-                      <TableCell className="px-4 py-3 text-right">
+                      <TableCell className="px-4 py-3 text-center">
                         <span className="text-xs tabular-nums text-foreground">
                           {formatCurrency(p.totalStock * p.purchasePrice, currency, rates?.[currency] || 1, showKurus)}
                         </span>
@@ -276,7 +276,7 @@ export function CriticalStockList({
                     <TableCell className="px-4 py-3 text-center">
                       <StockStatusBadge level={p.totalStock === 0 ? "kritik" : p.totalStock < p.minStock ? "kritik" : "dusuk"} />
                     </TableCell>
-                    <TableCell className="w-10 px-2 py-3 text-center">
+                    <TableCell className="w-14 pl-2 pr-5 py-3 text-right">
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" />}

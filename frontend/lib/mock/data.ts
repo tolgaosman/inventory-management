@@ -24,6 +24,8 @@ export const warehouses: Warehouse[] = [
   { id: "wh-3", name: "Gazimağusa Veri Merkezi Deposu", city: "Gazimağusa", address: "Teknoloji Bölgesi A-Blok", capacity: 10000 },
   { id: "wh-4", name: "Teknopark AR-GE Deposu", city: "Lefkoşa", address: "AR-GE Binası Zemin Kat", capacity: 6000 },
   { id: "wh-5", name: "İstanbul Lojistik Deposu", city: "İstanbul", address: "Hadımköy OSB 3. Cadde", capacity: 25000 },
+  { id: "wh-6", name: "Ankara Bölge Deposu", city: "Ankara", address: "Ostim OSB 5. Cadde No:12", capacity: 12000 },
+  { id: "wh-7", name: "İzmir Ege Lojistik Deposu", city: "İzmir", address: "Çiğli Serbest Bölge B-Blok", capacity: 9000 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -74,19 +76,35 @@ export const suppliers: Supplier[] = [
   { id: "sup-7", name: "Palo Alto Networks", contactName: "İrem Çelik", email: "irem@paloaltonetworks.com", phone: "0552 777 88 99", city: "Girne" },
   { id: "sup-8", name: "NetApp Storage Solutions", contactName: "Baran Koç", email: "baran@netapp.com", phone: "0534 888 99 00", city: "Lefkoşa" },
   { id: "sup-9", name: "Schneider Electric (APC)", contactName: "Zeynep Arslan", email: "zeynep@se.com", phone: "0536 999 00 11", city: "Bursa" },
-  { id: "sup-10", name: "Yakın Doğu IT Dağıtım", contactName: "Onur Polat", email: "onur@neareast.tech", phone: "0538 000 11 22", city: "Lefkoşa" },
+  { id: "sup-10", name: "Yakın Doğu IT Dağıtım", contactName: "Onur Polat", email: "onur@sirket.com", phone: "0538 000 11 22", city: "Lefkoşa" },
+  { id: "sup-11", name: "Juniper Networks Distribution", contactName: "Hakan Er", email: "hakan@juniper.com", phone: "0532 101 22 33", city: "Ankara" },
+  { id: "sup-12", name: "MikroTik Bölge Distribütörü", contactName: "Pınar Uçar", email: "pinar@mikrotik.com", phone: "0543 202 33 44", city: "İzmir" },
+  { id: "sup-13", name: "Synology Türkiye", contactName: "Burak Toprak", email: "burak@synology.com", phone: "0535 303 44 55", city: "İstanbul" },
+  { id: "sup-14", name: "Hikvision Cyprus", contactName: "Melis Kaan", email: "melis@hikvision.com", phone: "0544 404 55 66", city: "Girne" },
+  { id: "sup-15", name: "Apple Enterprise Reseller", contactName: "Tarkan Sezer", email: "tarkan@applereseller.com", phone: "0533 505 66 77", city: "İstanbul" },
 ];
 
 // ---------------------------------------------------------------------------
 // Near East Technology - Kullanıcılar
 // ---------------------------------------------------------------------------
 export const users: AppUser[] = [
-  { id: "usr-1", name: "Tolga Falay", email: "tolga@neareast.tech", role: "yonetici", initials: "TF" },
-  { id: "usr-2", name: "Elif Korkmaz", email: "elif@neareast.tech", role: "yonetici", initials: "EK" },
-  { id: "usr-3", name: "Can Uzun", email: "can@neareast.tech", role: "depo", initials: "CU" },
-  { id: "usr-4", name: "Aslı Güneş", email: "asli@neareast.tech", role: "depo", initials: "AG" },
-  { id: "usr-5", name: "Emre Bulut", email: "emre@neareast.tech", role: "satinalma", initials: "EB" },
-  { id: "usr-6", name: "Naz Yıldız", email: "naz@neareast.tech", role: "satinalma", initials: "NY" },
+  { id: "48271", name: "Tolga Osman Falay", email: "tolgaosman@sirket.com", role: "yonetici", initials: "TO" },
+  { id: "63094", name: "Gizem Karabaşak", email: "gizem.karabasak@sirket.com", role: "yonetici", initials: "GK" },
+  { id: "17856", name: "Mustafa Hacı", email: "mustafa.haci@sirket.com", role: "depo", initials: "MH" },
+  { id: "39412", name: "Alara Soysan", email: "alara.soysan@sirket.com", role: "satinalma", initials: "AS" },
+  { id: "82637", name: "Aliye Kavaz", email: "aliye.kavaz@sirket.com", role: "depo", initials: "AK" },
+  { id: "54180", name: "Irmak Bozkurt", email: "irmak.bozkurt@sirket.com", role: "satinalma", initials: "IB" },
+  { id: "24680", name: "Kaan Muslu Çağa", email: "kaan.caga@sirket.com", role: "yonetici", initials: "KÇ" },
+  { id: "71503", name: "Arda İbrahim Şahin", email: "arda.sahin@sirket.com", role: "yonetici", initials: "AŞ" },
+  { id: "20946", name: "Dehan Saycıoğlu", email: "dehan.saycioglu@sirket.com", role: "depo", initials: "DS" },
+  { id: "95328", name: "Mertkan Kılıçbey Türemen", email: "mertkan.turemen@sirket.com", role: "satinalma", initials: "MT" },
+  { id: "46715", name: "Savaş Muhammed Muhtaroğlu", email: "savas.muhtaroglu@sirket.com", role: "yonetici", initials: "SM" },
+  { id: "31849", name: "Berk Fenk", email: "berk.fenk@sirket.com", role: "depo", initials: "BF" },
+  { id: "89234", name: "Çiğdem Dürüst", email: "cigdem.durust@sirket.com", role: "yonetici", initials: "ÇD" },
+  { id: "57102", name: "Tolga Falay", email: "tolga.falay@sirket.com", role: "satinalma", initials: "TF" },
+  { id: "66721", name: "Kerem Yılmaz", email: "kerem.yilmaz@sirket.com", role: "depo", initials: "KY" },
+  { id: "12345", name: "Ayşe Kılıç", email: "ayse.kilic@sirket.com", role: "satinalma", initials: "AK" },
+  { id: "98765", name: "Caner Yıldız", email: "caner.yildiz@sirket.com", role: "depo", initials: "CY" },
 ];
 
 export const CURRENT_ROLES: Role[] = ["yonetici", "depo", "satinalma"];
@@ -95,41 +113,41 @@ export const CURRENT_ROLES: Role[] = ["yonetici", "depo", "satinalma"];
 // Near East Technology - Ürün Kataloğu
 // ---------------------------------------------------------------------------
 const productNamesByCategory: Record<string, string[]> = {
-  "cat-rack-server": ["Dell PowerEdge R760", "HPE ProLiant DL380 Gen11", "Lenovo ThinkSystem SR650 V3", "Cisco UCS C240 M6"],
-  "cat-blade-server": ["Dell PowerEdge MX750c", "HPE Synergy 480 Gen11", "Cisco UCS B200 M6"],
-  "cat-storage": ["NetApp FAS2750 SAN Storage", "Dell PowerStore 500T", "HPE Alletra 6000", "Synology Enterprise RS4021xs+"],
-  "cat-ups": ["APC Smart-UPS RT 10kVA", "Eaton 9PX 6kVA UPS", "Vertiv Liebert GXT5 3000VA"],
-  "cat-switch": ["Cisco Catalyst 9300 48P Switch", "Aruba CX 6300M Switch", "Dell PowerSwitch N3248P-ON", "Juniper EX4400-48P"],
-  "cat-router": ["Cisco ISR 4451 Router", "Juniper MX204 Universal Router", "MikroTik CCR2216-1G-12XS-2XQ"],
-  "cat-firewall": ["FortiGate 100F Next-Gen Firewall", "Palo Alto PA-440 Firewall", "Cisco Secure Firewall 3110"],
-  "cat-ap": ["Aruba AP-635 Wi-Fi 6E Access Point", "Cisco Catalyst 9136I AP", "FortiAP 431F Wi-Fi 6 AP"],
-  "cat-workstation": ["HP ZBook Fury 16 G10 Workstation", "Dell Precision 7780 Workstation", "Lenovo ThinkStation P620"],
-  "cat-kurumsal-laptop": ["Lenovo ThinkPad T14 Gen 5", "Dell Latitude 5550", "HP EliteBook 840 G10", "Apple MacBook Pro 14 M3 Pro"],
-  "cat-desktop": ["Dell OptiPlex 7020 Tower", "Lenovo ThinkCentre M90q Tiny", "HP EliteDesk 800 G9"],
-  "cat-os-license": ["Microsoft Windows Server 2025 Datacenter", "Red Hat Enterprise Linux 9 Subscription", "Ubuntu Advantage Enterprise"],
-  "cat-db-license": ["Microsoft SQL Server 2022 Enterprise", "Oracle Database 19c Enterprise Edition"],
-  "cat-security-software": ["Kaspersky Endpoint Security Cloud", "CrowdStrike Falcon Enterprise", "FortiClient EMS Pro License"],
-  "cat-ip-kamera": ["Hikvision 4K Akıllı PTZ IP Kamera", "Dahua 8MP Termal IP Kamera", "Axis P3268-LV Dome Kamera"],
-  "cat-gecis-sistemi": ["Suprema BioStation 3 Yüz Tanıma", "HID Signo 40 Kart Okuyucu Terminal"],
+  "cat-rack-server": ["Dell PowerEdge R760", "HPE ProLiant DL380 Gen11", "Lenovo ThinkSystem SR650 V3", "Cisco UCS C240 M6", "Dell PowerEdge R650xs", "HPE ProLiant DL360 Gen11"],
+  "cat-blade-server": ["Dell PowerEdge MX750c", "HPE Synergy 480 Gen11", "Cisco UCS B200 M6", "Lenovo Flex System x240 M6"],
+  "cat-storage": ["NetApp FAS2750 SAN Storage", "Dell PowerStore 500T", "HPE Alletra 6000", "Synology Enterprise RS4021xs+", "QNAP TS-h1290FX NAS", "NetApp AFF A250"],
+  "cat-ups": ["APC Smart-UPS RT 10kVA", "Eaton 9PX 6kVA UPS", "Vertiv Liebert GXT5 3000VA", "APC Smart-UPS SRT 5000VA"],
+  "cat-switch": ["Cisco Catalyst 9300 48P Switch", "Aruba CX 6300M Switch", "Dell PowerSwitch N3248P-ON", "Juniper EX4400-48P", "MikroTik CRS326-24G-2S+RM"],
+  "cat-router": ["Cisco ISR 4451 Router", "Juniper MX204 Universal Router", "MikroTik CCR2216-1G-12XS-2XQ", "Ubiquiti EdgeRouter Infinity"],
+  "cat-firewall": ["FortiGate 100F Next-Gen Firewall", "Palo Alto PA-440 Firewall", "Cisco Secure Firewall 3110", "FortiGate 60F Desktop Firewall"],
+  "cat-ap": ["Aruba AP-635 Wi-Fi 6E Access Point", "Cisco Catalyst 9136I AP", "FortiAP 431F Wi-Fi 6 AP", "Ubiquiti UniFi U6-Enterprise"],
+  "cat-workstation": ["HP ZBook Fury 16 G10 Workstation", "Dell Precision 7780 Workstation", "Lenovo ThinkStation P620", "Apple Mac Studio M2 Ultra"],
+  "cat-kurumsal-laptop": ["Lenovo ThinkPad T14 Gen 5", "Dell Latitude 5550", "HP EliteBook 840 G10", "Apple MacBook Pro 14 M3 Pro", "Lenovo ThinkPad X1 Carbon Gen 12"],
+  "cat-desktop": ["Dell OptiPlex 7020 Tower", "Lenovo ThinkCentre M90q Tiny", "HP EliteDesk 800 G9", "Apple Mac mini M2 Pro"],
+  "cat-os-license": ["Microsoft Windows Server 2025 Datacenter", "Red Hat Enterprise Linux 9 Subscription", "Ubuntu Advantage Enterprise", "Microsoft Windows 11 Pro Lisansı"],
+  "cat-db-license": ["Microsoft SQL Server 2022 Enterprise", "Oracle Database 19c Enterprise Edition", "PostgreSQL Enterprise Destek Paketi"],
+  "cat-security-software": ["Kaspersky Endpoint Security Cloud", "CrowdStrike Falcon Enterprise", "FortiClient EMS Pro License", "Microsoft Defender for Endpoint P2"],
+  "cat-ip-kamera": ["Hikvision 4K Akıllı PTZ IP Kamera", "Dahua 8MP Termal IP Kamera", "Axis P3268-LV Dome Kamera", "Hikvision ColorVu 4MP Bullet Kamera"],
+  "cat-gecis-sistemi": ["Suprema BioStation 3 Yüz Tanıma", "HID Signo 40 Kart Okuyucu Terminal", "ZKTeco SpeedFace V5L Terminal"],
 };
 
 const brandsByCategory: Record<string, string[]> = {
   "cat-rack-server": ["Dell", "HPE", "Lenovo", "Cisco"],
-  "cat-blade-server": ["Dell", "HPE", "Cisco"],
-  "cat-storage": ["NetApp", "Dell", "HPE", "Synology"],
+  "cat-blade-server": ["Dell", "HPE", "Cisco", "Lenovo"],
+  "cat-storage": ["NetApp", "Dell", "HPE", "Synology", "QNAP"],
   "cat-ups": ["APC", "Eaton", "Vertiv"],
-  "cat-switch": ["Cisco", "Aruba", "Dell", "Juniper"],
-  "cat-router": ["Cisco", "Juniper", "MikroTik"],
+  "cat-switch": ["Cisco", "Aruba", "Dell", "Juniper", "MikroTik"],
+  "cat-router": ["Cisco", "Juniper", "MikroTik", "Ubiquiti"],
   "cat-firewall": ["Fortinet", "Palo Alto", "Cisco"],
-  "cat-ap": ["Aruba", "Cisco", "Fortinet"],
-  "cat-workstation": ["HP", "Dell", "Lenovo"],
+  "cat-ap": ["Aruba", "Cisco", "Fortinet", "Ubiquiti"],
+  "cat-workstation": ["HP", "Dell", "Lenovo", "Apple"],
   "cat-kurumsal-laptop": ["Lenovo", "Dell", "HP", "Apple"],
-  "cat-desktop": ["Dell", "Lenovo", "HP"],
+  "cat-desktop": ["Dell", "Lenovo", "HP", "Apple"],
   "cat-os-license": ["Microsoft", "Red Hat", "Canonical"],
-  "cat-db-license": ["Microsoft", "Oracle"],
-  "cat-security-software": ["Kaspersky", "CrowdStrike", "Fortinet"],
+  "cat-db-license": ["Microsoft", "Oracle", "PostgreSQL"],
+  "cat-security-software": ["Kaspersky", "CrowdStrike", "Fortinet", "Microsoft"],
   "cat-ip-kamera": ["Hikvision", "Dahua", "Axis"],
-  "cat-gecis-sistemi": ["Suprema", "HID"],
+  "cat-gecis-sistemi": ["Suprema", "HID", "ZKTeco"],
 };
 
 const unitByCategory: Record<string, string> = {
@@ -209,7 +227,7 @@ function buildProducts(): Product[] {
       ],
     };
 
-    for (let rep = 0; rep < 3; rep++) {
+    for (let rep = 0; rep < 4; rep++) {
       for (const baseName of names) {
         const brand = pick(rand, brands);
         const purchasePrice = int(rand, minP, maxP);
@@ -298,12 +316,12 @@ const reasonsByType: Record<"giris" | "cikis", MovementReason[]> = {
 function buildMovements(): StockMovement[] {
   const list: StockMovement[] = [];
   const now = Date.now();
-  const days = 180;
+  const days = 365;
   let n = 1;
 
   for (let d = days; d >= 0; d--) {
     const dayTs = now - d * 24 * 60 * 60 * 1000;
-    const movementsToday = int(rand, 2, 9);
+    const movementsToday = int(rand, 3, 14);
     for (let i = 0; i < movementsToday; i++) {
       const product = pick(rand, products);
       const warehouse = pick(rand, warehouses);
@@ -372,7 +390,7 @@ const poStatuses: PurchaseOrderStatus[] = [
 function buildPurchaseOrders(): PurchaseOrder[] {
   const list: PurchaseOrder[] = [];
   const now = Date.now();
-  for (let n = 1; n <= 42; n++) {
+  for (let n = 1; n <= 80; n++) {
     const supplier = pick(rand, suppliers);
     const itemCount = int(rand, 1, 4);
     const items = Array.from({ length: itemCount }, () => {

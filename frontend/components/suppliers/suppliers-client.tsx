@@ -160,9 +160,13 @@ export function SuppliersClient() {
         id: "name",
         accessorKey: "name",
         header: "Tedarikçi",
-        meta: { className: "w-[22%]" },
+        meta: { className: "w-[21%] text-left" },
         cell: ({ row }) => (
-          <Link href={`/tedarikciler/${row.original.id}`} className="font-medium text-foreground hover:text-primary transition-colors">
+          <Link
+            href={`/tedarikciler/${row.original.id}`}
+            className="block truncate font-medium text-foreground hover:text-primary transition-colors"
+            title={row.original.name}
+          >
             {row.original.name}
           </Link>
         ),
@@ -171,38 +175,50 @@ export function SuppliersClient() {
         id: "contactName",
         accessorKey: "contactName",
         header: "Yetkili",
-        meta: { className: "w-[15%]" },
+        meta: { className: "w-[15%] text-center" },
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.contactName}>{row.original.contactName}</span>
+        ),
       },
       {
         id: "email",
         accessorKey: "email",
         header: "E-posta",
-        meta: { className: "w-[20%]" },
+        meta: { className: "w-[20%] text-center" },
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.email}>{row.original.email}</span>
+        ),
       },
       {
         id: "phone",
         accessorKey: "phone",
         header: "Telefon",
-        meta: { className: "w-[15%]" },
+        meta: { className: "w-[14%] text-center" },
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.phone}>{row.original.phone}</span>
+        ),
       },
       {
         id: "city",
         accessorKey: "city",
         header: "Şehir",
-        meta: { className: "w-[15%]" },
+        meta: { className: "w-[13%] text-center" },
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.city}>{row.original.city}</span>
+        ),
       },
       {
         id: "productCount",
         accessorKey: "productCount",
         header: "Ürün Sayısı",
-        meta: { className: "w-[13%] text-right" },
-        cell: ({ row }) => <span className="tabular-nums">{formatNumber(row.original.productCount)}</span>,
+        meta: { className: "w-[12%] text-center" },
+        cell: ({ row }) => <span className="tabular-nums flex justify-center">{formatNumber(row.original.productCount)}</span>,
       },
       {
         id: "actions",
         header: "",
         enableSorting: false,
-        meta: { className: "w-12 text-right" },
+        meta: { className: "w-16 pr-5 text-right" },
         cell: ({ row }) => {
           const supplier = row.original;
           return (

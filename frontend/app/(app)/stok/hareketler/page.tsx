@@ -1,5 +1,5 @@
-import { ComingSoon } from "@/components/common/coming-soon";
+import { MovementHistoryClient } from "@/components/stock/movement-history-client";
 
 export default function StockMovementsPage() {
-  return <ComingSoon title="Stok Hareketleri Geçmişi" />;
+  return <MovementHistoryClient />;
 }

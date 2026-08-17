@@ -394,13 +394,18 @@ export function ProductsClient() {
         id: "name",
         accessorKey: "name",
         header: "Ürün",
-        meta: { className: "min-w-[240px]" },
+        meta: { className: "w-[24%] text-left" },
         cell: ({ row }) => (
           <Link href={`/urunler/${row.original.id}`} className="flex items-center gap-3 group hover:text-primary">
             <ProductImageThumbnail src={row.original.imageUrl} alt={row.original.name} size="sm" />
-            <div>
-              <span className="font-medium text-foreground group-hover:text-primary transition-colors">{row.original.name}</span>
-              <span className="block text-xs text-muted-foreground">{row.original.brand}</span>
+            <div className="min-w-0">
+              <span
+                className="block truncate font-medium text-foreground group-hover:text-primary transition-colors"
+                title={row.original.name}
+              >
+                {row.original.name}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">{row.original.brand}</span>
             </div>
           </Link>
         ),
@@ -409,11 +414,11 @@ export function ProductsClient() {
         id: "sku",
         accessorKey: "sku",
         header: "SKU / Barkod",
-        meta: { className: "min-w-[130px]" },
+        meta: { className: "w-[13%] text-center" },
         cell: ({ row }) => (
-          <div>
-            <span className="font-mono text-xs">{row.original.sku}</span>
-            <p className="font-mono text-micro text-muted-foreground">{row.original.barcode}</p>
+          <div className="min-w-0">
+            <span className="block truncate font-mono text-xs">{row.original.sku}</span>
+            <p className="truncate font-mono text-micro text-muted-foreground">{row.original.barcode}</p>
           </div>
         ),
       },
@@ -421,14 +426,18 @@ export function ProductsClient() {
         id: "categoryName",
         accessorKey: "categoryName",
         header: "Kategori",
-        meta: { className: "min-w-[130px]" },
-        cell: ({ row }) => row.original.categoryName,
+        meta: { className: "w-[12%] text-center" },
+        cell: ({ row }) => (
+          <span className="block truncate" title={row.original.categoryName}>
+            {row.original.categoryName}
+          </span>
+        ),
       },
       {
         id: "totalStock",
         accessorKey: "totalStock",
         header: "Stok",
-        meta: { className: "min-w-[120px]" },
+        meta: { className: "w-[13%] text-center" },
         cell: ({ row }) => (
           <div className="tabular-nums">
             <span className="font-medium text-foreground">{formatNumber(row.original.totalStock)}</span>{" "}
@@ -450,7 +459,7 @@ export function ProductsClient() {
         id: "stockLevel",
         header: "Stok Durumu",
         enableSorting: false,
-        meta: { className: "min-w-[140px] text-center" },
+        meta: { className: "w-[12%] text-center" },
         cell: ({ row }) => (
           <div className="flex justify-center">
             <StockStatusBadge level={stockLevel(row.original)} />
@@ -461,7 +470,7 @@ export function ProductsClient() {
         id: "salePrice",
         accessorKey: "salePrice",
         header: "Fiyat",
-        meta: { className: "min-w-[140px] text-right" },
+        meta: { className: "w-[14%] text-center" },
         cell: ({ row }) => {
           const rate = rates?.[currency] || 1;
           return (
@@ -476,7 +485,7 @@ export function ProductsClient() {
         id: "status",
         accessorKey: "status",
         header: "Durum",
-        meta: { className: "min-w-[120px] text-center" },
+        meta: { className: "w-[11%] text-center" },
         cell: ({ row }) => (
           <div className="flex justify-center">
             <ProductStatusBadge status={row.original.status} />
@@ -487,7 +496,7 @@ export function ProductsClient() {
         id: "actions",
         header: "",
         enableSorting: false,
-        meta: { className: "w-12 text-right" },
+        meta: { className: "w-16 pr-5 text-right" },
         cell: ({ row }) => {
           const product = row.original;
           return (

@@ -10,9 +10,16 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       data-slot="table-container"
       className="relative w-full overflow-x-auto"
     >
+      {/*
+        table-fixed (not the CSS default table-auto) makes the per-column
+        percentage widths in each table's column `meta` authoritative. Under
+        table-auto the browser sizes columns to their longest unbreakable
+        string, so `w-full` could not shrink below that sum and the container
+        overflowed horizontally on narrower monitors.
+      */}
       <table
         data-slot="table"
-        className={cn("w-full caption-bottom text-sm", className)}
+        className={cn("w-full table-fixed caption-bottom text-sm", className)}
         {...props}
       />
     </div>
@@ -74,7 +81,7 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "h-11 px-4 text-left align-middle text-xs font-semibold tracking-wider uppercase whitespace-nowrap text-muted-foreground [&:has([role=checkbox])]:pr-0",
+        "h-11 px-4 text-left align-middle text-xs font-semibold tracking-wider uppercase truncate text-muted-foreground [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -82,12 +89,16 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
   )
 }
 
+// No `whitespace-nowrap` here on purpose: with table-fixed it would re-inflate
+// the column's intrinsic width and bring back the horizontal scrollbar. Columns
+// that genuinely must not wrap (dates, quantities) opt in via their own
+// `meta.className`.
 function TableCell({ className, ...props }: React.ComponentProps<"td">) {
   return (
     <td
       data-slot="table-cell"
       className={cn(
-        "px-4 py-2.5 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0",
+        "px-4 py-2.5 align-middle [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}

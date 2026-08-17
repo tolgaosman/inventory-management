@@ -482,7 +482,7 @@ export function WarehousesClient() {
               </div>
 
               <Select value={selectedWarehouseId} onValueChange={(val) => setSelectedWarehouseId(val || "all")}>
-                <SelectTrigger className="w-full sm:w-auto sm:min-w-[180px] sm:max-w-[240px] text-micro sm:text-xs h-9">
+                <SelectTrigger className="w-full sm:w-fit sm:min-w-[180px] sm:max-w-[320px] text-micro sm:text-xs h-9">
                   <SelectValue>
                     {selectedWarehouseId === "all"
                       ? "Tüm Depolar"
@@ -500,7 +500,7 @@ export function WarehousesClient() {
               </Select>
 
               <Select value={selectedCategoryId} onValueChange={(val) => setSelectedCategoryId(val || "all")}>
-                <SelectTrigger className="w-full sm:w-auto sm:min-w-[180px] sm:max-w-[240px] text-micro sm:text-xs h-9">
+                <SelectTrigger className="w-full sm:w-fit sm:min-w-[180px] sm:max-w-[320px] text-micro sm:text-xs h-9">
                   <SelectValue>
                     {selectedCategoryId === "all"
                       ? "Tüm Kategoriler"
@@ -536,8 +536,8 @@ export function WarehousesClient() {
           <Table className="table-fixed w-full text-xs">
             <TableHeader>
               <TableRow className="border-y border-border/60 bg-muted/40 hover:bg-muted/40">
-                <TableHead style={{ width: "22%" }}>Ürün &amp; Kod (SKU)</TableHead>
-                <TableHead style={{ width: "7%" }}>Kategori</TableHead>
+                <TableHead style={{ width: "22%" }} className="text-left">Ürün &amp; Kod (SKU)</TableHead>
+                <TableHead style={{ width: "7%" }} className="text-center">Kategori</TableHead>
                 {warehouses?.map((w) => {
                   const isSelected = selectedWarehouseId === w.id;
                   return (
@@ -555,8 +555,8 @@ export function WarehousesClient() {
                   );
                 })}
                 <TableHead style={{ width: "10%" }} className="text-center">Toplam Stok</TableHead>
-                <TableHead style={{ width: "10%" }} className="text-right">Stok Değeri</TableHead>
-                <TableHead style={{ width: "9%" }} className="text-center">İşlem</TableHead>
+                <TableHead style={{ width: "10%" }} className="text-center">Stok Değeri</TableHead>
+                <TableHead style={{ width: "9%" }} className="pr-5 text-center">İşlem</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody
@@ -572,8 +572,8 @@ export function WarehousesClient() {
                       <Skeleton className="mb-1 h-4 w-32" />
                       <Skeleton className="h-3 w-20" />
                     </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-20" />
+                    <TableCell className="text-center">
+                      <Skeleton className="mx-auto h-4 w-20" />
                     </TableCell>
                     {warehouses?.map((w) => (
                       <TableCell key={w.id} className="text-center">
@@ -583,8 +583,8 @@ export function WarehousesClient() {
                     <TableCell className="text-center">
                       <Skeleton className="mx-auto h-4 w-16" />
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Skeleton className="ml-auto h-4 w-20" />
+                    <TableCell className="text-center">
+                      <Skeleton className="mx-auto h-4 w-20" />
                     </TableCell>
                     <TableCell className="text-center">
                       <Skeleton className="mx-auto h-7 w-16" />
@@ -611,7 +611,7 @@ export function WarehousesClient() {
                     </TableCell>
 
                     {/* Category */}
-                    <TableCell className="truncate text-muted-foreground" title={row.categoryName}>
+                    <TableCell className="truncate text-muted-foreground text-center" title={row.categoryName}>
                       {row.categoryName}
                     </TableCell>
 
@@ -665,12 +665,12 @@ export function WarehousesClient() {
                     </TableCell>
 
                     {/* Total Value */}
-                    <TableCell className="truncate text-right font-semibold tabular-nums text-foreground">
+                    <TableCell className="truncate text-center font-semibold tabular-nums text-foreground">
                       {formatCurrency(row.totalValue, currency, rates?.[currency] || 1, showKurus)}
                     </TableCell>
 
                     {/* Action */}
-                    <TableCell className="text-center">
+                    <TableCell className="pr-5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <Can permission="products.manage">
                           <Button

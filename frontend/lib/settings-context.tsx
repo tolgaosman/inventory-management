@@ -58,7 +58,7 @@ const DEFAULT_COMPANY: CompanySettings = {
 const DEFAULT_PROFILE: UserProfileSettings = {
   firstName: "Ahmet",
   lastName: "Yılmaz",
-  email: "ahmet.yilmaz@neareast.tech",
+  email: "ahmet.yilmaz@sirket.com",
   phone: "+90 555 123 4567",
 };
 

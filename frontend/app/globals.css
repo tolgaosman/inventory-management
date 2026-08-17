@@ -278,6 +278,21 @@
   outline-color: color-mix(in srgb, var(--ring) 50%, transparent);
 }
 
+/*
+ * Fluid root scale. Every Tailwind size token (px-4, text-sm, h-11, gap-3,
+ * rounded-xl …) is rem-based, so scaling the root font-size scales the whole
+ * interface — type, spacing, icons, row heights and table cell padding
+ * together — instead of shrinking each page by hand.
+ *
+ * The line is anchored at the two ends of the range that matters: 16px at
+ * 1920px (today's design is untouched at or above it) down to 13px at 1280px,
+ * i.e. ~84% at 1366px and ~86% at 1440px. That is what buys wide tables enough
+ * room to fit without a horizontal scrollbar on a smaller monitor.
+ */
+html {
+  font-size: clamp(13px, 0.4688vw + 7px, 16px);
+}
+
 html,
 body {
   background-color: var(--background);

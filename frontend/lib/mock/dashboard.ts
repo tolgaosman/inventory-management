@@ -185,6 +185,43 @@ export function getWarehouseStockTotals(warehouseId?: string): WarehouseStockTot
     .sort((a, b) => b.units - a.units);
 }
 
+export interface WarehouseDetail {
+  warehouseId: string;
+  name: string;
+  city: string;
+  units: number;
+  capacity: number;
+  capacityPercent: number;
+  totalValue: number;
+  productCount: number;
+}
+
+/** Richer per-warehouse aggregate (value, SKU variety) for warehouse comparison panels. */
+export function getWarehouseDetails(warehouseId?: string): WarehouseDetail[] {
+  const scoped = warehouseId ? warehouses.filter((w) => w.id === warehouseId) : warehouses;
+  return scoped
+    .map((wh) => {
+      const levels = stockLevels.filter((s) => s.warehouseId === wh.id);
+      const units = levels.reduce((sum, s) => sum + s.quantity, 0);
+      const totalValue = levels.reduce((sum, s) => {
+        const product = products.find((p) => p.id === s.productId);
+        return sum + (product ? s.quantity * product.purchasePrice : 0);
+      }, 0);
+      const productCount = new Set(levels.filter((s) => s.quantity > 0).map((s) => s.productId)).size;
+      return {
+        warehouseId: wh.id,
+        name: wh.name,
+        city: wh.city,
+        units,
+        capacity: wh.capacity,
+        capacityPercent: wh.capacity > 0 ? Math.min(Math.round((units / wh.capacity) * 100), 100) : 0,
+        totalValue,
+        productCount,
+      };
+    })
+    .sort((a, b) => b.units - a.units);
+}
+
 export interface EnrichedMovement extends StockMovement {
   productName: string;
   productImageUrl?: string;

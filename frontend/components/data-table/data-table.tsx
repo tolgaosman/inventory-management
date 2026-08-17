@@ -45,6 +45,8 @@ interface DataTableProps<T> {
   emptyDescription?: string;
   isFiltered?: boolean;
   rowHref?: (row: T) => string | undefined;
+  className?: string;
+  tableContainerClassName?: string;
 }
 
 export function DataTable<T>({
@@ -62,6 +64,8 @@ export function DataTable<T>({
   emptyTitle = "Kayıt bulunamadı",
   emptyDescription,
   isFiltered,
+  className,
+  tableContainerClassName,
 }: DataTableProps<T>) {
   // TanStack Table's useReactTable() returns functions that the React
   // Compiler can't safely memoize — inherent to the library, not a bug here.
@@ -83,9 +87,9 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-soft">
-        <div className="overflow-x-auto custom-scrollbar">
+    <div className={cn("space-y-4 flex flex-col", className)}>
+      <div className={cn("overflow-hidden rounded-xl border border-border bg-card shadow-soft flex flex-col flex-1 min-h-0", tableContainerClassName)}>
+        <div className="overflow-auto custom-scrollbar flex-1 min-h-0">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((hg) => (
@@ -131,8 +135,12 @@ export function DataTable<T>({
               {loading ? (
                 Array.from({ length: pageSize }).map((_, i) => (
                   <TableRow key={i} className="border-b border-border/50">
-                    {columns.map((_, j) => (
-                      <TableCell key={j} className="px-4 py-3">
+                    {/* Skeleton cells carry the same meta.className as real
+                        cells: under table-fixed the first rendered row sets the
+                        column grid, so without it the table would re-lay out
+                        when data arrives. */}
+                    {columns.map((column, j) => (
+                      <TableCell key={j} className={cn("px-4 py-3", column.meta?.className)}>
                         <Skeleton className="h-4 w-full max-w-32" />
                       </TableCell>
                     ))}

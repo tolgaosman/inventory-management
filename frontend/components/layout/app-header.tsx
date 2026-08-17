@@ -46,7 +46,7 @@ function DashboardFilters() {
         value={warehouseId ?? "all"}
         onValueChange={(v) => setWarehouseId(!v || v === "all" ? undefined : v)}
       >
-        <SelectTrigger className="w-[200px]">
+        <SelectTrigger className="w-fit min-w-[200px]">
           <Warehouse className="size-3.5 text-muted-foreground shrink-0" />
           <SelectValue>
             {warehouseId ? warehouses?.find((w) => w.id === warehouseId)?.name ?? "Depo" : "Tüm Depolar"}
@@ -72,7 +72,7 @@ function DashboardFilters() {
           });
         }}
       >
-        <SelectTrigger className="w-[140px]">
+        <SelectTrigger className="w-fit min-w-[140px]">
           <CalendarRange className="size-3.5 text-muted-foreground shrink-0" />
           <SelectValue>{RANGE_LABELS[range]}</SelectValue>
         </SelectTrigger>

@@ -67,12 +67,12 @@ import type { Category } from "@/lib/types";
  * Per-breakpoint visibility for the metric columns, applied identically to the
  * header cell and its body cells so a hidden column never leaves a stray header.
  */
-const COL_PRODUCTS = "hidden w-20 text-right sm:table-cell";
-const COL_UNITS = "hidden w-24 text-right md:table-cell";
-const COL_VALUE = "hidden w-32 text-right lg:table-cell";
-const COL_CRITICAL = "hidden w-24 text-right xl:table-cell";
+const COL_PRODUCTS = "hidden w-32 text-center sm:table-cell";
+const COL_UNITS = "hidden w-36 text-center md:table-cell";
+const COL_VALUE = "hidden w-48 text-center lg:table-cell";
+const COL_CRITICAL = "hidden w-36 text-center xl:table-cell";
 
-/** Right-aligned metric cells, shared by root and child rows. */
+/** Center-aligned metric cells, shared by root and child rows. */
 function MetricCells({
   node,
   currency,
@@ -333,7 +333,7 @@ export function CategoriesClient() {
               <TableHead className={COL_UNITS}>Stok</TableHead>
               <TableHead className={COL_VALUE}>Stok Değeri</TableHead>
               <TableHead className={COL_CRITICAL}>Kritik</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-16 pr-5 text-right" />
             </TableRow>
           </TableHeader>
           <TableBody
@@ -363,7 +363,7 @@ export function CategoriesClient() {
                   <TableCell className={COL_CRITICAL}>
                     <Skeleton className="ml-auto h-4 w-10" />
                   </TableCell>
-                  <TableCell className="w-12" />
+                  <TableCell className="w-16 pr-5 text-right" />
                 </TableRow>
               ))
             ) : tree.length === 0 ? (
@@ -417,7 +417,7 @@ export function CategoriesClient() {
                       </div>
                     </TableCell>
                     <MetricCells node={root} currency={currency} rate={rate} showKurus={showKurus} />
-                    <TableCell className="w-12" onClick={(e) => e.stopPropagation()}>
+                    <TableCell className="w-16 pr-5 text-right" onClick={(e) => e.stopPropagation()}>
                       <ActionsMenu
                         node={root}
                         isRoot
@@ -453,7 +453,7 @@ export function CategoriesClient() {
                           </div>
                         </TableCell>
                         <MetricCells node={child} currency={currency} rate={rate} showKurus={showKurus} />
-                        <TableCell className="w-12" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="w-16 pr-5 text-right" onClick={(e) => e.stopPropagation()}>
                           <ActionsMenu
                             node={child}
                             isRoot={false}
