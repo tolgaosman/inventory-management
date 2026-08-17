@@ -1,0 +1,157 @@
+### Near East Technology API — VS Code REST Client dosyası.
+### php artisan serve --port=8000 çalışırken kullanın.
+
+@baseUrl = http://127.0.0.1:8000/api
+
+### Login
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "tolgaosman@sirket.com",
+  "password": "demo1234"
+}
+
+###
+@token = {{login.response.body.token}}
+
+### Me
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### ── Katalog ─────────────────────────────────────────────
+
+### Kategori ağacı
+GET {{baseUrl}}/categories/tree
+Authorization: Bearer {{token}}
+
+### Depolar (detaylı)
+GET {{baseUrl}}/warehouses/detailed
+Authorization: Bearer {{token}}
+
+### Stok matrisi
+GET {{baseUrl}}/warehouses/stock-matrix?search=sunucu
+Authorization: Bearer {{token}}
+
+### Tedarikçiler
+GET {{baseUrl}}/suppliers?page=1&pageSize=5
+Authorization: Bearer {{token}}
+
+### Tedarikçi karneleri
+GET {{baseUrl}}/suppliers/scorecards
+Authorization: Bearer {{token}}
+
+### ── Ürünler ─────────────────────────────────────────────
+
+### Ürün listesi (kritik stok filtresi)
+GET {{baseUrl}}/products?stockStatus=kritik&pageSize=5
+Authorization: Bearer {{token}}
+
+### Ürün detay geçmişi
+GET {{baseUrl}}/products/prd-0001/history
+Authorization: Bearer {{token}}
+
+### ── Stok hareketleri ────────────────────────────────────
+
+### Stok girişi (idempotency-key ile — aynı key'le tekrar çalıştırınca aynı hareket döner)
+POST {{baseUrl}}/stock/in
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "warehouseId": "wh-1",
+  "productId": "prd-0001",
+  "quantity": 10,
+  "idempotencyKey": "manual-test-in-1"
+}
+
+### Stok çıkışı — yetersiz stok senaryosu (422 bekleniyor)
+POST {{baseUrl}}/stock/out
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "warehouseId": "wh-1",
+  "productId": "prd-0001",
+  "quantity": 999999,
+  "reason": "satis"
+}
+
+### Transfer
+POST {{baseUrl}}/stock/transfer
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "sourceWarehouseId": "wh-1",
+  "targetWarehouseId": "wh-2",
+  "productId": "prd-0001",
+  "quantity": 2
+}
+
+### ── Satın alma ──────────────────────────────────────────
+
+### Sipariş istatistikleri
+GET {{baseUrl}}/purchase-orders/stats
+Authorization: Bearer {{token}}
+
+### Taslak sipariş oluştur
+# @name createPo
+POST {{baseUrl}}/purchase-orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "supplierId": "sup-1",
+  "warehouseId": "wh-1",
+  "expectedAt": "2026-09-15T00:00:00.000Z",
+  "items": [{ "productId": "prd-0001", "quantity": 20, "unitPrice": 1000 }]
+}
+
+###
+@poId = {{createPo.response.body.id}}
+
+### Gönder (draft -> ordered)
+POST {{baseUrl}}/purchase-orders/{{poId}}/order
+Authorization: Bearer {{token}}
+
+### Kısmen teslim al
+POST {{baseUrl}}/purchase-orders/{{poId}}/receive
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "receivedQuantities": { "prd-0001": 5 },
+  "idempotencyKey": "manual-receive-1"
+}
+
+### İkmal önerileri
+GET {{baseUrl}}/replenishment/suggestions
+Authorization: Bearer {{token}}
+
+### ── Dashboard / raporlar ────────────────────────────────
+
+GET {{baseUrl}}/dashboard?range=son-3-ay
+Authorization: Bearer {{token}}
+
+### Takvim
+GET {{baseUrl}}/calendar?from=2026-08-01T00:00:00.000Z&to=2026-08-31T23:59:59.000Z
+Authorization: Bearer {{token}}
+
+### ── Yetki reddi senaryosu (depo rolüyle satın alma) ─────
+# @name depoLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{ "email": "mustafa.haci@sirket.com", "password": "demo1234" }
+
+###
+@depoToken = {{depoLogin.response.body.token}}
+
+### 403 FORBIDDEN bekleniyor
+POST {{baseUrl}}/purchase-orders
+Authorization: Bearer {{depoToken}}
+Content-Type: application/json
+
+{}

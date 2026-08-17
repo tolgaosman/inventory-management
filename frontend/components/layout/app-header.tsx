@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, ChevronDown, LogOut, Settings, UserCog, AlertTriangle, Warehouse, CalendarRange, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
@@ -90,6 +90,7 @@ function DashboardFilters() {
 }
 
 export function AppHeader() {
+  const router = useRouter();
   const { name, initials, role, setRole } = useAuth();
   const { notifications } = useSettings();
   const pathname = usePathname();
@@ -240,6 +241,9 @@ export function AppHeader() {
               toast.warning("Oturum Kapatıldı", {
                 description: "Giriş sayfasına yönlendiriliyorsunuz...",
               });
+              setTimeout(() => {
+                router.push("/giris");
+              }, 500);
             }}
           >
             <LogOut className="size-4" />
