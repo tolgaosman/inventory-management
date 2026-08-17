@@ -5,6 +5,7 @@ import { ApiError, delay, matchesSearch, paginate } from "./client";
 
 export interface MovementQuery extends PagedQuery {
   type?: MovementType;
+  reason?: MovementReason;
   productId?: string;
   warehouseId?: string;
   userId?: string;
@@ -15,6 +16,7 @@ export interface MovementQuery extends PagedQuery {
 export async function listMovements(query: MovementQuery = {}) {
   let rows = [...stockMovements];
   if (query.type) rows = rows.filter((m) => m.type === query.type);
+  if (query.reason) rows = rows.filter((m) => m.reason === query.reason);
   if (query.productId) rows = rows.filter((m) => m.productId === query.productId);
   // Match both the source warehouse and, for transfers, the destination —
   // otherwise a warehouse's incoming transfers never show up in its history.
@@ -63,6 +65,8 @@ export interface StockInInput {
   productId: string;
   quantity: number;
   supplierId?: string;
+  /** Set when this entry comes from receiving a purchase order. */
+  purchaseOrderId?: string;
   note?: string;
   userId: string;
   idempotencyKey?: string;
@@ -90,6 +94,7 @@ export async function createStockIn(input: StockInInput): Promise<StockMovement>
       newQuantity,
       reason: "satin_alma",
       supplierId: input.supplierId,
+      purchaseOrderId: input.purchaseOrderId,
       userId: input.userId,
       note: input.note,
       createdAt: new Date().toISOString(),

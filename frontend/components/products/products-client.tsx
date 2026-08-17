@@ -23,9 +23,6 @@ import {
   CircleDot,
   X,
   Loader2,
-  Package,
-  AlertTriangle,
-  Wallet,
   ArrowDownToLine,
   ArrowUpFromLine,
   ArrowLeftRight,
@@ -40,7 +37,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -63,6 +59,7 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { StockStatusBadge, ProductStatusBadge } from "@/components/common/status-badge";
 import { ProductFormSheet } from "@/components/products/product-form-sheet";
+import { ProductsCommandHero } from "@/components/products/products-command-hero";
 import { StockMovementSheet, type StockMovementMode } from "@/components/products/stock-movement-sheet";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useChangedSince } from "@/lib/hooks/use-reset-on-change";
@@ -86,10 +83,11 @@ import { downloadBlob, reportFilename } from "@/lib/export/download";
 import type { ReportData } from "@/lib/export/report-data";
 import type { Product } from "@/lib/types";
 
-const STOCK_STATUS_LABELS: Record<"kritik" | "dusuk" | "normal", string> = {
+const STOCK_STATUS_LABELS: Record<"kritik" | "dusuk" | "normal" | "fazla", string> = {
   kritik: "Kritik",
   dusuk: "Düşük",
   normal: "Normal",
+  fazla: "Fazla",
 };
 
 function stockLevel(row: ProductRow): "kritik" | "dusuk" | "normal" {
@@ -109,6 +107,7 @@ export function ProductsClient() {
   const [search, setSearch] = useState(searchInput);
   const [categoryId, setCategoryId] = useState(searchParams.get("categoryId") ?? "all");
   const [stockStatus, setStockStatus] = useState(searchParams.get("stockStatus") ?? "all");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") ?? "all");
   const [warehouseId, setWarehouseId] = useState(searchParams.get("warehouseId") ?? "all");
   const [supplierId, setSupplierId] = useState(searchParams.get("supplierId") ?? "all");
   const [minPrice, setMinPrice] = useState(searchParams.get("minPrice") ?? "");
@@ -181,7 +180,8 @@ export function ProductsClient() {
     () => ({
       search: search || undefined,
       categoryId: categoryId === "all" ? undefined : categoryId,
-      stockStatus: stockStatus === "all" ? undefined : (stockStatus as "kritik" | "dusuk" | "normal"),
+      stockStatus: stockStatus === "all" ? undefined : (stockStatus as "kritik" | "dusuk" | "normal" | "fazla"),
+      status: statusFilter === "all" ? undefined : (statusFilter as "aktif" | "pasif"),
       warehouseId: warehouseId === "all" ? undefined : warehouseId,
       supplierId: supplierId === "all" ? undefined : supplierId,
       minPrice: !isNaN(parsedMin) ? parsedMin * rate : undefined,
@@ -191,11 +191,11 @@ export function ProductsClient() {
       sortBy: sorting[0]?.id,
       sortDir: sorting[0]?.desc ? "desc" : "asc",
     }),
-    [search, categoryId, stockStatus, warehouseId, supplierId, parsedMin, parsedMax, rate, page, sorting],
+    [search, categoryId, stockStatus, statusFilter, warehouseId, supplierId, parsedMin, parsedMax, rate, page, sorting],
   );
 
   // Reset to page 1 whenever a filter (anything but page itself) changes.
-  const filterKey = JSON.stringify({ search, categoryId, stockStatus, warehouseId, supplierId, minPrice, maxPrice, sorting });
+  const filterKey = JSON.stringify({ search, categoryId, stockStatus, statusFilter, warehouseId, supplierId, minPrice, maxPrice, sorting });
   if (useChangedSince(filterKey) && page !== 1) setPage(1);
 
   // Keep the URL in sync so links like /urunler?stockStatus=kritik round-trip,
@@ -205,6 +205,7 @@ export function ProductsClient() {
     if (search) params.set("search", search);
     if (categoryId !== "all") params.set("categoryId", categoryId);
     if (stockStatus !== "all") params.set("stockStatus", stockStatus);
+    if (statusFilter !== "all") params.set("status", statusFilter);
     if (warehouseId !== "all") params.set("warehouseId", warehouseId);
     if (supplierId !== "all") params.set("supplierId", supplierId);
     if (minPrice) params.set("minPrice", minPrice);
@@ -217,7 +218,7 @@ export function ProductsClient() {
     const qs = params.toString();
     router.replace(qs ? `/urunler?${qs}` : "/urunler", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, categoryId, stockStatus, warehouseId, supplierId, minPrice, maxPrice, page, sorting]);
+  }, [search, categoryId, stockStatus, statusFilter, warehouseId, supplierId, minPrice, maxPrice, page, sorting]);
 
   const { status, data, staleData, error, refetch } = useAsync(() => listProducts(query), [
     JSON.stringify(query),
@@ -236,7 +237,7 @@ export function ProductsClient() {
   const suppliers = refData?.[2]?.rows ?? [];
 
   const isFiltered = Boolean(
-    search || categoryId !== "all" || stockStatus !== "all" || warehouseId !== "all" || supplierId !== "all" || minPrice || maxPrice,
+    search || categoryId !== "all" || stockStatus !== "all" || statusFilter !== "all" || warehouseId !== "all" || supplierId !== "all" || minPrice || maxPrice,
   );
 
   function clearFilters() {
@@ -244,6 +245,7 @@ export function ProductsClient() {
     setSearch("");
     setCategoryId("all");
     setStockStatus("all");
+    setStatusFilter("all");
     setWarehouseId("all");
     setSupplierId("all");
     setMinPrice("");
@@ -612,25 +614,19 @@ export function ProductsClient() {
         }
       />
 
+      <ProductsCommandHero
+        stats={view?.stats}
+        currency={currency}
+        rate={rate}
+        onTotalClick={clearFilters}
+        onCriticalClick={() => setStockStatus("kritik")}
+        onLowClick={() => setStockStatus("dusuk")}
+        onOverstockClick={() => setStockStatus("fazla")}
+        onPassiveClick={() => setStatusFilter("pasif")}
+      />
+
       <SectionStack className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
       <Section index={0}>
-      <StatGrid
-        className="grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        items={[
-          { icon: Package, tint: "blue", label: "Toplam Ürün", value: formatNumber(view?.stats.total ?? 0) },
-          { icon: AlertTriangle, tint: "red", label: "Kritik Stok", value: formatNumber(view?.stats.critical ?? 0) },
-          { icon: CircleDot, tint: "amber", label: "Pasif Ürün", value: formatNumber(view?.stats.passive ?? 0) },
-          {
-            icon: Wallet,
-            tint: "green",
-            label: "Stok Değeri",
-            value: formatCurrency(view?.stats.stockValue ?? 0, currency, rates?.[currency] || 1, showKurus),
-          },
-        ]}
-      />
-      </Section>
-
-      <Section index={1}>
       <Card>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -651,7 +647,7 @@ export function ProductsClient() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Select value={categoryId} onValueChange={(v) => setCategoryId((v as string) ?? "all")}>
               <SelectTrigger className="w-full">
                 <SelectValue>
@@ -679,6 +675,22 @@ export function ProductsClient() {
                 {(Object.keys(STOCK_STATUS_LABELS) as Array<keyof typeof STOCK_STATUS_LABELS>).map((k) => (
                   <SelectItem key={k} value={k}>
                     {STOCK_STATUS_LABELS[k]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v as string) ?? "all")}>
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {statusFilter === "all" ? "Tüm Durumlar" : PRODUCT_STATUS_LABELS[statusFilter as "aktif" | "pasif"]}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tüm Durumlar</SelectItem>
+                {(Object.keys(PRODUCT_STATUS_LABELS) as Array<"aktif" | "pasif">).map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {PRODUCT_STATUS_LABELS[k]}
                   </SelectItem>
                 ))}
               </SelectContent>

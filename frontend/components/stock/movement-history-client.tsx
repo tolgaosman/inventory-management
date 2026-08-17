@@ -11,11 +11,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { DataTable } from "@/components/data-table/data-table";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import { MovementTypeBadge } from "@/components/common/status-badge";
+import { MovementCommandHero } from "@/components/stock/movement-command-hero";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,13 +37,7 @@ import { MOVEMENT_TYPE_LABELS, MOVEMENT_REASON_LABELS, PAGE_SIZE } from "@/lib/c
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings-context";
 import { cn } from "@/lib/utils";
-import type { MovementType, StockMovement } from "@/lib/types";
-import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  ArrowLeftRight,
-  Package,
-} from "lucide-react";
+import type { MovementReason, MovementType, StockMovement } from "@/lib/types";
 
 const MOVEMENT_TYPE_COLOR: Record<MovementType, string> = {
   giris: "text-status-good",
@@ -69,6 +63,7 @@ export function MovementHistoryClient() {
   const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
   const [search, setSearch] = useState(searchInput);
   const [type, setType] = useState(searchParams.get("type") ?? "all");
+  const [reason, setReason] = useState(searchParams.get("reason") ?? "all");
   const [warehouseId, setWarehouseId] = useState(searchParams.get("warehouseId") ?? "all");
   const [userId, setUserId] = useState(searchParams.get("userId") ?? "all");
   const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
@@ -84,6 +79,7 @@ export function MovementHistoryClient() {
     () => ({
       search: search || undefined,
       type: type === "all" ? undefined : (type as MovementType),
+      reason: reason === "all" ? undefined : (reason as MovementReason),
       warehouseId: warehouseId === "all" ? undefined : warehouseId,
       userId: userId === "all" ? undefined : userId,
       dateFrom: dateFrom ? toStartOfDayIso(dateFrom) : undefined,
@@ -91,16 +87,17 @@ export function MovementHistoryClient() {
       page,
       pageSize: PAGE_SIZE,
     }),
-    [search, type, warehouseId, userId, dateFrom, dateTo, page],
+    [search, type, reason, warehouseId, userId, dateFrom, dateTo, page],
   );
 
-  const filterKey = JSON.stringify({ search, type, warehouseId, userId, dateFrom, dateTo });
+  const filterKey = JSON.stringify({ search, type, reason, warehouseId, userId, dateFrom, dateTo });
   if (useChangedSince(filterKey) && page !== 1) setPage(1);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (type !== "all") params.set("type", type);
+    if (reason !== "all") params.set("reason", reason);
     if (warehouseId !== "all") params.set("warehouseId", warehouseId);
     if (userId !== "all") params.set("userId", userId);
     if (dateFrom) params.set("dateFrom", dateFrom);
@@ -109,7 +106,7 @@ export function MovementHistoryClient() {
     const qs = params.toString();
     router.replace(qs ? `/stok/hareketler?${qs}` : "/stok/hareketler", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, type, warehouseId, userId, dateFrom, dateTo, page]);
+  }, [search, type, reason, warehouseId, userId, dateFrom, dateTo, page]);
 
   const { status, data, staleData, error, refetch } = useAsync(() => listMovements(query), [
     JSON.stringify(query),
@@ -134,14 +131,43 @@ export function MovementHistoryClient() {
   }, [search, warehouseId, userId, dateFrom, dateTo]);
   const [inResult, outResult, transferResult] = typeCounts ?? [];
 
+  // Hero data: today's net flow, fire/iade anomaly count, and the busiest
+  // warehouse — none of these are aggregated anywhere else in the app today,
+  // every movement view is an all-time total.
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const { data: heroStats } = useAsync(async () => {
+    const todayFrom = toStartOfDayIso(todayStr);
+    const todayTo = toEndOfDayIso(todayStr);
+    const [todayIn, todayOut, fire, warehouseCounts] = await Promise.all([
+      listMovements({ type: "giris", dateFrom: todayFrom, dateTo: todayTo, page: 1, pageSize: 1 }),
+      listMovements({ type: "cikis", dateFrom: todayFrom, dateTo: todayTo, page: 1, pageSize: 1 }),
+      listMovements({ reason: "fire", page: 1, pageSize: 1 }),
+      Promise.all(
+        warehouses.map((w) =>
+          listMovements({ warehouseId: w.id, page: 1, pageSize: 1 }).then((r) => ({ id: w.id, name: w.name, count: r.total })),
+        ),
+      ),
+    ]);
+    const topWarehouse = [...warehouseCounts].sort((a, b) => b.count - a.count)[0];
+    return {
+      todayIn: todayIn.total,
+      todayOut: todayOut.total,
+      fireCount: fire.total,
+      topWarehouseId: topWarehouse?.id,
+      topWarehouseName: topWarehouse?.name,
+      topWarehouseCount: topWarehouse?.count,
+    };
+  }, [warehouses, todayStr]);
+
   const isFiltered = Boolean(
-    search || type !== "all" || warehouseId !== "all" || userId !== "all" || dateFrom || dateTo,
+    search || type !== "all" || reason !== "all" || warehouseId !== "all" || userId !== "all" || dateFrom || dateTo,
   );
 
   function clearFilters() {
     setSearchInput("");
     setSearch("");
     setType("all");
+    setReason("all");
     setWarehouseId("all");
     setUserId("all");
     setDateFrom("");
@@ -305,7 +331,7 @@ export function MovementHistoryClient() {
   );
 
   return (
-    <div className="flex h-[calc(100dvh-112px)] flex-col space-y-6">
+    <div className="flex flex-col space-y-6">
       <PageHeader
         title="Stok Hareketleri Geçmişi"
         description="Tüm stok giriş, çıkış ve transfer hareketlerinin geçmişi."
@@ -327,25 +353,32 @@ export function MovementHistoryClient() {
         }
       />
 
-      <SectionStack 
+      <MovementCommandHero
+        stats={heroStats}
+        onTodayClick={() => {
+          setDateFrom(todayStr);
+          setDateTo(todayStr);
+        }}
+        onFireClick={() => setReason("fire")}
+        onTopWarehouseClick={() => {
+          if (heroStats?.topWarehouseId) setWarehouseId(heroStats.topWarehouseId);
+        }}
+        typeBreakdown={{
+          total: view?.total,
+          in: inResult?.total,
+          out: outResult?.total,
+          transfer: transferResult?.total,
+        }}
+        onTypeClick={(t) => setType(t)}
+      />
+
+      <SectionStack
         className={cn(
-          "flex flex-1 flex-col min-h-0 space-y-0 gap-6",
+          "flex flex-col space-y-0 gap-6",
           status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"
         )}
       >
         <Section index={0} className="shrink-0">
-          <StatGrid
-            className="grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-            items={[
-              { icon: Package, tint: "neutral", label: "Toplam Kayıt", value: formatNumber(view?.total ?? 0) },
-              { icon: ArrowDownToLine, tint: "green", label: "Giriş", value: formatNumber(inResult?.total ?? 0) },
-              { icon: ArrowUpFromLine, tint: "amber", label: "Çıkış", value: formatNumber(outResult?.total ?? 0) },
-              { icon: ArrowLeftRight, tint: "blue", label: "Transfer", value: formatNumber(transferResult?.total ?? 0) },
-            ]}
-          />
-        </Section>
-
-        <Section index={1} className="shrink-0">
           <Card>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap items-center gap-3">
@@ -366,7 +399,7 @@ export function MovementHistoryClient() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
                 <Select value={type} onValueChange={(v) => setType((v as string) ?? "all")}>
                   <SelectTrigger className="w-full">
                     <SelectValue>
@@ -378,6 +411,22 @@ export function MovementHistoryClient() {
                     {(Object.keys(MOVEMENT_TYPE_LABELS) as MovementType[]).map((t) => (
                       <SelectItem key={t} value={t}>
                         {MOVEMENT_TYPE_LABELS[t]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={reason} onValueChange={(v) => setReason((v as string) ?? "all")}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {reason === "all" ? "Tüm Sebepler" : MOVEMENT_REASON_LABELS[reason as MovementReason]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tüm Sebepler</SelectItem>
+                    {(Object.keys(MOVEMENT_REASON_LABELS) as MovementReason[]).map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {MOVEMENT_REASON_LABELS[r]}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -419,6 +468,7 @@ export function MovementHistoryClient() {
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
+                  max={dateTo || undefined}
                   className="h-9"
                   aria-label="Başlangıç tarihi"
                 />
@@ -426,6 +476,7 @@ export function MovementHistoryClient() {
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
+                  min={dateFrom || undefined}
                   className="h-9"
                   aria-label="Bitiş tarihi"
                 />
@@ -434,9 +485,8 @@ export function MovementHistoryClient() {
           </Card>
         </Section>
 
-        <Section index={2} className="flex min-h-0 flex-1 flex-col">
+        <Section index={2} className="flex flex-col">
           <DataTable
-            className="flex-1 min-h-0"
             columns={columns}
             data={view?.rows ?? []}
             total={view?.total ?? 0}

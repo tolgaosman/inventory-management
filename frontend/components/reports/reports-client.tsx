@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import Link from "next/link";
 import {
@@ -12,9 +12,12 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
   PieChart,
   Pie,
-  LabelList,
+  AreaChart,
+  Area,
+  type LabelProps,
 } from "recharts";
 import {
   FileSpreadsheet,
@@ -30,9 +33,11 @@ import {
   Package,
   Loader2,
   ChevronRight,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
   CheckCircle2,
   Inbox,
-  MapPin,
   Wallet,
   Boxes,
   type LucideIcon,
@@ -45,13 +50,14 @@ import { EmptyState } from "@/components/common/empty-state";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PurchaseStatusBadge } from "@/components/common/status-badge";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
-import { CHART_GRID, CHART_X_AXIS, CHART_Y_AXIS, ChartSwatch, ChartTooltip } from "@/components/charts/chart-primitives";
+import { CHART_GRID, CHART_X_AXIS, ChartSwatch, ChartLegend, ChartTooltip } from "@/components/charts/chart-primitives";
+import { WarehouseCapacityRadials } from "@/components/reports/warehouse-capacity-radials";
+import { WarehouseValueChart } from "@/components/reports/warehouse-value-chart";
+import { WarehouseMoversChart } from "@/components/reports/warehouse-movers-chart";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings-context";
 import { useCurrency } from "@/lib/currency-context";
@@ -68,7 +74,6 @@ import {
   getDashboardKpis,
 } from "@/lib/mock/dashboard";
 import { warehouses, products, stockMovements, purchaseOrders, purchaseOrderTotal, suppliers } from "@/lib/mock/data";
-import { capacityIndicatorClass } from "@/lib/capacity";
 import { formatNumber, formatCurrency, formatDateTime, formatSigned } from "@/lib/format";
 import { MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { MOVEMENT_TYPE_LABELS, MOVEMENT_REASON_LABELS, PURCHASE_STATUS_LABELS } from "@/lib/constants";
@@ -100,6 +105,11 @@ export function ReportsClient() {
   const [range, setRange] = useState<DateRangePreset>("son-6-ay");
   const [tab, setTab] = useState<ReportTab>("urunler");
   const [moversWarehouseId, setMoversWarehouseId] = useState<string>("all");
+  const [purchasePage, setPurchasePage] = useState(1);
+
+  useEffect(() => {
+    setPurchasePage(1);
+  }, [range]);
 
   const rate = rates?.[currency] ?? 1;
   const months = MONTHS_BY_RANGE[range];
@@ -142,6 +152,12 @@ export function ReportsClient() {
     [rangeStart],
   );
 
+  const purchasePageSize = 20;
+  const totalPurchasePages = Math.ceil(filteredOrders.length / purchasePageSize);
+  const paginatedOrders = useMemo(() => {
+    return filteredOrders.slice((purchasePage - 1) * purchasePageSize, purchasePage * purchasePageSize);
+  }, [filteredOrders, purchasePage]);
+
   // Purchase order status breakdown for pie
   const orderStatusData = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -154,7 +170,65 @@ export function ReportsClient() {
     }));
   }, [filteredOrders]);
 
+  const topSuppliersData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const po of filteredOrders) {
+      counts[po.supplierId] = (counts[po.supplierId] ?? 0) + purchaseOrderTotal(po);
+    }
+    return Object.entries(counts)
+      .map(([supplierId, total]) => {
+        const supplier = suppliers.find((s) => s.id === supplierId);
+        return {
+          name: supplier?.name ?? "Bilinmiyor",
+          total: total / rate,
+        };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [filteredOrders, suppliers, rate]);
 
+  const monthlyPurchaseTrend = useMemo(() => {
+    const monthData: Record<string, { total: number; count: number; byStatus: Record<string, number> }> = {};
+    for (const po of filteredOrders) {
+      const d = new Date(po.createdAt);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthData[key]) monthData[key] = { total: 0, count: 0, byStatus: {} };
+      const amt = purchaseOrderTotal(po);
+      monthData[key].total += amt;
+      monthData[key].count += 1;
+      const statusLabel = PURCHASE_STATUS_LABELS[po.status as keyof typeof PURCHASE_STATUS_LABELS] ?? po.status;
+      monthData[key].byStatus[statusLabel] = (monthData[key].byStatus[statusLabel] ?? 0) + amt;
+    }
+    // Collect all unique status labels
+    const allStatuses = new Set<string>();
+    Object.values(monthData).forEach((m) => Object.keys(m.byStatus).forEach((s) => allStatuses.add(s)));
+
+    return Object.entries(monthData)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([key, data]) => {
+        const [year, month] = key.split("-");
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        const row: Record<string, string | number> = {
+          name: new Intl.DateTimeFormat("tr-TR", { month: "short", year: "2-digit" }).format(date),
+          total: data.total / rate,
+          count: data.count,
+        };
+        for (const status of allStatuses) {
+          row[status] = (data.byStatus[status] ?? 0) / rate;
+        }
+        return row;
+      });
+  }, [filteredOrders, rate]);
+
+  const monthlyTrendStatuses = useMemo(() => {
+    const statuses = new Set<string>();
+    for (const row of monthlyPurchaseTrend) {
+      Object.keys(row).forEach((k) => {
+        if (k !== "name" && k !== "total" && k !== "count") statuses.add(k);
+      });
+    }
+    return [...statuses];
+  }, [monthlyPurchaseTrend]);
 
   const rangeSelector = (
     <Select value={range} onValueChange={(v) => setRange(v as DateRangePreset)}>
@@ -324,169 +398,73 @@ export function ReportsClient() {
               />
             </Section>
 
-            {/* Yan yana depo karşılaştırması: kapasite, değer ve ürün çeşidini tek panelde gösterir. */}
+            {/* Yan yana depo karşılaştırması: her depo için tek doluluk halkası + destekleyici metrikler. */}
             <Section index={1}>
-              <div className="space-y-3">
-                <h2 className="text-base font-semibold tracking-tight text-foreground">Depo Karşılaştırması</h2>
-                {warehouseDetails.length === 0 ? (
-                  <EmptyState icon={Warehouse} title="Depo verisi yok" />
-                ) : (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {warehouseDetails.map((w) => (
-                      <Card key={w.warehouseId} className="border-border/70 bg-card">
-                        <CardHeader className="p-4 pb-2">
-                          <Badge variant="outline" className="mb-1 w-fit text-micro uppercase font-semibold text-primary bg-primary/10 border-primary/20">
-                            <MapPin className="mr-1 inline-block size-3" />
-                            {w.city}
-                          </Badge>
-                          <CardTitle className="text-sm font-semibold tracking-tight line-clamp-1">{w.name}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-2 space-y-3">
-                          <div className="flex items-baseline justify-between text-xs font-semibold">
-                            <span className="text-muted-foreground">Stok Miktarı:</span>
-                            <span className="text-foreground">{formatNumber(w.units)} Adet</span>
-                          </div>
-                          <div className="flex items-baseline justify-between text-xs font-semibold">
-                            <span className="text-muted-foreground">Ürün Çeşidi:</span>
-                            <span className="text-foreground">{w.productCount} SKU</span>
-                          </div>
-                          <div className="flex items-baseline justify-between text-xs font-semibold">
-                            <span className="text-muted-foreground">Toplam Değer:</span>
-                            <span className="text-primary font-semibold">
-                              {formatCurrency(w.totalValue / rate, currency, 1, true)}
-                            </span>
-                          </div>
-                          <div className="space-y-1 pt-1 border-t border-border/40">
-                            <div className="flex justify-between text-micro">
-                              <span className="text-muted-foreground">Doluluk:</span>
-                              <span className="font-semibold text-foreground">
-                                %{w.capacityPercent} ({formatNumber(w.units)} / {formatNumber(w.capacity)})
-                              </span>
-                            </div>
-                            <Progress value={w.capacityPercent} className="h-1.5">
-                              <ProgressTrack className="h-1.5">
-                                <ProgressIndicator className={capacityIndicatorClass(w.capacityPercent)} />
-                              </ProgressTrack>
-                            </Progress>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <WarehouseCapacityRadials data={warehouseDetails} currency={currency} rate={rate} />
             </Section>
 
             <Section index={2} className="grid gap-4 lg:grid-cols-2">
-              <PanelCard title="Depo Başına Envanter Değeri">
-                {warehouseDetails.length === 0 ? (
-                  <EmptyState icon={Wallet} title="Veri yok" />
-                ) : (
-                  <div className="min-h-[300px] w-full flex-1">
-                    <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-                      <BarChart data={warehouseDetails} margin={{ left: -8, right: 8, top: 24, bottom: 8 }} barCategoryGap="28%">
-                        <defs>
-                          {warehouseDetails.map((_, i) => (
-                            <linearGradient key={i} id={`whValueGradient-${i}`} x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.95} />
-                              <stop offset="100%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.45} />
-                            </linearGradient>
-                          ))}
-                        </defs>
-                        <CartesianGrid {...CHART_GRID} />
-                        <XAxis
-                          dataKey="name"
-                          {...CHART_X_AXIS}
-                          tickFormatter={(v: string) => v.length > 10 ? v.slice(0, 9) + "…" : v}
-                        />
-                        <YAxis
-                          {...CHART_Y_AXIS}
-                          tickFormatter={(v) => formatCurrency(v / rate, currency, 1, false)}
-                        />
-                        <Tooltip
-                          cursor={{ fill: "var(--muted)", opacity: 0.35, radius: 8 }}
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null;
-                            const d = payload[0].payload as (typeof warehouseDetails)[0];
-                            return (
-                              <ChartTooltip
-                                title={d.name}
-                                rows={[
-                                  { label: "Envanter Değeri", color: CHART_COLORS[0], value: formatCurrency(d.totalValue / rate, currency, 1, true) },
-                                  { label: "Ürün Çeşidi", color: CHART_COLORS[1], value: `${d.productCount} SKU`, divider: true },
-                                ]}
-                              />
-                            );
-                          }}
-                        />
-                        <Bar dataKey="totalValue" radius={[10, 10, 4, 4]} maxBarSize={56} animationDuration={600}>
-                          {warehouseDetails.map((_, i) => (
-                            <Cell key={i} fill={`url(#whValueGradient-${i})`} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={1} />
-                          ))}
-                          <LabelList
-                            dataKey="totalValue"
-                            position="top"
-                            offset={10}
-                            fill="var(--foreground)"
-                            fontSize={11}
-                            fontWeight={700}
-                            formatter={(v) => formatCurrency(Number(v) / rate, currency, 1, false)}
-                          />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </PanelCard>
+              <WarehouseValueChart data={warehouseDetails} currency={currency} rate={rate} />
 
               <PanelCard
                 title="Depo Bazında Kategori Dağılımı"
                 bodyClassName="flex flex-col"
               >
+                {/* CSS-only hover: dim siblings without triggering React re-renders */}
+                <style>{`
+                  .cdw-bar:hover .recharts-bar-rectangle { opacity: 0.5; transition: opacity 0.3s; }
+                  .cdw-bar .recharts-bar-rectangle { transition: opacity 0.3s; }
+                  .cdw-bar .recharts-bar-rectangle:hover { opacity: 1 !important; cursor: pointer; }
+                `}</style>
                 {categoryByWarehouseData.length === 0 ? (
                   <EmptyState icon={Boxes} title="Veri yok" />
                 ) : (
                   <>
-                    <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5">
-                      {warehouses.map((w, i) => (
-                        <span key={w.id} className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                          <ChartSwatch color={CHART_COLORS[i % CHART_COLORS.length]} />
-                          {w.name.length > 18 ? `${w.name.slice(0, 17)}…` : w.name}
-                        </span>
-                      ))}
-                    </div>
+                    <ChartLegend
+                      className="mb-3 flex flex-wrap justify-start gap-x-4 gap-y-1.5 space-y-0"
+                      items={warehouses.map((w, i) => ({
+                        label: w.name,
+                        color: CHART_COLORS[i % CHART_COLORS.length],
+                      }))}
+                    />
                     <div className="min-h-[280px] w-full flex-1">
                       <ResponsiveContainer width="100%" height="100%" minHeight={280}>
                         <BarChart
                           data={categoryByWarehouseData}
                           layout="vertical"
-                          margin={{ left: 0, right: 16, top: 4, bottom: 4 }}
-                          barGap={2}
-                          barCategoryGap="22%"
+                          margin={{ left: 0, right: 16, top: 16, bottom: 0 }}
+                          barCategoryGap="20%"
+                          className="cdw-bar"
                         >
-                          <CartesianGrid {...CHART_GRID} vertical={false} horizontal={false} />
-                          <XAxis type="number" {...CHART_X_AXIS} tickFormatter={(v) => formatNumber(v)} width={50} />
+                          <XAxis type="number" hide domain={[0, 'dataMax']} />
                           <YAxis
                             type="category"
                             dataKey="category"
-                            width={110}
+                            width={160}
                             tickLine={false}
                             axisLine={false}
-                            tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 }}
-                            tickFormatter={(v: string) => (v.length > 14 ? v.slice(0, 13) + "…" : v)}
+                            tick={{ fill: "var(--muted-foreground)", fontSize: 12, fontWeight: 500 }}
                           />
                           <Tooltip
-                            cursor={{ fill: "var(--muted)", opacity: 0.35 }}
+                            cursor={false}
                             content={({ active, payload, label }) => {
                               if (!active || !payload?.length) return null;
+                              const rows = warehouses
+                                .map((w, i) => ({
+                                  label: w.name,
+                                  color: CHART_COLORS[i % CHART_COLORS.length],
+                                  raw: Number(payload.find((p) => p.dataKey === w.name)?.value ?? 0),
+                                }))
+                                .filter((r) => r.raw > 0)
+                                .sort((a, b) => b.raw - a.raw);
+                              const total = rows.reduce((sum, r) => sum + r.raw, 0);
                               return (
                                 <ChartTooltip
                                   title={String(label)}
-                                  rows={warehouses.map((w, i) => ({
-                                    label: w.name,
-                                    color: CHART_COLORS[i % CHART_COLORS.length],
-                                    value: formatNumber(Number(payload.find((p) => p.dataKey === w.name)?.value ?? 0)),
-                                  }))}
+                                  rows={[
+                                    ...rows.map((r) => ({ label: r.label, color: r.color, value: formatNumber(r.raw) })),
+                                    { label: "Toplam", color: "var(--muted-foreground)", value: formatNumber(total), divider: true },
+                                  ]}
                                 />
                               );
                             }}
@@ -497,11 +475,12 @@ export function ReportsClient() {
                               dataKey={w.name}
                               stackId="warehouses"
                               fill={CHART_COLORS[i % CHART_COLORS.length]}
-                              opacity={0.9}
                               stroke="var(--card)"
                               strokeWidth={2}
-                              maxBarSize={22}
-                              radius={i === warehouses.length - 1 ? [0, 6, 6, 0] : i === 0 ? [6, 0, 0, 6] : undefined}
+                              maxBarSize={28}
+                              radius={[4, 4, 4, 4]}
+                              isAnimationActive={false}
+                              {...(i === 0 ? { background: { fill: "var(--muted)", opacity: 0.35, radius: 8 } } : {})}
                             />
                           ))}
                         </BarChart>
@@ -513,8 +492,8 @@ export function ReportsClient() {
             </Section>
 
             <Section index={3}>
-              <PanelCard
-                title="Depo Bazında En Çok Hareket Gören Ürünler"
+              <WarehouseMoversChart
+                data={warehouseMovers}
                 actions={
                   <Select value={moversWarehouseId} onValueChange={(v) => setMoversWarehouseId((v as string) ?? "all")}>
                     <SelectTrigger className="h-8 w-fit min-w-[176px] text-xs">
@@ -532,67 +511,7 @@ export function ReportsClient() {
                     </SelectContent>
                   </Select>
                 }
-              >
-                {warehouseMovers.length === 0 ? (
-                  <EmptyState icon={TrendingUp} title="Hareket verisi yok" />
-                ) : (
-                  <div className="min-h-[300px] w-full flex-1">
-                    <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-                      <BarChart data={warehouseMovers} layout="vertical" margin={{ left: 0, right: 44, top: 4, bottom: 4 }} barCategoryGap="26%">
-                        <defs>
-                          {warehouseMovers.map((_, i) => (
-                            <linearGradient key={i} id={`moverGradient-${i}`} x1="0" y1="0" x2="1" y2="0">
-                              <stop offset="0%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.5} />
-                              <stop offset="100%" stopColor={CHART_COLORS[i % CHART_COLORS.length]} stopOpacity={0.95} />
-                            </linearGradient>
-                          ))}
-                        </defs>
-                        <CartesianGrid {...CHART_GRID} vertical={false} horizontal={false} />
-                        <XAxis type="number" {...CHART_X_AXIS} tickFormatter={(v) => formatNumber(v)} width={50} />
-                        <YAxis
-                          type="category"
-                          dataKey="name"
-                          width={140}
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 500 }}
-                          tickFormatter={(v: string) => (v.length > 18 ? v.slice(0, 17) + "…" : v)}
-                        />
-                        <Tooltip
-                          cursor={{ fill: "var(--muted)", opacity: 0.35 }}
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null;
-                            const d = payload[0].payload as (typeof warehouseMovers)[0];
-                            return (
-                              <ChartTooltip
-                                title={d.name}
-                                rows={[
-                                  { label: "Toplam Miktar", color: CHART_COLORS[0], value: formatNumber(d.totalQuantity) },
-                                  { label: "Hareket Sayısı", color: CHART_COLORS[1], value: formatNumber(d.movementCount), divider: true },
-                                ]}
-                              />
-                            );
-                          }}
-                        />
-                        <Bar dataKey="totalQuantity" radius={[0, 8, 8, 0]} maxBarSize={22} animationDuration={600}>
-                          {warehouseMovers.map((_, i) => (
-                            <Cell key={i} fill={`url(#moverGradient-${i})`} />
-                          ))}
-                          <LabelList
-                            dataKey="totalQuantity"
-                            position="right"
-                            offset={8}
-                            fill="var(--foreground)"
-                            fontSize={11}
-                            fontWeight={700}
-                            formatter={(v) => formatNumber(Number(v))}
-                          />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </PanelCard>
+              />
             </Section>
           </SectionStack>
         </TabsContent>
@@ -608,10 +527,14 @@ export function ReportsClient() {
                     <MovementStat icon={ArrowUpFromLine} label="Çıkış" count={outMovements.length} color="text-status-critical" bg="bg-status-critical/10" />
                     <MovementStat icon={ArrowLeftRight} label="Transfer" count={transferMovements.length} color="text-primary" bg="bg-primary/10" />
                   </div>
-                  <div className="space-y-3 border-t border-border pt-5 lg:border-t-0 lg:border-l lg:px-8 lg:pt-0">
-                    <MiniBar label="Giriş" percent={inPercent} color="bg-status-good" count={inMovements.length} />
-                    <MiniBar label="Çıkış" percent={outPercent} color="bg-status-critical" count={outMovements.length} />
-                    <MiniBar label="Transfer" percent={transferPercent} color="bg-primary" count={transferMovements.length} />
+                  <div className="border-t border-border pt-5 lg:border-t-0 lg:border-l lg:px-8 lg:pt-0">
+                    <MovementDistributionChart
+                      data={[
+                        { key: "giris", label: "Giriş", percent: inPercent, count: inMovements.length },
+                        { key: "cikis", label: "Çıkış", percent: outPercent, count: outMovements.length },
+                        { key: "transfer", label: "Transfer", percent: transferPercent, count: transferMovements.length },
+                      ]}
+                    />
                   </div>
                   <div className="space-y-2 border-t border-border pt-5 lg:border-t-0 lg:border-l lg:pl-8 lg:pt-0">
                     <p className="text-micro font-medium uppercase tracking-wide text-muted-foreground">Dönem Toplamları</p>
@@ -671,20 +594,19 @@ export function ReportsClient() {
         </TabsContent>
 
         {/* ── Satın Alma ──────────────────────────────────────────────────── */}
-        <TabsContent value="satin-alma" className="h-[calc(100dvh-270px)] min-h-[400px]">
-          <Section index={0} className="grid h-full gap-4 lg:grid-cols-[1fr_280px]">
+        <TabsContent value="satin-alma">
+          <Section index={0} className="grid items-start gap-4 lg:grid-cols-[1fr_280px]">
             <PanelCard
               title="Satın Alma Siparişleri"
               meta={`${filteredOrders.length} kayıt`}
-              className="flex h-full flex-col"
-              bodyClassName="flex flex-col flex-1 min-h-0 pt-0"
+              bodyClassName="pt-0"
               actions={
                 <Link href="/satin-alma" className="flex items-center gap-1 text-xs text-primary hover:underline">
                   Siparişler <ChevronRight className="size-3.5" />
                 </Link>
               }
             >
-              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-3">
+              <div className="w-full overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="border-b border-border/70 hover:bg-transparent">
@@ -696,14 +618,14 @@ export function ReportsClient() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredOrders.length === 0 ? (
+                    {paginatedOrders.length === 0 ? (
                       <TableRow className="hover:bg-transparent">
                         <TableCell colSpan={5} className="p-0">
                           <EmptyState icon={ShoppingCart} title="Seçili dönemde sipariş yok" />
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredOrders.map((po) => {
+                      paginatedOrders.map((po) => {
                         const supplier = suppliers.find((s) => s.id === po.supplierId);
                         const total = purchaseOrderTotal(po);
                         return (
@@ -726,56 +648,225 @@ export function ReportsClient() {
                   </TableBody>
                 </Table>
               </div>
-            </PanelCard>
-
-            <PanelCard title="Sipariş Durumları" className="self-start" bodyClassName="flex flex-col items-center justify-start pt-2">
-              {orderStatusData.length === 0 ? (
-                <EmptyState icon={ShoppingCart} title="Veri yok" />
-              ) : (
-                <div className="w-full space-y-3">
-                  <div className="min-h-[160px] w-full">
-                    <ResponsiveContainer width="100%" height="100%" minHeight={160}>
-                      <PieChart>
-                        <Pie data={orderStatusData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value" cornerRadius={5} stroke="none">
-                          {orderStatusData.map((_, i) => (
-                            <Cell 
-                              key={i} 
-                              fill={CHART_COLORS[i % CHART_COLORS.length]} 
-                              className="transition-all duration-300 ease-out hover:scale-110 hover:drop-shadow-md cursor-pointer outline-none"
-                              style={{ transformOrigin: "50% 50%", transformBox: "fill-box" } as React.CSSProperties}
-                            />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          cursor={false}
-                          content={({ active, payload }) => {
-                            if (!active || !payload?.length) return null;
-                            const d = payload[0].payload as (typeof orderStatusData)[0];
-                            return (
-                              <ChartTooltip
-                                title={d.name}
-                                rows={[{ label: "Sipariş", color: CHART_COLORS[0], value: String(d.value) }]}
-                              />
-                            );
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="space-y-1.5 px-1">
-                    {orderStatusData.map((d, i) => (
-                      <div key={d.name} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <ChartSwatch color={CHART_COLORS[i % CHART_COLORS.length]} />
-                          <span className="text-muted-foreground">{d.name}</span>
-                        </div>
-                        <span className="font-semibold tabular-nums text-foreground">{d.value}</span>
-                      </div>
-                    ))}
+              
+              {totalPurchasePages > 1 && (
+                <div className="mt-4 flex items-center justify-start gap-4 border-t border-border/50 pt-4 text-xs">
+                  <span className="text-muted-foreground">
+                    Toplam {filteredOrders.length} kayıttan {(purchasePage - 1) * purchasePageSize + 1}-
+                    {Math.min(purchasePage * purchasePageSize, filteredOrders.length)} arası gösteriliyor
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8"
+                      disabled={purchasePage === 1}
+                      onClick={() => setPurchasePage(1)}
+                      title="İlk Sayfa"
+                    >
+                      <ChevronsLeft className="size-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8"
+                      disabled={purchasePage === 1}
+                      onClick={() => setPurchasePage((p) => Math.max(1, p - 1))}
+                      title="Önceki Sayfa"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8"
+                      disabled={purchasePage === totalPurchasePages}
+                      onClick={() => setPurchasePage((p) => Math.min(totalPurchasePages, p + 1))}
+                      title="Sonraki Sayfa"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="size-8"
+                      disabled={purchasePage === totalPurchasePages}
+                      onClick={() => setPurchasePage(totalPurchasePages)}
+                      title="Son Sayfa"
+                    >
+                      <ChevronsRight className="size-4" />
+                    </Button>
                   </div>
                 </div>
               )}
             </PanelCard>
+
+            <div className="flex flex-col gap-4">
+              <PanelCard title="Sipariş Durumları" bodyClassName="flex flex-col items-center justify-start pt-2">
+                {orderStatusData.length === 0 ? (
+                  <EmptyState icon={ShoppingCart} title="Veri yok" />
+                ) : (
+                  <div className="w-full space-y-3">
+                    <div className="min-h-[160px] w-full">
+                      <ResponsiveContainer width="100%" height="100%" minHeight={160}>
+                        <PieChart>
+                          <Pie data={orderStatusData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value" cornerRadius={5} stroke="none">
+                            {orderStatusData.map((_, i) => (
+                              <Cell 
+                                key={i} 
+                                fill={CHART_COLORS[i % CHART_COLORS.length]} 
+                                className="transition-all duration-300 ease-out hover:scale-110 hover:drop-shadow-md cursor-pointer outline-none"
+                                style={{ transformOrigin: "50% 50%", transformBox: "fill-box" } as React.CSSProperties}
+                              />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            cursor={false}
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const d = payload[0].payload as (typeof orderStatusData)[0];
+                              return (
+                                <ChartTooltip
+                                  title={d.name}
+                                  rows={[{ label: "Sipariş", color: CHART_COLORS[0], value: String(d.value) }]}
+                                />
+                              );
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="space-y-1.5 px-1">
+                      {orderStatusData.map((d, i) => (
+                        <div key={d.name} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1.5">
+                            <ChartSwatch color={CHART_COLORS[i % CHART_COLORS.length]} />
+                            <span className="text-muted-foreground">{d.name}</span>
+                          </div>
+                          <span className="font-semibold tabular-nums text-foreground">{d.value}</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </PanelCard>
+
+              <PanelCard title="En Çok Sipariş" bodyClassName="flex flex-col pt-2">
+                {topSuppliersData.length === 0 ? (
+                  <EmptyState icon={ShoppingCart} title="Veri yok" />
+                ) : (
+                  <div className="w-full space-y-4">
+                    {topSuppliersData.map((d, i) => (
+                      <div key={d.name} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-foreground truncate max-w-[140px]">{d.name}</span>
+                          <span className="text-muted-foreground tabular-nums">{formatCurrency(d.total, currency, 0, true)}</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div 
+                            className="h-full rounded-full transition-all duration-500 ease-out" 
+                            style={{ 
+                              width: `${(d.total / topSuppliersData[0].total) * 100}%`,
+                              backgroundColor: CHART_COLORS[i % CHART_COLORS.length] 
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PanelCard>
+
+              <PanelCard 
+                title="Aylık Satın Alma Trendi" 
+                className="overflow-visible"
+                bodyClassName="flex flex-col pt-2 overflow-visible"
+              >
+                {monthlyPurchaseTrend.length === 0 ? (
+                  <EmptyState icon={ShoppingCart} title="Veri yok" />
+                ) : (
+                  <div className="w-full space-y-3">
+                    {/* Summary KPIs */}
+                    <div className="grid grid-cols-2 gap-2 px-1">
+                      <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-border/60 bg-muted/30 px-2.5 text-center">
+                        <p className="text-[10px] text-muted-foreground">Toplam Sipariş</p>
+                        <p className="text-sm font-bold tabular-nums text-foreground">
+                          {monthlyPurchaseTrend.reduce((s, r) => s + (r.count as number), 0)}
+                        </p>
+                      </div>
+                      <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-border/60 bg-muted/30 px-1 text-center">
+                        <p className="w-full text-[10px] text-muted-foreground">Toplam Tutar</p>
+                        <p className="w-full whitespace-nowrap text-[10px] font-bold tabular-nums tracking-tighter text-foreground">
+                          {formatCurrency(monthlyPurchaseTrend.reduce((s, r) => s + (r.total as number), 0), currency, 0, true)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Stacked Bar Chart */}
+                    <div className="min-h-[180px] w-full">
+                      <ResponsiveContainer width="100%" height="100%" minHeight={180}>
+                        <BarChart data={monthlyPurchaseTrend} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+                          <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="4 4" opacity={0.4} />
+                          <XAxis 
+                            dataKey="name" 
+                            tickLine={false} 
+                            axisLine={false} 
+                            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} 
+                            dy={8}
+                          />
+                          <Tooltip
+                            cursor={{ fill: "var(--muted)", opacity: 0.2 }}
+                            position={{ x: -240, y: -20 }}
+                            allowEscapeViewBox={{ x: true, y: true }}
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const d = payload[0]?.payload as Record<string, string | number>;
+                              const rows = monthlyTrendStatuses
+                                .filter((status) => (d[status] as number) > 0)
+                                .map((status, i) => ({
+                                  label: status,
+                                  color: CHART_COLORS[i % CHART_COLORS.length],
+                                  value: formatCurrency(d[status] as number, currency, 0, true),
+                                }));
+                              rows.push({ label: "Toplam", color: "var(--foreground)", value: formatCurrency(d.total as number, currency, 0, true) });
+                              return (
+                                <ChartTooltip
+                                  title={`${d.name} · ${d.count} sipariş`}
+                                  rows={rows}
+                                />
+                              );
+                            }}
+                          />
+                          {monthlyTrendStatuses.map((status, i) => (
+                            <Bar 
+                              key={status}
+                              dataKey={status} 
+                              stackId="1"
+                              fill={CHART_COLORS[i % CHART_COLORS.length]} 
+                              radius={
+                                // If it's the last item in the stack, we might want top rounded corners, but in a dynamic stack it's hard to know which is top.
+                                // We can leave radius 0 or just round all bars slightly.
+                                [2, 2, 0, 0]
+                              }
+                            />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 px-1">
+                      {monthlyTrendStatuses.map((status, i) => (
+                        <div key={status} className="flex items-center gap-1.5 text-[10px]">
+                          <ChartSwatch color={CHART_COLORS[i % CHART_COLORS.length]} />
+                          <span className="text-muted-foreground">{status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </PanelCard>
+            </div>
           </Section>
         </TabsContent>
       </Tabs>
@@ -803,21 +894,69 @@ function MovementStat({ icon: Icon, label, count, color, bg }: {
   );
 }
 
-function MiniBar({ label, percent, color, count }: {
+/** Semantic per-type color — matches `MovementStat`'s tint tokens for the same three categories. */
+const MOVEMENT_DIST_COLORS: Record<string, string> = {
+  giris: "var(--status-good)",
+  cikis: "var(--status-critical)",
+  transfer: "var(--primary)",
+};
+
+function MovementDistributionTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fontWeight={500} fill="var(--muted-foreground)">
+      {payload?.value}
+    </text>
+  );
+}
+
+interface MovementDistDatum {
+  key: string;
   label: string;
   percent: number;
-  color: string;
   count: number;
-}) {
+}
+
+function MovementDistributionChart({ data }: { data: MovementDistDatum[] }) {
   return (
-    <div>
-      <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="tabular-nums font-medium text-foreground">{count} · %{percent}</span>
-      </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-        <div className={cn("h-full rounded-full transition-all duration-500", color)} style={{ width: `${percent}%` }} />
-      </div>
+    <div className="h-[116px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} layout="vertical" margin={{ left: 0, right: 56, top: 2, bottom: 2 }} barCategoryGap="32%">
+          <XAxis type="number" domain={[0, 100]} hide />
+          <YAxis type="category" dataKey="label" width={64} tickLine={false} axisLine={false} tick={<MovementDistributionTick />} />
+          <Tooltip
+            cursor={{ fill: "var(--muted)", opacity: 0.35 }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const d = payload[0].payload as MovementDistDatum;
+              return (
+                <ChartTooltip
+                  title={d.label}
+                  rows={[{ label: "Hareket", color: MOVEMENT_DIST_COLORS[d.key], value: `${formatNumber(d.count)} (%${d.percent})` }]}
+                />
+              );
+            }}
+          />
+          <Bar dataKey="percent" radius={[0, 6, 6, 0]} maxBarSize={14} animationDuration={500}>
+            {data.map((d) => (
+              <Cell key={d.key} fill={MOVEMENT_DIST_COLORS[d.key]} />
+            ))}
+            <LabelList
+              dataKey="percent"
+              content={(props: LabelProps) => {
+                const d = data[Number(props.index ?? 0)];
+                if (!d) return null;
+                const cx = Number(props.x ?? 0) + Number(props.width ?? 0) + 8;
+                const cy = Number(props.y ?? 0) + Number(props.height ?? 0) / 2;
+                return (
+                  <text x={cx} y={cy} dy={4} fontSize={11} fontWeight={700} fill="var(--foreground)">
+                    {`${formatNumber(d.count)} · %${d.percent}`}
+                  </text>
+                );
+              }}
+            />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

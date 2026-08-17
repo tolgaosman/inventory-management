@@ -121,14 +121,19 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
                         cx={props.cx}
                         cy={props.cy}
                         innerRadius={props.innerRadius}
-                        outerRadius={props.outerRadius + (isHovered ? 8 : 0)}
+                        outerRadius={props.outerRadius}
                         startAngle={props.startAngle}
                         endAngle={props.endAngle}
                         fill={props.fill}
+                        opacity={props.opacity}
                         cornerRadius={8}
+                        style={{
+                          transform: isHovered ? "scale(1.08)" : "scale(1)",
+                          transformOrigin: `${props.cx}px ${props.cy}px`,
+                          transition: "transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+                        }}
                         className={cn(
-                          "transition-all duration-300",
-                          isHovered ? "drop-shadow-lg" : ""
+                          isHovered ? "drop-shadow-md" : ""
                         )}
                       />
                     );

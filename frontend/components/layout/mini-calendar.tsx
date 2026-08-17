@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 const MONTH_NAMES = [
@@ -45,9 +46,14 @@ export function MiniCalendar() {
   return (
     <div className="p-3 text-popover-foreground select-none shrink-0">
       <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-xs font-medium text-sidebar-foreground">
-          {MONTH_NAMES[month]} {year}
-        </span>
+        <Link 
+          href="/takvim" 
+          className="flex items-center gap-1.5 text-xs font-semibold text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors rounded-md px-2 py-1 -ml-2"
+          title="Tam takvim sayfasını aç"
+        >
+          <span>{MONTH_NAMES[month]} {year}</span>
+          <CalendarDays className="size-3.5 opacity-60" />
+        </Link>
         <div className="flex items-center gap-0.5">
           <button
             type="button"

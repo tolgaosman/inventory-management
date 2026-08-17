@@ -84,17 +84,25 @@ function setWorksheetFormatting(
       const trimmedVal = strVal.trim();
       const lowerVal = trimmedVal.toLowerCase();
       if (!isHeader) {
-        if (trimmedVal === "Stok Girişi" || trimmedVal === "Giriş" || lowerVal === "aktif") {
+        if (trimmedVal === "Stok Girişi" || trimmedVal === "Giriş" || lowerVal === "aktif" || trimmedVal === "Teslim Alındı") {
           fillColor = { fgColor: { rgb: "C6EFCE" } }; // Good Fill (#C6EFCE)
           fontColor = { rgb: "006100" }; // Good Text (#006100)
           isBold = true;
-        } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış" || lowerVal === "pasif") {
+        } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış" || lowerVal === "pasif" || trimmedVal === "İptal Edildi") {
           fillColor = { fgColor: { rgb: "FFC7CE" } }; // Bad Fill (#FFC7CE)
           fontColor = { rgb: "9C0006" }; // Bad Text (#9C0006)
           isBold = true;
-        } else if (trimmedVal === "Transfer") {
+        } else if (trimmedVal === "Transfer" || trimmedVal === "Kısmen Teslim Alındı") {
           fillColor = { fgColor: { rgb: "FFEB9C" } }; // Neutral Fill (#FFEB9C)
           fontColor = { rgb: "9C6500" }; // Neutral Text (#9C6500)
+          isBold = true;
+        } else if (trimmedVal === "Sipariş Edildi") {
+          fillColor = { fgColor: { rgb: "B4C6E7" } }; // 60% Accent 5
+          fontColor = { rgb: "1F497D" }; // Dark Blue, Text 2, Darker 50%
+          isBold = true;
+        } else if (trimmedVal === "Taslak") {
+          fillColor = { fgColor: { rgb: "F2F2F2" } }; // Output Fill
+          fontColor = { rgb: "3F3F3F" }; // Output Text
           isBold = true;
         }
       }

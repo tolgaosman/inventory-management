@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Search, ShieldCheck, Download, SlidersHorizontal, MoreHorizontal, Eye, ArrowDownToLine, ShoppingCart, X } from "lucide-react";
+import { Search, ShieldCheck, SlidersHorizontal, MoreHorizontal, Eye, ArrowDownToLine, ShoppingCart, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -164,9 +164,6 @@ export function CriticalStockList({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="icon" className="shrink-0" aria-label="Dışa aktar" onClick={onExport}>
-            <Download className="size-4" />
-          </Button>
         </div>
       </CardHeader>
 

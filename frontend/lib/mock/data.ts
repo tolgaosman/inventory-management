@@ -101,10 +101,6 @@ export const users: AppUser[] = [
   { id: "46715", name: "Savaş Muhammed Muhtaroğlu", email: "savas.muhtaroglu@sirket.com", role: "yonetici", initials: "SM" },
   { id: "31849", name: "Berk Fenk", email: "berk.fenk@sirket.com", role: "depo", initials: "BF" },
   { id: "89234", name: "Çiğdem Dürüst", email: "cigdem.durust@sirket.com", role: "yonetici", initials: "ÇD" },
-  { id: "57102", name: "Tolga Falay", email: "tolga.falay@sirket.com", role: "satinalma", initials: "TF" },
-  { id: "66721", name: "Kerem Yılmaz", email: "kerem.yilmaz@sirket.com", role: "depo", initials: "KY" },
-  { id: "12345", name: "Ayşe Kılıç", email: "ayse.kilic@sirket.com", role: "satinalma", initials: "AK" },
-  { id: "98765", name: "Caner Yıldız", email: "caner.yildiz@sirket.com", role: "depo", initials: "CY" },
 ];
 
 export const CURRENT_ROLES: Role[] = ["yonetici", "depo", "satinalma"];
@@ -417,14 +413,27 @@ function buildPurchaseOrders(): PurchaseOrder[] {
       else if (status === "partially_received") item.receivedQuantity = int(rand, 1, item.quantity - 1 || 1);
     }
 
+    const warehouse = pick(rand, warehouses);
+
+    // Jitter around the promised date: negative = early, positive = late —
+    // gives a realistic on-time-delivery spread from day one instead of a
+    // suspicious 100%. Only meaningful (and only stored) for received orders.
+    const deliveryJitterDays = int(rand, -3, 6);
+    const receivedAt =
+      status === "received"
+        ? new Date(new Date(expectedAt).getTime() + deliveryJitterDays * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
+
     list.push({
       id: id("po", n),
       code: `NET-PO-${2026}${String(n).padStart(4, "0")}`,
       supplierId: supplier.id,
+      warehouseId: warehouse.id,
       status,
       items,
       createdAt,
       expectedAt,
+      receivedAt,
       currency: "TRY",
     });
   }

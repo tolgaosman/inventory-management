@@ -46,7 +46,7 @@ interface SettingsContextValue extends PersistedSettings {
   setDefaultRange: (range: DateRangePreset) => void;
 }
 
-const STORAGE_KEY = "net_app_settings_v1";
+const STORAGE_KEY = "net_app_settings_v2";
 
 const DEFAULT_COMPANY: CompanySettings = {
   companyName: "Near East Technology",
@@ -56,9 +56,9 @@ const DEFAULT_COMPANY: CompanySettings = {
 };
 
 const DEFAULT_PROFILE: UserProfileSettings = {
-  firstName: "Ahmet",
-  lastName: "Yılmaz",
-  email: "ahmet.yilmaz@sirket.com",
+  firstName: "Tolga Osman",
+  lastName: "Falay",
+  email: "tolgaosman@sirket.com",
   phone: "+90 555 123 4567",
 };
 

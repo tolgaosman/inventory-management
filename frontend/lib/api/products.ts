@@ -16,7 +16,8 @@ import { ApiError, delay, matchesSearch, paginate } from "./client";
 export interface ProductQuery extends PagedQuery {
   categoryId?: string;
   warehouseId?: string;
-  stockStatus?: "kritik" | "dusuk" | "normal";
+  stockStatus?: "kritik" | "dusuk" | "normal" | "fazla";
+  status?: "aktif" | "pasif";
   supplierId?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -33,6 +34,10 @@ export interface ProductRow extends Product {
 export interface ProductStats {
   total: number;
   critical: number;
+  /** Not critical, but below the 1.5x-of-min "healthy" band — same threshold `stockStatus=dusuk` filters on. */
+  low: number;
+  /** Above `maxStock` — the first place `Product.maxStock` is aggregated across the catalog. */
+  overstock: number;
   passive: number;
   stockValue: number;
 }
@@ -45,6 +50,8 @@ function computeStats(rows: ProductRow[]): ProductStats {
   return {
     total: rows.length,
     critical: rows.filter((p) => p.critical).length,
+    low: rows.filter((p) => !p.critical && p.totalStock < p.minStock * 1.5).length,
+    overstock: rows.filter((p) => p.totalStock > p.maxStock).length,
     passive: rows.filter((p) => p.status === "pasif").length,
     stockValue: rows.reduce((sum, p) => sum + (p.warehouseStock ?? p.totalStock) * p.purchasePrice, 0),
   };
@@ -100,6 +107,8 @@ export async function listProducts(query: ProductQuery = {}): Promise<ProductLis
   if (query.stockStatus === "dusuk")
     rows = rows.filter((p) => !p.critical && p.totalStock < p.minStock * 1.5);
   if (query.stockStatus === "normal") rows = rows.filter((p) => p.totalStock >= p.minStock * 1.5);
+  if (query.stockStatus === "fazla") rows = rows.filter((p) => p.totalStock > p.maxStock);
+  if (query.status) rows = rows.filter((p) => p.status === query.status);
   if (query.minPrice != null) rows = rows.filter((p) => p.salePrice >= query.minPrice!);
   if (query.maxPrice != null) rows = rows.filter((p) => p.salePrice <= query.maxPrice!);
 

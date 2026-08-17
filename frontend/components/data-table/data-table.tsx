@@ -9,7 +9,7 @@ import {
   type SortingState,
   type OnChangeFn,
 } from "@tanstack/react-table";
-import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsUpDown, ChevronUp, ChevronDown, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -179,7 +179,7 @@ export function DataTable<T>({
       </div>
 
       {!loading && data.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-start gap-4 text-sm text-muted-foreground">
           <p>
             <span className="font-medium text-foreground">
               {formatNumber((page - 1) * pageSize + 1)}–{formatNumber(Math.min(page * pageSize, total))}
@@ -189,21 +189,43 @@ export function DataTable<T>({
           <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="size-8"
               disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
+              onClick={() => onPageChange(1)}
+              title="İlk Sayfa"
             >
-              <ChevronLeft className="size-4" />
-              Önceki
+              <ChevronsLeft className="size-4" />
             </Button>
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
+              className="size-8"
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+              title="Önceki Sayfa"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
               disabled={page >= pageCount}
               onClick={() => onPageChange(page + 1)}
+              title="Sonraki Sayfa"
             >
-              Sonraki Sayfa
               <ChevronRight className="size-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-8"
+              disabled={page >= pageCount}
+              onClick={() => onPageChange(pageCount)}
+              title="Son Sayfa"
+            >
+              <ChevronsRight className="size-4" />
             </Button>
           </div>
         </div>

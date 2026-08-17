@@ -244,7 +244,7 @@ function renderSection(
     styles: {
       font: FONT,
       fontStyle: "normal",
-      fontSize: 7.5,
+      fontSize: 10,
       cellPadding: 4,
       textColor: COLORS.secondary,
       lineColor: COLORS.grid,
@@ -258,7 +258,7 @@ function renderSection(
       fontStyle: "bold",
       fillColor: COLORS.brand,
       textColor: COLORS.white,
-      fontSize: 7.5,
+      fontSize: 10,
       lineWidth: 0.4,
       halign: "center",
       valign: "middle",
@@ -269,17 +269,25 @@ function renderSection(
       const rawText = String(hook.cell.raw ?? "").trim();
       const lowerText = rawText.toLowerCase();
 
-      if (rawText === "Stok Girişi" || rawText === "Giriş" || lowerText === "aktif") {
+      if (rawText === "Stok Girişi" || rawText === "Giriş" || lowerText === "aktif" || rawText === "Teslim Alındı") {
         hook.cell.styles.fillColor = [198, 239, 206]; // Good Fill (#C6EFCE)
         hook.cell.styles.textColor = [0, 97, 0]; // Good Text (#006100)
         hook.cell.styles.fontStyle = "bold";
-      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış" || lowerText === "pasif") {
+      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış" || lowerText === "pasif" || rawText === "İptal Edildi") {
         hook.cell.styles.fillColor = [255, 199, 206]; // Bad Fill (#FFC7CE)
         hook.cell.styles.textColor = [156, 0, 6]; // Bad Text (#9C0006)
         hook.cell.styles.fontStyle = "bold";
-      } else if (rawText === "Transfer") {
+      } else if (rawText === "Transfer" || rawText === "Kısmen Teslim Alındı") {
         hook.cell.styles.fillColor = [255, 235, 156]; // Neutral Fill (#FFEB9C)
         hook.cell.styles.textColor = [156, 101, 0]; // Neutral Text (#9C6500)
+        hook.cell.styles.fontStyle = "bold";
+      } else if (rawText === "Sipariş Edildi") {
+        hook.cell.styles.fillColor = [180, 198, 231]; // 60% Accent 5 (#B4C6E7)
+        hook.cell.styles.textColor = [31, 73, 125]; // Dark Blue, Text 2, Darker 50% (#1F497D)
+        hook.cell.styles.fontStyle = "bold";
+      } else if (rawText === "Taslak") {
+        hook.cell.styles.fillColor = [242, 242, 242]; // Output Fill (#F2F2F2)
+        hook.cell.styles.textColor = [63, 63, 63]; // Output Text (#3F3F3F)
         hook.cell.styles.fontStyle = "bold";
       } else if (isCritical) {
         // Flag under-stocked rows, and make the shortfall itself stand out.

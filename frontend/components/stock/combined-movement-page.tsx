@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, ArrowUpFromLine, Package } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Package, ArrowLeftRight } from "lucide-react";
 import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { PageHeader } from "@/components/common/page-header";
@@ -8,6 +8,8 @@ import { Can } from "@/components/common/can";
 import { ForbiddenState } from "@/components/common/forbidden-state";
 import { StockEntryForm } from "@/components/stock/stock-entry-form";
 import { RecentSideMovementsList } from "@/components/stock/recent-side-movements-list";
+import { TransferForm } from "@/components/stock/transfer-form";
+import { RecentTransfersList } from "@/components/stock/recent-transfers-list";
 import { useAsync } from "@/lib/hooks/use-async";
 import { listWarehouses, listSuppliers } from "@/lib/api/catalog";
 import { listProducts } from "@/lib/api/products";
@@ -24,19 +26,23 @@ export function CombinedMovementPage() {
         listProducts({ pageSize: 2000 }),
         listMovements({ type: "giris", pageSize: 50 }),
         listMovements({ type: "cikis", pageSize: 50 }),
+        listMovements({ type: "transfer", pageSize: 50 }),
       ]),
     [],
   );
   const view = data ?? staleData;
-  const [warehouses, supplierResult, productResult, girisStats, cikisStats] = view ?? [];
+  const [warehouses, supplierResult, productResult, girisStats, cikisStats, transferStats] = view ?? [];
 
   const girisTodayUnits =
     girisStats?.rows.filter((m) => isToday(m.createdAt)).reduce((sum, m) => sum + m.quantity, 0) ?? 0;
   const cikisTodayUnits =
     cikisStats?.rows.filter((m) => isToday(m.createdAt)).reduce((sum, m) => sum + m.quantity, 0) ?? 0;
+  const transferTodayUnits =
+    transferStats?.rows.filter((m) => isToday(m.createdAt)).reduce((sum, m) => sum + m.quantity, 0) ?? 0;
   const totalTodayCount =
     (girisStats?.rows.filter((m) => isToday(m.createdAt)).length ?? 0) +
-    (cikisStats?.rows.filter((m) => isToday(m.createdAt)).length ?? 0);
+    (cikisStats?.rows.filter((m) => isToday(m.createdAt)).length ?? 0) +
+    (transferStats?.rows.filter((m) => isToday(m.createdAt)).length ?? 0);
 
   function handleDone() {
     refetch();
@@ -45,12 +51,12 @@ export function CombinedMovementPage() {
   return (
     <Can permission="stock.in" fallback={<Forbidden />}>
       <div className="space-y-6">
-        <PageHeader title="Stok Girişi / Çıkışı" description="Deponuza yeni giren ve çıkan stok hareketlerini tek ekrandan yönetin." />
+        <PageHeader title="Giriş / Çıkış / Transfer" description="Deponuza yeni giren, çıkan ve transfer edilen stok hareketlerini tek ekrandan yönetin." />
 
         <SectionStack className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <Section index={0}>
             <StatGrid
-              className="grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-3 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1"
+              className="grid-cols-2 gap-4 lg:grid-cols-4 [&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1"
               items={[
                 {
                   icon: ArrowDownToLine,
@@ -63,6 +69,12 @@ export function CombinedMovementPage() {
                   tint: "critical",
                   label: "Bugünkü Toplam Çıkış",
                   value: `${formatNumber(cikisTodayUnits)} adet`,
+                },
+                {
+                  icon: ArrowLeftRight,
+                  tint: "blue",
+                  label: "Bugünkü Transfer",
+                  value: `${formatNumber(transferTodayUnits)} adet`,
                 },
                 {
                   icon: Package,
@@ -108,6 +120,21 @@ export function CombinedMovementPage() {
                 />
               </div>
             </div>
+            
+            <TransferForm
+              warehouses={warehouses ?? []}
+              onDone={handleDone}
+            />
+            <div className="lg:relative">
+              <div className="lg:absolute lg:inset-0">
+                <RecentTransfersList
+                  className="h-full"
+                  movements={transferStats?.rows.slice(0, 10) ?? []}
+                  products={productResult?.rows ?? []}
+                  warehouses={warehouses ?? []}
+                />
+              </div>
+            </div>
           </Section>
         </SectionStack>
       </div>
@@ -118,7 +145,7 @@ export function CombinedMovementPage() {
 function Forbidden() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Stok Girişi / Çıkışı" />
+      <PageHeader title="Giriş / Çıkış / Transfer" />
       <ForbiddenState message="Stok işlemi yapmak için yetkiniz yok." />
     </div>
   );

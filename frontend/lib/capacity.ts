@@ -14,3 +14,9 @@ export function capacityIndicatorClass(percent: number): string {
   const tone = capacityTone(percent);
   return tone === "red" ? "bg-tint-red" : tone === "amber" ? "bg-tint-amber" : "bg-tint-green";
 }
+
+/** CSS colour (for SVG `fill`/`stroke`) matching `capacityIndicatorClass`'s tone. */
+export function capacityFillVar(percent: number): string {
+  const tone = capacityTone(percent);
+  return tone === "red" ? "var(--tint-red)" : tone === "amber" ? "var(--tint-amber)" : "var(--tint-green)";
+}

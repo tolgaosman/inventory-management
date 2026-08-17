@@ -12,7 +12,6 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
-import { StatGrid } from "@/components/common/stat-card";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -43,14 +42,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Warehouse as WarehouseIcon,
   Package,
   Plus,
   Search,
   ArrowLeftRight,
   MapPin,
   AlertTriangle,
-  Layers,
   Download,
   Eye,
   MoreHorizontal,
@@ -62,6 +59,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import {
@@ -80,6 +78,7 @@ import { buildReportPdf } from "@/lib/export/pdf";
 import { buildReportData } from "@/lib/export/report-data";
 import { downloadBlob, reportFilename } from "@/lib/export/download";
 import { WarehouseFormSheet } from "@/components/warehouses/warehouse-form-sheet";
+import { WarehouseCommandHero } from "@/components/warehouses/warehouse-command-hero";
 import { ApiError } from "@/lib/api/client";
 import type { Warehouse } from "@/lib/types";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -93,6 +92,7 @@ export function WarehousesClient() {
   const [search, setSearch] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [capacityFilter, setCapacityFilter] = useState<"all" | "critical" | "idle">("all");
   const [page, setPage] = useState(1);
 
   // Modals state
@@ -146,13 +146,23 @@ export function WarehousesClient() {
 
   // Summary Metrics
   const summaryMetrics = useMemo(() => {
-    if (!warehouses) return { totalCount: 0, totalUnits: 0, totalValue: 0, avgCapacity: 0 };
+    if (!warehouses) return { totalCount: 0, totalUnits: 0, totalValue: 0, avgCapacity: 0, criticalCapacityCount: 0, idleCapacityCount: 0, topValueWarehouse: undefined as WarehouseDetail | undefined };
     const totalCount = warehouses.length;
     const totalUnits = warehouses.reduce((sum, w) => sum + w.units, 0);
     const totalValue = warehouses.reduce((sum, w) => sum + w.totalValue, 0);
     const avgCapacity = totalCount > 0 ? Math.round(warehouses.reduce((sum, w) => sum + w.capacityUsagePercent, 0) / totalCount) : 0;
-    return { totalCount, totalUnits, totalValue, avgCapacity };
+    const criticalCapacityCount = warehouses.filter((w) => w.capacityUsagePercent >= 90).length;
+    const idleCapacityCount = warehouses.filter((w) => w.capacityUsagePercent < 30).length;
+    const topValueWarehouse = [...warehouses].sort((a, b) => b.totalValue - a.totalValue)[0];
+    return { totalCount, totalUnits, totalValue, avgCapacity, criticalCapacityCount, idleCapacityCount, topValueWarehouse };
   }, [warehouses]);
+
+  const filteredWarehouseCards = useMemo(() => {
+    if (!warehouses) return warehouses;
+    if (capacityFilter === "critical") return warehouses.filter((w) => w.capacityUsagePercent >= 90);
+    if (capacityFilter === "idle") return warehouses.filter((w) => w.capacityUsagePercent < 30);
+    return warehouses;
+  }, [warehouses, capacityFilter]);
 
   // Open Transfer Modal
   const openTransferModal = (product: ProductStockMatrixRow, defaultSourceId?: string) => {
@@ -313,35 +323,28 @@ export function WarehousesClient() {
         }
       />
 
-      {/* KPI Cards */}
-      <StatGrid
-        className="grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
-        items={[
-          {
-            icon: WarehouseIcon,
-            tint: "plum",
-            label: "Toplam Depo Sayısı",
-            value: formatNumber(summaryMetrics.totalCount),
-          },
-          {
-            icon: Package,
-            tint: "blue",
-            label: "Toplanan Stok Adedi",
-            value: `${formatNumber(summaryMetrics.totalUnits)} Adet`,
-          },
-          {
-            icon: Boxes,
-            tint: "teal",
-            label: "Depolardaki Envanter Değeri",
-            value: formatCurrency(summaryMetrics.totalValue, currency, rates?.[currency] || 1, showKurus),
-          },
-          {
-            icon: Layers,
-            tint: "amber",
-            label: "Ortalama Doluluk Oranı",
-            value: `% ${summaryMetrics.avgCapacity}`,
-          },
-        ]}
+      <WarehouseCommandHero
+        stats={
+          warehouses
+            ? {
+                totalCount: summaryMetrics.totalCount,
+                totalUnits: summaryMetrics.totalUnits,
+                totalValue: summaryMetrics.totalValue,
+                avgCapacity: summaryMetrics.avgCapacity,
+                criticalCapacityCount: summaryMetrics.criticalCapacityCount,
+                idleCapacityCount: summaryMetrics.idleCapacityCount,
+                topValueWarehouseName: summaryMetrics.topValueWarehouse?.name,
+              }
+            : undefined
+        }
+        currency={currency}
+        rate={rates?.[currency] || 1}
+        onTotalClick={() => setCapacityFilter("all")}
+        onCriticalCapacityClick={() => setCapacityFilter("critical")}
+        onIdleCapacityClick={() => setCapacityFilter("idle")}
+        onTopValueClick={() => {
+          if (summaryMetrics.topValueWarehouse) setSelectedWarehouseId(summaryMetrics.topValueWarehouse.id);
+        }}
       />
 
       {/* Warehouses Card Overview Grid */}
@@ -351,15 +354,23 @@ export function WarehousesClient() {
             <Building2 className="size-4 text-primary" />
             Aktif Depo Lokasyonları
           </h2>
-          <span className="text-xs text-muted-foreground font-medium">
-            Filtrelemek için depoya tıklayabilirsiniz
-          </span>
+          <div className="flex items-center gap-2">
+            {capacityFilter !== "all" && (
+              <Button variant="ghost" size="sm" onClick={() => setCapacityFilter("all")} className="h-7 text-xs">
+                <X className="mr-1 size-3.5" />
+                {capacityFilter === "critical" ? "Kritik Doluluk" : "Atıl Kapasite"} Filtresini Temizle
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground font-medium">
+              Filtrelemek için depoya tıklayabilirsiniz
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {whStatus === "loading" && !warehouses
             ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[168px] rounded-xl" />)
-            : warehouses?.map((wh) => {
+            : filteredWarehouseCards?.map((wh) => {
             const isSelected = selectedWarehouseId === wh.id;
             return (
               <Card

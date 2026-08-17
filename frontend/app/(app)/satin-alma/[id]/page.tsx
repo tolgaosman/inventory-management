@@ -1,5 +1,6 @@
-import { ComingSoon } from "@/components/common/coming-soon";
+import { PurchaseOrderDetailClient } from "@/components/purchase-orders/purchase-order-detail-client";
 
-export default function PurchaseOrderDetailPage() {
-  return <ComingSoon title="Satın Alma Sipariş Detayı" />;
+export default async function PurchaseOrderDetailPage(props: PageProps<"/satin-alma/[id]">) {
+  const { id } = await props.params;
+  return <PurchaseOrderDetailClient id={id} />;
 }

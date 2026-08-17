@@ -81,6 +81,8 @@ export interface StockMovement {
   newQuantity: number;
   reason: MovementReason;
   supplierId?: string;
+  /** Set when this "giriş" was created by receiving a purchase order — ties the movement back to it. */
+  purchaseOrderId?: string;
   userId: string;
   note?: string;
   createdAt: string; // ISO date
@@ -104,11 +106,16 @@ export interface PurchaseOrder {
   id: string;
   code: string;
   supplierId: string;
+  /** Delivery warehouse — where receiving this order adds stock. */
+  warehouseId: string;
   status: PurchaseOrderStatus;
   items: PurchaseOrderItem[];
   createdAt: string;
   expectedAt: string;
+  /** Stamped when `status` transitions to "received" — the only real delivery timestamp in the schema. */
+  receivedAt?: string;
   currency: "TRY";
+  notes?: string;
 }
 
 export interface PagedQuery {

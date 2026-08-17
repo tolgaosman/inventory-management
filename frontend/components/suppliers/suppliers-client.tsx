@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Truck,
-  Package,
-  MapPin,
   Search,
   Plus,
   MoreHorizontal,
@@ -23,7 +21,6 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
 import { ForbiddenState } from "@/components/common/forbidden-state";
-import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,24 +49,34 @@ import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useAuth } from "@/lib/auth";
 import { useCurrency } from "@/lib/currency-context";
 import { listSuppliers, createSupplier, updateSupplier, deleteSupplier, type SupplierQuery } from "@/lib/api/catalog";
+import { getSupplierScorecards, type SupplierScorecard } from "@/lib/api/purchase-orders";
+import { performanceTextClass } from "@/lib/purchase-order-actions";
 import { ApiError } from "@/lib/api/client";
-import { formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { PAGE_SIZE } from "@/lib/constants";
 import type { Supplier } from "@/lib/types";
 import { buildReportData } from "@/lib/export/report-data";
 import { buildReportExcel } from "@/lib/export/excel";
 import { buildReportPdf } from "@/lib/export/pdf";
 import { downloadBlob, reportFilename } from "@/lib/export/download";
+import { SupplierCommandHero } from "@/components/suppliers/supplier-command-hero";
 
-type SupplierRow = Supplier & { productCount: number };
+type SupplierRow = Supplier & {
+  productCount: number;
+  scorecard?: SupplierScorecard;
+};
 
 export function SuppliersClient() {
+  const router = useRouter();
   const { name, role } = useAuth();
   const { currency, rates } = useCurrency();
+  const rate = rates?.[currency] || 1;
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [noProductsOnly, setNoProductsOnly] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Supplier | undefined>(undefined);
@@ -90,21 +97,50 @@ export function SuppliersClient() {
   const { status, data, staleData, error, refetch } = useAsync(() => listSuppliers(query), [
     JSON.stringify(query),
   ]);
-  const view = data ?? staleData;
+  const { data: scorecards } = useAsync(getSupplierScorecards, []);
 
-  const isFiltered = Boolean(search);
+  const rawView = data ?? staleData;
+  const view = useMemo(() => {
+    if (!rawView) return rawView;
+    const rows: SupplierRow[] = rawView.rows.map((s) => ({
+      ...s,
+      scorecard: scorecards?.find((sc) => sc.supplierId === s.id),
+    }));
+    return { ...rawView, rows: noProductsOnly ? rows.filter((s) => s.productCount === 0) : rows };
+  }, [rawView, scorecards, noProductsOnly]);
+
+  const summary = useMemo(() => {
+    const rows = rawView?.rows ?? [];
+    const totalProducts = rows.reduce((sum, s) => sum + s.productCount, 0);
+    const cityCount = new Set(rows.map((s) => s.city)).size;
+    return { totalCount: rawView?.total ?? 0, totalProducts, cityCount };
+  }, [rawView]);
+
+  const heroStats = useMemo(() => {
+    if (!scorecards || !rawView) return undefined;
+    const withOnTime = scorecards.filter((s) => s.onTimeRatePercent !== null);
+    const avgOnTimePercent =
+      withOnTime.length > 0
+        ? Math.round(withOnTime.reduce((sum, s) => sum + (s.onTimeRatePercent ?? 0), 0) / withOnTime.length)
+        : null;
+    return {
+      totalCount: summary.totalCount,
+      totalProducts: summary.totalProducts,
+      cityCount: summary.cityCount,
+      totalOpenValue: scorecards.reduce((sum, s) => sum + s.openValue, 0),
+      avgOnTimePercent,
+      riskyCount: scorecards.filter((s) => s.onTimeRatePercent !== null && s.onTimeRatePercent < 60).length,
+      noProductsCount: scorecards.filter((s) => s.productCount === 0).length,
+    };
+  }, [scorecards, rawView, summary]);
+
+  const isFiltered = Boolean(search) || noProductsOnly;
 
   function clearFilters() {
     setSearchInput("");
     setSearch("");
+    setNoProductsOnly(false);
   }
-
-  const summary = useMemo(() => {
-    const rows = view?.rows ?? [];
-    const totalProducts = rows.reduce((sum, s) => sum + s.productCount, 0);
-    const cityCount = new Set(rows.map((s) => s.city)).size;
-    return { totalCount: view?.total ?? 0, totalProducts, cityCount };
-  }, [view]);
 
   async function handleExport(type: "excel" | "pdf") {
     await exportGuard.guard(async () => {
@@ -160,7 +196,7 @@ export function SuppliersClient() {
         id: "name",
         accessorKey: "name",
         header: "Tedarikçi",
-        meta: { className: "w-[21%] text-left" },
+        meta: { className: "w-[16%] text-left" },
         cell: ({ row }) => (
           <Link
             href={`/tedarikciler/${row.original.id}`}
@@ -175,7 +211,7 @@ export function SuppliersClient() {
         id: "contactName",
         accessorKey: "contactName",
         header: "Yetkili",
-        meta: { className: "w-[15%] text-center" },
+        meta: { className: "w-[12%] text-center" },
         cell: ({ row }) => (
           <span className="block truncate" title={row.original.contactName}>{row.original.contactName}</span>
         ),
@@ -184,7 +220,7 @@ export function SuppliersClient() {
         id: "email",
         accessorKey: "email",
         header: "E-posta",
-        meta: { className: "w-[20%] text-center" },
+        meta: { className: "w-[15%] text-center" },
         cell: ({ row }) => (
           <span className="block truncate" title={row.original.email}>{row.original.email}</span>
         ),
@@ -193,7 +229,7 @@ export function SuppliersClient() {
         id: "phone",
         accessorKey: "phone",
         header: "Telefon",
-        meta: { className: "w-[14%] text-center" },
+        meta: { className: "w-[11%] text-center" },
         cell: ({ row }) => (
           <span className="block truncate" title={row.original.phone}>{row.original.phone}</span>
         ),
@@ -202,7 +238,7 @@ export function SuppliersClient() {
         id: "city",
         accessorKey: "city",
         header: "Şehir",
-        meta: { className: "w-[13%] text-center" },
+        meta: { className: "w-[10%] text-center" },
         cell: ({ row }) => (
           <span className="block truncate" title={row.original.city}>{row.original.city}</span>
         ),
@@ -211,8 +247,32 @@ export function SuppliersClient() {
         id: "productCount",
         accessorKey: "productCount",
         header: "Ürün Sayısı",
-        meta: { className: "w-[12%] text-center" },
+        meta: { className: "w-[9%] text-center" },
         cell: ({ row }) => <span className="tabular-nums flex justify-center">{formatNumber(row.original.productCount)}</span>,
+      },
+      {
+        id: "openValue",
+        header: "Açık Sipariş",
+        meta: { className: "w-[11%] text-center" },
+        cell: ({ row }) => {
+          const sc = row.original.scorecard;
+          if (!sc || sc.openValue === 0) return <span className="text-sm text-muted-foreground">—</span>;
+          return (
+            <span className="tabular-nums font-medium text-foreground">
+              {formatCurrency(sc.openValue / rate, currency, 1, true)}
+            </span>
+          );
+        },
+      },
+      {
+        id: "onTimeRate",
+        header: "Zamanında Teslimat",
+        meta: { className: "w-[11%] text-center" },
+        cell: ({ row }) => {
+          const percent = row.original.scorecard?.onTimeRatePercent ?? null;
+          if (percent === null) return <span className="text-sm text-muted-foreground">—</span>;
+          return <span className={cn("tabular-nums font-semibold", performanceTextClass(percent))}>%{percent}</span>;
+        },
       },
       {
         id: "actions",
@@ -259,7 +319,7 @@ export function SuppliersClient() {
         },
       },
     ],
-    [],
+    [rate, currency],
   );
 
   return (
@@ -304,19 +364,17 @@ export function SuppliersClient() {
           }
         />
 
+        <SupplierCommandHero
+          stats={heroStats}
+          currency={currency}
+          rate={rate}
+          onOverviewClick={clearFilters}
+          onRiskyClick={() => router.push("/satin-alma?tab=scorecard")}
+          onNoProductsClick={() => setNoProductsOnly((v) => !v)}
+        />
+
         <SectionStack className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
           <Section index={0}>
-            <StatGrid
-              className="grid-cols-1 gap-4 sm:grid-cols-3"
-              items={[
-                { icon: Truck, tint: "plum", label: "Toplam Tedarikçi", value: formatNumber(summary.totalCount) },
-                { icon: Package, tint: "blue", label: "Toplam Ürün Çeşidi", value: formatNumber(summary.totalProducts) },
-                { icon: MapPin, tint: "teal", label: "Şehir Sayısı", value: formatNumber(summary.cityCount) },
-              ]}
-            />
-          </Section>
-
-          <Section index={1}>
             <Card>
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap items-center gap-3">
@@ -344,7 +402,7 @@ export function SuppliersClient() {
             <DataTable
               columns={columns}
               data={view?.rows ?? []}
-              total={view?.total ?? 0}
+              total={noProductsOnly ? view?.rows.length ?? 0 : view?.total ?? 0}
               page={page}
               pageSize={PAGE_SIZE}
               onPageChange={setPage}
