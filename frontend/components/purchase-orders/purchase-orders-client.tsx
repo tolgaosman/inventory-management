@@ -24,7 +24,11 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  FileSignature,
   Loader2,
+  Hourglass,
+  BadgeCheck,
+  Undo2,
 } from "lucide-react";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
@@ -32,6 +36,7 @@ import { Can } from "@/components/common/can";
 import { ForbiddenState } from "@/components/common/forbidden-state";
 import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
+import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +70,9 @@ import { PurchaseCommandHero } from "@/components/purchase-orders/purchase-comma
 import { ReplenishmentPanel } from "@/components/purchase-orders/replenishment-panel";
 import { ReplenishmentOrderDialog } from "@/components/purchase-orders/replenishment-order-dialog";
 import { SupplierScorecardPanel } from "@/components/purchase-orders/supplier-scorecard-panel";
+import { QuoteRequestDialog } from "@/components/purchase-orders/quote-request-dialog";
+import { QuoteRequestFormSheet } from "@/components/purchase-orders/quote-request-form-sheet";
+import { QuotesAndOrdersPanel } from "@/components/purchase-orders/quote-requests-panel";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useChangedSince } from "@/lib/hooks/use-reset-on-change";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
@@ -72,6 +80,7 @@ import { useCurrency } from "@/lib/currency-context";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings-context";
 import { getAvailableActions } from "@/lib/purchase-order-actions";
+import { cn } from "@/lib/utils";
 import {
   listPurchaseOrders,
   getPurchaseOrder,
@@ -82,6 +91,9 @@ import {
   updatePurchaseOrder,
   deletePurchaseOrder,
   markPurchaseOrderOrdered,
+  requestPurchaseOrderApproval,
+  approvePurchaseOrder,
+  rejectPurchaseOrderApproval,
   cancelPurchaseOrder,
   createPurchaseOrdersFromSuggestions,
   bulkMarkPurchaseOrdersOrdered,
@@ -103,9 +115,16 @@ import type { PurchaseOrderStatus } from "@/lib/types";
 
 type PurchaseOrderRow = Awaited<ReturnType<typeof listPurchaseOrders>>["rows"][number];
 type PurchaseOrderDetail = Awaited<ReturnType<typeof getPurchaseOrder>>;
-type CommandTab = "orders" | "replenishment" | "scorecard";
+type CommandTab = "orders" | "replenishment" | "scorecard" | "quotes";
 
-const STATUS_OPTIONS: PurchaseOrderStatus[] = ["draft", "ordered", "partially_received", "received", "cancelled"];
+const STATUS_OPTIONS: PurchaseOrderStatus[] = [
+  "draft",
+  "pending_approval",
+  "ordered",
+  "partially_received",
+  "received",
+  "cancelled",
+];
 
 function receiveProgress(row: PurchaseOrderRow): number {
   return row.orderedTotal > 0 ? Math.round((row.receivedTotal / row.orderedTotal) * 100) : 0;
@@ -131,9 +150,11 @@ export function PurchaseOrdersClient() {
   );
   const [supplierId, setSupplierId] = useState(searchParams.get("supplierId") ?? "all");
   const [warehouseFilter, setWarehouseFilter] = useState(searchParams.get("warehouseId") ?? "all");
-  const [overdueOnly, setOverdueOnly] = useState(searchParams.get("overdue") === "1");
+  const [priorityFilter, setPriorityFilter] = useState<"low" | "medium" | "high" | "all">(
+    (searchParams.get("priority") as "low" | "medium" | "high" | "all") ?? "all"
+  );
   const [page, setPage] = useState(Number(searchParams.get("page")) || 1);
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
@@ -150,6 +171,13 @@ export function PurchaseOrdersClient() {
   const [replenishOrderOpen, setReplenishOrderOpen] = useState(false);
   const [replenishLines, setReplenishLines] = useState<{ productId: string; quantity: number }[]>([]);
 
+  const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
+  const [quoteFormOpen, setQuoteFormOpen] = useState(false);
+  const [quoteSelection, setQuoteSelection] = useState<{ supplierId: string; purchaseOrderIds: string[] } | undefined>(
+    undefined,
+  );
+  const [quoteRefreshKey, setQuoteRefreshKey] = useState(0);
+
   const exportGuard = useSubmitGuard();
 
   useEffect(() => {
@@ -163,16 +191,16 @@ export function PurchaseOrdersClient() {
       status: status === "all" ? undefined : status,
       supplierId: supplierId === "all" ? undefined : supplierId,
       warehouseId: warehouseFilter === "all" ? undefined : warehouseFilter,
-      overdue: overdueOnly || undefined,
+      priority: priorityFilter === "all" ? undefined : priorityFilter,
       page,
       pageSize: PAGE_SIZE,
       sortBy: sorting[0]?.id,
       sortDir: sorting[0]?.desc ? "desc" : "asc",
     }),
-    [search, status, supplierId, warehouseFilter, overdueOnly, page, sorting],
+    [search, status, supplierId, warehouseFilter, priorityFilter, page, sorting],
   );
 
-  const filterKey = JSON.stringify({ search, status, supplierId, warehouseFilter, overdueOnly, sorting });
+  const filterKey = JSON.stringify({ search, status, supplierId, warehouseFilter, priorityFilter, sorting });
   if (useChangedSince(filterKey) && page !== 1) setPage(1);
 
   useEffect(() => {
@@ -181,12 +209,12 @@ export function PurchaseOrdersClient() {
     if (status !== "all") params.set("status", status);
     if (supplierId !== "all") params.set("supplierId", supplierId);
     if (warehouseFilter !== "all") params.set("warehouseId", warehouseFilter);
-    if (overdueOnly) params.set("overdue", "1");
+    if (priorityFilter !== "all") params.set("priority", priorityFilter);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     router.replace(qs ? `/satin-alma?${qs}` : "/satin-alma", { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, status, supplierId, warehouseFilter, overdueOnly, page]);
+  }, [search, status, supplierId, warehouseFilter, priorityFilter, page]);
 
   const { status: fetchStatus, data, staleData, error, refetch } = useAsync(
     () => listPurchaseOrders(query),
@@ -223,7 +251,7 @@ export function PurchaseOrdersClient() {
   }
 
   const isFiltered =
-    Boolean(search) || status !== "all" || supplierId !== "all" || warehouseFilter !== "all" || overdueOnly;
+    Boolean(search) || status !== "all" || supplierId !== "all" || warehouseFilter !== "all" || priorityFilter !== "all";
 
   function clearFilters() {
     setSearchInput("");
@@ -231,7 +259,7 @@ export function PurchaseOrdersClient() {
     setStatus("all");
     setSupplierId("all");
     setWarehouseFilter("all");
-    setOverdueOnly(false);
+    setPriorityFilter("all");
   }
 
   // Deep link from the panel's critical-stock list: ?productId=x or ?productIds=a,b —
@@ -269,19 +297,16 @@ export function PurchaseOrdersClient() {
   function goToOverdue() {
     setTab("orders");
     setStatus("all");
-    setOverdueOnly(true);
   }
   function goToReplenishment() {
     setTab("replenishment");
   }
   function goToDrafts() {
     setTab("orders");
-    setOverdueOnly(false);
     setStatus("draft");
   }
   function goToArrivingSoon() {
     setTab("orders");
-    setOverdueOnly(false);
     setStatus("all");
     setSorting([{ id: "expectedAt", desc: false }]);
   }
@@ -339,6 +364,42 @@ export function PurchaseOrdersClient() {
       refetchAll();
     } catch (err) {
       toast.error("Sipariş gönderilemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    }
+  }
+
+  async function handleRequestApproval(row: PurchaseOrderRow) {
+    try {
+      await requestPurchaseOrderApproval(row.id);
+      toast.success("Sipariş onaya gönderildi.", { description: `${row.code} artık "Onay Bekliyor" durumunda.` });
+      refetchAll();
+    } catch (err) {
+      toast.error("Sipariş onaya gönderilemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    }
+  }
+
+  async function handleApprove(row: PurchaseOrderRow) {
+    try {
+      await approvePurchaseOrder(row.id);
+      toast.success("Sipariş onaylandı.", { description: `${row.code} artık "Sipariş Edildi" durumunda.` });
+      refetchAll();
+    } catch (err) {
+      toast.error("Sipariş onaylanamadı", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    }
+  }
+
+  async function handleReject(row: PurchaseOrderRow) {
+    try {
+      await rejectPurchaseOrderApproval(row.id);
+      toast.success("Onay reddedildi.", { description: `${row.code} tekrar "Taslak" durumuna alındı.` });
+      refetchAll();
+    } catch (err) {
+      toast.error("Onay reddedilemedi", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
       });
     }
@@ -482,7 +543,7 @@ export function PurchaseOrdersClient() {
       refetchAll();
       setTab("orders");
       setStatus("draft");
-      setOverdueOnly(false);
+      setPriorityFilter("all");
     } catch (err) {
       toast.error("Sipariş oluşturulamadı", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
@@ -534,7 +595,7 @@ export function PurchaseOrdersClient() {
         id: "code",
         accessorKey: "code",
         header: "Sipariş No",
-        meta: { className: "w-[14%] text-left" },
+        meta: { className: "w-[12%] text-left" },
         cell: ({ row }) => (
           <Link
             href={`/satin-alma/${row.original.id}`}
@@ -545,27 +606,101 @@ export function PurchaseOrdersClient() {
           </Link>
         ),
       },
+
       {
         id: "supplier",
         accessorKey: "supplierName",
         header: "Tedarikçi",
         enableSorting: false,
-        meta: { className: "w-[16%] text-left" },
+        meta: { 
+          className: "w-[14%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={supplierId}
+              onValueChange={setSupplierId}
+              options={suppliers.map((s) => ({ label: s.name, value: s.id }))}
+              title="Tedarikçi Seç"
+            />
+          )
+        },
         cell: ({ row }) => (
-          <span className="block truncate" title={row.original.supplierName}>{row.original.supplierName}</span>
+          <span className="block truncate text-center" title={row.original.supplierName}>{row.original.supplierName}</span>
         ),
+      },
+      {
+        id: "warehouse",
+        accessorKey: "warehouseName",
+        header: "Depo",
+        enableSorting: false,
+        meta: {
+          className: "w-[12%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={warehouseFilter}
+              onValueChange={setWarehouseFilter}
+              options={warehouses.map((w) => ({ label: w.name, value: w.id }))}
+              title="Depo Seç"
+            />
+          )
+        },
+        cell: ({ row }) => (
+          <span className="block truncate text-muted-foreground text-xs text-center">{row.original.warehouseName}</span>
+        )
       },
       {
         id: "status",
         accessorKey: "status",
         header: "Durum",
         enableSorting: false,
-        meta: { className: "w-[12%] text-center" },
+        meta: { 
+          className: "w-[12%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={status}
+              onValueChange={(v) => setStatus(v as any)}
+              options={STATUS_OPTIONS.map((s) => ({ label: PURCHASE_STATUS_LABELS[s], value: s }))}
+              title="Durum"
+            />
+          )
+        },
         cell: ({ row }) => (
           <div className="flex justify-center">
             <PurchaseStatusBadge status={row.original.status} />
           </div>
         ),
+      },
+      {
+        id: "priority",
+        accessorKey: "priority",
+        header: "Öncelik",
+        enableSorting: false,
+        meta: { 
+          className: "w-[8%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={priorityFilter}
+              onValueChange={(v) => setPriorityFilter(v as any)}
+              options={[
+                { label: "Yüksek", value: "high" },
+                { label: "Orta", value: "medium" },
+                { label: "Düşük", value: "low" }
+              ]}
+              title="Öncelik"
+            />
+          )
+        },
+        cell: ({ row }) => {
+          const p = row.original.priority;
+          const label = p === "high" ? "Yüksek" : p === "medium" ? "Orta" : "Düşük";
+          const variant = p === "high" ? "destructive" : p === "medium" ? "secondary" : "outline";
+          return (
+            <div className="flex justify-center">
+              <Badge variant={variant} className="capitalize">
+                {label}
+              </Badge>
+            </div>
+          );
+        },
       },
       {
         id: "itemCount",
@@ -598,9 +733,9 @@ export function PurchaseOrdersClient() {
         id: "total",
         accessorKey: "total",
         header: "Toplam",
-        meta: { className: "w-[12%] text-right" },
+        meta: { className: "w-[12%] text-center" },
         cell: ({ row }) => (
-          <span className="tabular-nums font-semibold">
+          <span className="tabular-nums font-semibold flex justify-center">
             {formatCurrency(row.original.total / rate, currency, 1, true)}
           </span>
         ),
@@ -609,14 +744,14 @@ export function PurchaseOrdersClient() {
         id: "expectedAt",
         accessorKey: "expectedAt",
         header: "Beklenen Teslim",
-        meta: { className: "w-[12%] text-right" },
+        meta: { className: "w-[10%] text-center" },
         cell: ({ row }) => {
           const overdue =
             row.original.status !== "received" &&
             row.original.status !== "cancelled" &&
             row.original.expectedAt < new Date().toISOString();
           return (
-            <span className={overdue ? "tabular-nums font-medium text-status-critical" : "tabular-nums text-muted-foreground"}>
+            <span className={cn(overdue ? "tabular-nums font-medium text-status-critical" : "tabular-nums text-muted-foreground", "flex justify-center")}>
               {formatDate(row.original.expectedAt)}
             </span>
           );
@@ -646,13 +781,36 @@ export function PurchaseOrdersClient() {
                 </DropdownMenuItem>
                 <Can permission="purchase.manage">
                   <>
-                    {(actions.canMarkOrdered || actions.canEdit || actions.canReceive || actions.canCancel || actions.canDelete) && (
-                      <DropdownMenuSeparator />
-                    )}
+                    {(actions.canMarkOrdered ||
+                      actions.canRequestApproval ||
+                      actions.canApprove ||
+                      actions.canReject ||
+                      actions.canEdit ||
+                      actions.canReceive ||
+                      actions.canCancel ||
+                      actions.canDelete) && <DropdownMenuSeparator />}
                     {actions.canMarkOrdered && (
                       <DropdownMenuItem onClick={() => handleMarkOrdered(po)}>
                         <Send className="size-4" />
                         Siparişi Gönder
+                      </DropdownMenuItem>
+                    )}
+                    {actions.canRequestApproval && (
+                      <DropdownMenuItem onClick={() => handleRequestApproval(po)}>
+                        <Hourglass className="size-4" />
+                        Onaya Gönder
+                      </DropdownMenuItem>
+                    )}
+                    {actions.canApprove && (
+                      <DropdownMenuItem onClick={() => handleApprove(po)}>
+                        <BadgeCheck className="size-4" />
+                        Siparişi Onayla
+                      </DropdownMenuItem>
+                    )}
+                    {actions.canReject && (
+                      <DropdownMenuItem onClick={() => handleReject(po)}>
+                        <Undo2 className="size-4" />
+                        Siparişi Reddet
                       </DropdownMenuItem>
                     )}
                     {actions.canEdit && (
@@ -719,6 +877,16 @@ export function PurchaseOrdersClient() {
               <Can permission="purchase.manage">
                 <Button
                   size="sm"
+                  disabled={(stats?.draftCount ?? 0) + (stats?.pendingApprovalCount ?? 0) === 0}
+                  onClick={() => setQuoteDialogOpen(true)}
+                >
+                  <FileSignature className="size-4" />
+                  Teklif Formu
+                </Button>
+              </Can>
+              <Can permission="purchase.manage">
+                <Button
+                  size="sm"
                   onClick={() => {
                     setEditingOrder(undefined);
                     setInitialItems(undefined);
@@ -763,6 +931,10 @@ export function PurchaseOrdersClient() {
               <Truck className="size-4" />
               Tedarikçi Karnesi
             </TabsTrigger>
+            <TabsTrigger value="quotes">
+              <FileSignature className="size-4" />
+              Teklifler ve Siparişler
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="orders">
@@ -797,82 +969,12 @@ export function PurchaseOrdersClient() {
                           className="h-9 pl-8"
                         />
                       </div>
-                      <Select value={status} onValueChange={(v) => setStatus((v as PurchaseOrderStatus | "all") ?? "all")}>
-                        <SelectTrigger className="h-9 w-fit min-w-[160px]">
-                          <SelectValue>{status === "all" ? "Tüm Durumlar" : PURCHASE_STATUS_LABELS[status]}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tüm Durumlar</SelectItem>
-                          {STATUS_OPTIONS.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {PURCHASE_STATUS_LABELS[s]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={supplierId} onValueChange={(v) => setSupplierId((v as string) ?? "all")}>
-                        <SelectTrigger className="h-9 w-fit min-w-[180px]">
-                          <SelectValue>
-                            {supplierId === "all" ? "Tüm Tedarikçiler" : suppliers.find((s) => s.id === supplierId)?.name}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tüm Tedarikçiler</SelectItem>
-                          {suppliers.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={warehouseFilter} onValueChange={(v) => setWarehouseFilter((v as string) ?? "all")}>
-                        <SelectTrigger className="h-9 w-fit min-w-[170px]">
-                          <SelectValue>
-                            {warehouseFilter === "all" ? "Tüm Depolar" : warehouses.find((w) => w.id === warehouseFilter)?.name}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tüm Depolar</SelectItem>
-                          {warehouses.map((w) => (
-                            <SelectItem key={w.id} value={w.id}>
-                              {w.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        size="sm"
-                        variant={overdueOnly ? "secondary" : "outline"}
-                        onClick={() => setOverdueOnly((v) => !v)}
-                        className="h-9 gap-1.5"
-                      >
-                        <Clock className="size-3.5" />
-                        Sadece Gecikenler
-                      </Button>
                       {isFiltered && (
                         <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
                           <X className="size-4" />
-                          Filtreleri Temizle
+                          Temizle
                         </Button>
                       )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger
-                          render={
-                            <Button variant="outline" size="sm" disabled={exportGuard.pending} className="ml-auto shrink-0">
-                              {exportGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
-                              Dışa Aktar
-                            </Button>
-                          }
-                        />
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleExport("excel")}>
-                            <FileSpreadsheet className="size-4 text-status-good" /> Excel (.xlsx)
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleExport("pdf")}>
-                            <FileText className="size-4 text-status-critical" /> PDF (.pdf)
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
                     </div>
                   </CardContent>
                 </Card>
@@ -906,16 +1008,6 @@ export function PurchaseOrdersClient() {
                     >
                       <Ban className="size-3.5" />
                       Toplu İptal
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleExport("excel", true)}
-                      disabled={exportGuard.pending}
-                      className="h-8 gap-1 text-xs"
-                    >
-                      <Download className="size-3.5" />
-                      Dışa Aktar
                     </Button>
                     <Button
                       size="sm"
@@ -978,6 +1070,10 @@ export function PurchaseOrdersClient() {
               rate={rate}
             />
           </TabsContent>
+
+          <TabsContent value="quotes">
+            <QuotesAndOrdersPanel refreshKey={quoteRefreshKey} />
+          </TabsContent>
         </Tabs>
 
         <PurchaseOrderFormSheet
@@ -1008,6 +1104,28 @@ export function PurchaseOrdersClient() {
           suggestions={suggestions}
           warehouses={warehouses}
           onConfirm={handleConfirmReplenishOrder}
+        />
+
+        <QuoteRequestDialog
+          open={quoteDialogOpen}
+          onOpenChange={setQuoteDialogOpen}
+          suppliers={suppliers}
+          onContinue={(selection) => {
+            setQuoteSelection(selection);
+            setQuoteDialogOpen(false);
+            setQuoteFormOpen(true);
+          }}
+        />
+
+        <QuoteRequestFormSheet
+          open={quoteFormOpen}
+          onOpenChange={setQuoteFormOpen}
+          supplier={suppliers.find((s) => s.id === quoteSelection?.supplierId)}
+          purchaseOrderIds={quoteSelection?.purchaseOrderIds ?? []}
+          onCreated={() => {
+            refetchAll();
+            setQuoteRefreshKey((k) => k + 1);
+          }}
         />
 
         <AlertDialog open={Boolean(cancelling)} onOpenChange={(open) => !open && setCancelling(undefined)}>

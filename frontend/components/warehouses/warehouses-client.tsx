@@ -12,6 +12,7 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
+import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -491,42 +492,6 @@ export function WarehousesClient() {
                   className="pl-8 text-xs h-9"
                 />
               </div>
-
-              <Select value={selectedWarehouseId} onValueChange={(val) => setSelectedWarehouseId(val || "all")}>
-                <SelectTrigger className="w-full sm:w-fit sm:min-w-[180px] sm:max-w-[320px] text-micro sm:text-xs h-9">
-                  <SelectValue>
-                    {selectedWarehouseId === "all"
-                      ? "Tüm Depolar"
-                      : warehouses?.find((w) => w.id === selectedWarehouseId)?.name || "Depo Seçiniz"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Depolar</SelectItem>
-                  {warehouses?.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={selectedCategoryId} onValueChange={(val) => setSelectedCategoryId(val || "all")}>
-                <SelectTrigger className="w-full sm:w-fit sm:min-w-[180px] sm:max-w-[320px] text-micro sm:text-xs h-9">
-                  <SelectValue>
-                    {selectedCategoryId === "all"
-                      ? "Tüm Kategoriler"
-                      : categories?.find((c) => c.id === selectedCategoryId)?.name || "Kategori Seçiniz"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tüm Kategoriler</SelectItem>
-                  {categories?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </CardHeader>
@@ -548,7 +513,17 @@ export function WarehousesClient() {
             <TableHeader>
               <TableRow className="border-y border-border/60 bg-muted/40 hover:bg-muted/40">
                 <TableHead style={{ width: "22%" }} className="text-left">Ürün &amp; Kod (SKU)</TableHead>
-                <TableHead style={{ width: "7%" }} className="text-center">Kategori</TableHead>
+                <TableHead style={{ width: "7%" }} className="text-center">
+                  <div className="flex justify-center items-center gap-1">
+                    Kategori
+                    <DataTableColumnFilter
+                      value={selectedCategoryId}
+                      onValueChange={setSelectedCategoryId}
+                      options={categories?.map(c => ({ label: c.name, value: c.id })) || []}
+                      title="Kategori Seç"
+                    />
+                  </div>
+                </TableHead>
                 {warehouses?.map((w) => {
                   const isSelected = selectedWarehouseId === w.id;
                   return (
@@ -565,7 +540,17 @@ export function WarehousesClient() {
                     </TableHead>
                   );
                 })}
-                <TableHead style={{ width: "10%" }} className="text-center">Toplam Stok</TableHead>
+                <TableHead style={{ width: "10%" }} className="text-center">
+                  <div className="flex justify-center items-center gap-1">
+                    Toplam Stok
+                    <DataTableColumnFilter
+                      value={selectedWarehouseId}
+                      onValueChange={setSelectedWarehouseId}
+                      options={warehouses?.map(w => ({ label: w.name, value: w.id })) || []}
+                      title="Depo Vurgula"
+                    />
+                  </div>
+                </TableHead>
                 <TableHead style={{ width: "10%" }} className="text-center">Stok Değeri</TableHead>
                 <TableHead style={{ width: "9%" }} className="pr-5 text-center">İşlem</TableHead>
               </TableRow>

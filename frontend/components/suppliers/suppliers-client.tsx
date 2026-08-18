@@ -213,7 +213,7 @@ export function SuppliersClient() {
         header: "Yetkili",
         meta: { className: "w-[12%] text-center" },
         cell: ({ row }) => (
-          <span className="block truncate" title={row.original.contactName}>{row.original.contactName}</span>
+          <span className="block truncate text-center" title={row.original.contactName}>{row.original.contactName}</span>
         ),
       },
       {
@@ -222,7 +222,7 @@ export function SuppliersClient() {
         header: "E-posta",
         meta: { className: "w-[15%] text-center" },
         cell: ({ row }) => (
-          <span className="block truncate" title={row.original.email}>{row.original.email}</span>
+          <span className="block truncate text-center" title={row.original.email}>{row.original.email}</span>
         ),
       },
       {
@@ -231,7 +231,7 @@ export function SuppliersClient() {
         header: "Telefon",
         meta: { className: "w-[11%] text-center" },
         cell: ({ row }) => (
-          <span className="block truncate" title={row.original.phone}>{row.original.phone}</span>
+          <span className="block truncate text-center" title={row.original.phone}>{row.original.phone}</span>
         ),
       },
       {
@@ -240,7 +240,7 @@ export function SuppliersClient() {
         header: "Şehir",
         meta: { className: "w-[10%] text-center" },
         cell: ({ row }) => (
-          <span className="block truncate" title={row.original.city}>{row.original.city}</span>
+          <span className="block truncate text-center" title={row.original.city}>{row.original.city}</span>
         ),
       },
       {
@@ -256,9 +256,9 @@ export function SuppliersClient() {
         meta: { className: "w-[11%] text-center" },
         cell: ({ row }) => {
           const sc = row.original.scorecard;
-          if (!sc || sc.openValue === 0) return <span className="text-sm text-muted-foreground">—</span>;
+          if (!sc || sc.openValue === 0) return <span className="block text-center text-sm text-muted-foreground">—</span>;
           return (
-            <span className="tabular-nums font-medium text-foreground">
+            <span className="block text-center tabular-nums font-medium text-foreground">
               {formatCurrency(sc.openValue / rate, currency, 1, true)}
             </span>
           );
@@ -270,8 +270,8 @@ export function SuppliersClient() {
         meta: { className: "w-[11%] text-center" },
         cell: ({ row }) => {
           const percent = row.original.scorecard?.onTimeRatePercent ?? null;
-          if (percent === null) return <span className="text-sm text-muted-foreground">—</span>;
-          return <span className={cn("tabular-nums font-semibold", performanceTextClass(percent))}>%{percent}</span>;
+          if (percent === null) return <span className="block text-center text-sm text-muted-foreground">—</span>;
+          return <span className={cn("block text-center tabular-nums font-semibold", performanceTextClass(percent))}>%{percent}</span>;
         },
       },
       {
@@ -390,7 +390,7 @@ export function SuppliersClient() {
                   {isFiltered && (
                     <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
                       <X className="size-4" />
-                      Filtreleri Temizle
+                      Temizle
                     </Button>
                   )}
                 </div>

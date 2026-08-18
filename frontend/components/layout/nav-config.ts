@@ -48,7 +48,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Operasyon",
     items: [
       {
-        label: "Stok Hareketleri",
+        label: "Envanter Hareketleri",
         href: "/stok/hareketler",
         icon: History,
         permission: "stock.in",

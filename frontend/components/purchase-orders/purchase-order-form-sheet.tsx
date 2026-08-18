@@ -6,14 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetFooter,
-} from "@/components/ui/sheet";
+import { SteppedFormDialog } from "@/components/common/stepped-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,11 +35,14 @@ const itemSchema = z.object({
   unitPrice: z.coerce.number().nonnegative("Birim fiyat negatif olamaz."),
 });
 
+const PRIORITIES = ["low", "medium", "high"] as const;
+
 const schema = z
   .object({
     supplierId: z.string().min(1, "Tedarikçi seçin."),
     warehouseId: z.string().min(1, "Teslim deposu seçin."),
     expectedAt: z.string().min(1, "Beklenen teslim tarihi gerekli."),
+    priority: z.enum(PRIORITIES),
     notes: z.string().optional(),
     items: z.array(itemSchema).min(1, "En az bir kalem ekleyin."),
   })
@@ -111,6 +107,7 @@ export function PurchaseOrderFormSheet({
       supplierId: "",
       warehouseId: "",
       expectedAt: "",
+      priority: "medium",
       notes: "",
       items: [EMPTY_ITEM],
     },
@@ -125,6 +122,7 @@ export function PurchaseOrderFormSheet({
         supplierId: order.supplierId,
         warehouseId: order.warehouseId,
         expectedAt: toDateInputValue(order.expectedAt),
+        priority: order.priority || "medium",
         notes: order.notes ?? "",
         items: order.items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
       });
@@ -133,6 +131,7 @@ export function PurchaseOrderFormSheet({
         supplierId: "",
         warehouseId: "",
         expectedAt: "",
+        priority: "medium",
         notes: "",
         items: initialItems && initialItems.length > 0 ? initialItems : [EMPTY_ITEM],
       });
@@ -156,147 +155,201 @@ export function PurchaseOrderFormSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-2xl overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>{order ? "Siparişi Düzenle" : "Yeni Satın Alma Siparişi"}</SheetTitle>
-          <SheetDescription>
-            {order ? "Sipariş bilgilerini güncelleyin." : "Bir tedarikçiye birden çok kalem içeren bir sipariş oluşturun."}
-          </SheetDescription>
-        </SheetHeader>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 space-y-4 overflow-y-auto px-4 pb-4">
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="supplierId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tedarikçi</FormLabel>
-                    <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue>
-                            {field.value ? suppliers.find((s) => s.id === field.value)?.name : "Tedarikçi seçin"}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {suppliers.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="warehouseId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Teslim Deposu</FormLabel>
-                    <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue>
-                            {field.value ? warehouses.find((w) => w.id === field.value)?.name : "Depo seçin"}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {warehouses.map((w) => (
-                          <SelectItem key={w.id} value={w.id}>
-                            {w.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="expectedAt"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Beklenen Teslim Tarihi</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <FormLabel>Kalemler</FormLabel>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => append({ ...EMPTY_ITEM })}
-                >
-                  <Plus className="size-4" />
-                  Kalem Ekle
-                </Button>
+    <Form {...form}>
+      <SteppedFormDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        title={order ? "Siparişi Düzenle" : "Yeni Satın Alma Siparişi"}
+        description={order ? "Sipariş bilgilerini güncelleyin." : "Bir tedarikçiye birden çok kalem içeren bir sipariş oluşturun."}
+        submitLabel={order ? "Değişiklikleri Kaydet" : "Siparişi Oluştur"}
+        isSubmitting={pending}
+        onSubmit={form.handleSubmit(onSubmit)}
+        steps={[
+          {
+            id: "basics",
+            label: "Temel Bilgiler",
+            onValidate: () => form.trigger(["supplierId", "warehouseId", "expectedAt", "priority"]),
+            content: (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="supplierId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tedarikçi</FormLabel>
+                        <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {field.value ? suppliers.find((s) => s.id === field.value)?.name : "Tedarikçi seçin"}
+                              </SelectValue>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {suppliers.map((s) => (
+                              <SelectItem key={s.id} value={s.id}>
+                                {s.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="warehouseId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Teslim Deposu</FormLabel>
+                        <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {field.value ? warehouses.find((w) => w.id === field.value)?.name : "Depo seçin"}
+                              </SelectValue>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {warehouses.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>
+                                {w.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="expectedAt"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Beklenen Teslim Tarihi</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="priority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Öncelik</FormLabel>
+                        <Select value={field.value as string} onValueChange={field.onChange}>
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue>
+                                {field.value === "low" ? "Düşük" : field.value === "medium" ? "Orta" : field.value === "high" ? "Yüksek" : "Öncelik seçin"}
+                              </SelectValue>
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="low">Düşük</SelectItem>
+                            <SelectItem value="medium">Orta</SelectItem>
+                            <SelectItem value="high">Yüksek</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </div>
-
-              {fields.map((field, index) => (
-                <PurchaseOrderItemRow
-                  key={field.id}
+            ),
+          },
+          {
+            id: "items",
+            label: "Sipariş Kalemleri",
+            onValidate: () => form.trigger(["items"]),
+            content: (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium">Kalem Listesi</h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => append({ ...EMPTY_ITEM })}
+                  >
+                    <Plus className="size-4 mr-2" />
+                    Kalem Ekle
+                  </Button>
+                </div>
+                <div className="space-y-4">
+                  {fields.map((field, index) => (
+                    <PurchaseOrderItemRow
+                      key={field.id}
+                      control={form.control}
+                      setValue={form.setValue}
+                      index={index}
+                      currency={currency}
+                      rate={rate}
+                      onRemove={() => remove(index)}
+                      removeDisabled={fields.length === 1}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3 mt-4">
+                  <span className="text-sm font-medium text-muted-foreground">Genel Toplam</span>
+                  <span className="text-lg font-bold tabular-nums text-foreground">
+                    {formatCurrency(total / rate, currency, 1, true)}
+                  </span>
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "review",
+            label: "Notlar & Onay",
+            content: (
+              <div className="space-y-4">
+                <FormField
                   control={form.control}
-                  setValue={form.setValue}
-                  index={index}
-                  currency={currency}
-                  rate={rate}
-                  onRemove={() => remove(index)}
-                  removeDisabled={fields.length === 1}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notlar (Opsiyonel)</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          rows={4} 
+                          placeholder="Siparişe özel eklemek istediğiniz notlar..." 
+                          {...field} 
+                          value={field.value ?? ""} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2.5">
-              <span className="text-sm font-medium text-muted-foreground">Genel Toplam</span>
-              <span className="text-sm font-semibold tabular-nums text-foreground">
-                {formatCurrency(total / rate, currency, 1, true)}
-              </span>
-            </div>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notlar (opsiyonel)</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} {...field} value={field.value ?? ""} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <SheetFooter className="flex-row justify-end gap-2 px-0">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Vazgeç
-              </Button>
-              <SubmitButton type="submit" pending={pending}>
-                {order ? "Değişiklikleri Kaydet" : "Siparişi Oluştur"}
-              </SubmitButton>
-            </SheetFooter>
-          </form>
-        </Form>
-      </SheetContent>
-    </Sheet>
+                
+                {/* Summary Box */}
+                <div className="rounded-xl border border-border/50 bg-muted/30 p-4 mt-6 space-y-3 text-sm">
+                  <h4 className="font-semibold text-foreground mb-1">Sipariş Özeti</h4>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Toplam Kalem:</span>
+                    <span className="font-medium">{fields.length} çeşit ürün</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Sipariş Tutarı:</span>
+                    <span className="font-medium text-primary">
+                      {formatCurrency(total / rate, currency, 1, true)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ),
+          },
+        ]}
+      />
+    </Form>
   );
 }
 

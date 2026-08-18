@@ -53,6 +53,8 @@ interface Crumb {
  * page's own `PageHeader` already carries it.
  */
 function resolveCrumbs(pathname: string): Crumb[] {
+  const normalizedPath = pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
       const candidates: { item: NavItem; parent?: NavItem }[] = [
@@ -60,9 +62,10 @@ function resolveCrumbs(pathname: string): Crumb[] {
         ...(item.children ?? []).map((child) => ({ item: child, parent: item })),
       ];
 
-      for (const { item: node, parent } of candidates) {
-        const isExact = pathname === node.href;
-        const isChildRoute = pathname.startsWith(`${node.href}/`);
+      // Reverse candidates so that deeper children are matched first if they share prefixes
+      for (const { item: node, parent } of candidates.reverse()) {
+        const isExact = normalizedPath === node.href;
+        const isChildRoute = normalizedPath.startsWith(`${node.href}/`);
         if (!isExact && !isChildRoute) continue;
 
         const trail: Crumb[] = [{ label: section.label, href: node.href }];

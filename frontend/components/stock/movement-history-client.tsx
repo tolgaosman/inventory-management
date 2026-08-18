@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Section, SectionStack } from "@/components/common/section";
 import { DataTable } from "@/components/data-table/data-table";
+import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import { MovementTypeBadge } from "@/components/common/status-badge";
 import { MovementCommandHero } from "@/components/stock/movement-command-hero";
@@ -241,7 +242,17 @@ export function MovementHistoryClient() {
       {
         id: "type",
         header: "Tip",
-        meta: { className: "w-[11%] whitespace-nowrap px-4 text-center" },
+        meta: { 
+          className: "w-[11%] whitespace-nowrap px-4 text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={type}
+              onValueChange={setType}
+              options={(Object.keys(MOVEMENT_TYPE_LABELS) as MovementType[]).map((t) => ({ label: MOVEMENT_TYPE_LABELS[t], value: t }))}
+              title="Hareket Tipi"
+            />
+          )
+        },
         cell: ({ row }) => <div className="flex justify-center"><MovementTypeBadge type={row.original.type} /></div>,
       },
       {
@@ -269,16 +280,26 @@ export function MovementHistoryClient() {
       {
         id: "warehouse",
         header: "Depo",
-        meta: { className: "w-[19%] text-center" },
+        meta: { 
+          className: "w-[19%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={warehouseId}
+              onValueChange={setWarehouseId}
+              options={warehouses.map((w) => ({ label: w.name, value: w.id }))}
+              title="Depo Seç"
+            />
+          )
+        },
         cell: ({ row }) => {
           const m = row.original;
           const sourceName = warehouses.find((w) => w.id === m.warehouseId)?.name ?? "-";
           if (m.type !== "transfer") {
-            return <span className="block truncate" title={sourceName}>{sourceName}</span>;
+            return <span className="block truncate text-center" title={sourceName}>{sourceName}</span>;
           }
           const targetName = warehouses.find((w) => w.id === m.targetWarehouseId)?.name ?? "-";
           return (
-            <span className="block truncate" title={`${sourceName} → ${targetName}`}>
+            <span className="block truncate text-center" title={`${sourceName} → ${targetName}`}>
               {sourceName} <span className="text-muted-foreground">→</span> {targetName}
             </span>
           );
@@ -301,19 +322,39 @@ export function MovementHistoryClient() {
       {
         id: "reason",
         header: "Sebep",
-        meta: { className: "w-[14%] text-center" },
+        meta: { 
+          className: "w-[14%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={reason}
+              onValueChange={setReason}
+              options={(Object.keys(MOVEMENT_REASON_LABELS) as MovementReason[]).map((r) => ({ label: MOVEMENT_REASON_LABELS[r], value: r }))}
+              title="Sebep Seç"
+            />
+          )
+        },
         cell: ({ row }) => {
           const label = MOVEMENT_REASON_LABELS[row.original.reason];
-          return <span className="block truncate" title={label}>{label}</span>;
+          return <span className="block truncate text-center" title={label}>{label}</span>;
         },
       },
       {
         id: "user",
         header: "Kullanıcı",
-        meta: { className: "w-[12%] text-center" },
+        meta: { 
+          className: "w-[12%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={userId}
+              onValueChange={setUserId}
+              options={users.map((u) => ({ label: u.name, value: u.id }))}
+              title="Kullanıcı Seç"
+            />
+          )
+        },
         cell: ({ row }) => {
           const userName = users.find((u) => u.id === row.original.userId)?.name ?? "-";
-          return <span className="block truncate" title={userName}>{userName}</span>;
+          return <span className="block truncate text-center" title={userName}>{userName}</span>;
         },
       },
       {
@@ -394,82 +435,18 @@ export function MovementHistoryClient() {
                 {isFiltered && (
                   <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
                     <X className="size-4" />
-                    Filtreleri Temizle
+                    Temizle
                   </Button>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-                <Select value={type} onValueChange={(v) => setType((v as string) ?? "all")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {type === "all" ? "Tüm Tipler" : MOVEMENT_TYPE_LABELS[type as MovementType]}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Tipler</SelectItem>
-                    {(Object.keys(MOVEMENT_TYPE_LABELS) as MovementType[]).map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {MOVEMENT_TYPE_LABELS[t]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={reason} onValueChange={(v) => setReason((v as string) ?? "all")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {reason === "all" ? "Tüm Sebepler" : MOVEMENT_REASON_LABELS[reason as MovementReason]}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Sebepler</SelectItem>
-                    {(Object.keys(MOVEMENT_REASON_LABELS) as MovementReason[]).map((r) => (
-                      <SelectItem key={r} value={r}>
-                        {MOVEMENT_REASON_LABELS[r]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={warehouseId} onValueChange={(v) => setWarehouseId((v as string) ?? "all")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {warehouseId === "all" ? "Tüm Depolar" : warehouses.find((w) => w.id === warehouseId)?.name || "Depo"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Depolar</SelectItem>
-                    {warehouses.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={userId} onValueChange={(v) => setUserId((v as string) ?? "all")}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {userId === "all" ? "Tüm Kullanıcılar" : users.find((u) => u.id === userId)?.name || "Kullanıcı"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Kullanıcılar</SelectItem>
-                    {users.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
+              <div className="flex flex-wrap items-center gap-3">
                 <Input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                   max={dateTo || undefined}
-                  className="h-9"
+                  className="h-9 w-fit"
                   aria-label="Başlangıç tarihi"
                 />
                 <Input
@@ -477,7 +454,7 @@ export function MovementHistoryClient() {
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   min={dateFrom || undefined}
-                  className="h-9"
+                  className="h-9 w-fit"
                   aria-label="Bitiş tarihi"
                 />
               </div>

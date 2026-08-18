@@ -5,6 +5,7 @@ import type { Role } from "@/lib/types";
 import type { DateRangePreset } from "@/lib/api/dashboard";
 import { TIMEZONE_OPTIONS } from "@/lib/constants";
 import { configureFormatting } from "@/lib/format";
+import { applyLanguage, readLanguageCookie, SOURCE_LANGUAGE, type LanguageCode } from "@/lib/translate";
 
 export interface CompanySettings {
   companyName: string;
@@ -31,6 +32,7 @@ interface PersistedSettings {
   userProfile: UserProfileSettings;
   notifications: NotificationSettings;
   timezone: string;
+  language: LanguageCode;
   role: Role;
   showKurus: boolean;
   defaultRange: DateRangePreset;
@@ -41,6 +43,7 @@ interface SettingsContextValue extends PersistedSettings {
   updateUserProfile: (newProfile: Partial<UserProfileSettings>) => void;
   updateNotifications: (newNotifications: Partial<NotificationSettings>) => void;
   setTimezone: (newTz: string) => void;
+  setLanguage: (code: LanguageCode) => void;
   setRole: (role: Role) => void;
   setShowKurus: (value: boolean) => void;
   setDefaultRange: (range: DateRangePreset) => void;
@@ -73,6 +76,7 @@ const DEFAULTS: PersistedSettings = {
   userProfile: DEFAULT_PROFILE,
   notifications: DEFAULT_NOTIFICATIONS,
   timezone: "europe-istanbul",
+  language: SOURCE_LANGUAGE,
   role: "yonetici",
   showKurus: false,
   defaultRange: "son-6-ay",
@@ -89,6 +93,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [userProfile, setUserProfile] = useState<UserProfileSettings>(DEFAULTS.userProfile);
   const [notifications, setNotifications] = useState<NotificationSettings>(DEFAULTS.notifications);
   const [timezone, setTimezoneState] = useState<string>(DEFAULTS.timezone);
+  const [language, setLanguageState] = useState<LanguageCode>(DEFAULTS.language);
   const [role, setRoleState] = useState<Role>(DEFAULTS.role);
   const [showKurus, setShowKurusState] = useState<boolean>(DEFAULTS.showKurus);
   const [defaultRange, setDefaultRangeState] = useState<DateRangePreset>(DEFAULTS.defaultRange);
@@ -106,6 +111,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           userProfile: { ...DEFAULTS.userProfile, ...parsed.userProfile },
           notifications: { ...DEFAULTS.notifications, ...parsed.notifications },
           timezone: parsed.timezone ?? DEFAULTS.timezone,
+          language: DEFAULTS.language,
           role: parsed.role ?? DEFAULTS.role,
           showKurus: parsed.showKurus ?? DEFAULTS.showKurus,
           defaultRange: parsed.defaultRange ?? DEFAULTS.defaultRange,
@@ -122,6 +128,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error("Failed to load settings from localStorage", e);
     }
+    // Aktif dilin tek kaynağı Google Translate'in `googtrans` çerezi.
+    setLanguageState(readLanguageCookie());
     configureFormatting({ timeZone: timezoneToIana(loaded.timezone), tryDecimals: loaded.showKurus });
   }, []);
 
@@ -138,6 +146,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     userProfile,
     notifications,
     timezone,
+    language,
     role,
     showKurus,
     defaultRange,
@@ -173,6 +182,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     configureFormatting({ timeZone: timezoneToIana(newTz) });
   };
 
+  const setLanguage = (code: LanguageCode) => {
+    setLanguageState(code);
+    applyLanguage(code);
+  };
+
   const setRole = (newRole: Role) => {
     setRoleState(newRole);
     saveAll({ ...current(), role: newRole });
@@ -196,6 +210,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         userProfile,
         notifications,
         timezone,
+        language,
         role,
         showKurus,
         defaultRange,
@@ -203,6 +218,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updateUserProfile,
         updateNotifications,
         setTimezone,
+        setLanguage,
         setRole,
         setShowKurus,
         setDefaultRange,

@@ -23,6 +23,7 @@ export const MOVEMENT_REASON_LABELS: Record<MovementReason, string> = {
 
 export const PURCHASE_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   draft: "Taslak",
+  pending_approval: "Onay Bekliyor",
   ordered: "Sipariş Edildi",
   partially_received: "Kısmen Teslim Alındı",
   received: "Teslim Alındı",
@@ -44,7 +45,7 @@ export const TIMEZONE_OPTIONS: { value: string; label: string; iana: string }[] 
 
 /** Shared by the Panel export modal and the Ayarlar "default export sections" preference. */
 export const REPORT_SECTIONS = [
-  { id: "all", label: "Tüm Dashboard Özeti", desc: "KPI metrikleri, kritik stoklar, stok hareketleri, depolar ve popüler ürünler." },
+  { id: "all", label: "Tüm Panel Özeti", desc: "KPI metrikleri, kritik stoklar, stok hareketleri, depolar ve popüler ürünler." },
   { id: "kpi", label: "KPI Metrikleri & Özet", desc: "Stok, satın alma ve envanter üst panel göstergeleri." },
   { id: "critical", label: "Kritik Stok Uyarıları", desc: "Minimum stok seviyesinin altındaki acil ürünler." },
   { id: "movements", label: "Son Stok Hareketleri", desc: "Panelde yer alan son stok giriş, çıkış ve transfer kayıtları." },

@@ -17,6 +17,9 @@ import {
   Wallet,
   Boxes,
   Gauge,
+  Hourglass,
+  BadgeCheck,
+  Undo2,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { ErrorState } from "@/components/common/error-state";
@@ -54,6 +57,9 @@ import {
   updatePurchaseOrder,
   deletePurchaseOrder,
   markPurchaseOrderOrdered,
+  requestPurchaseOrderApproval,
+  approvePurchaseOrder,
+  rejectPurchaseOrderApproval,
   cancelPurchaseOrder,
 } from "@/lib/api/purchase-orders";
 import { ApiError } from "@/lib/api/client";
@@ -105,6 +111,42 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
       refetch();
     } catch (err) {
       toast.error("Sipariş gönderilemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    }
+  }
+
+  async function handleRequestApproval() {
+    try {
+      await requestPurchaseOrderApproval(id);
+      toast.success("Sipariş onaya gönderildi.");
+      refetch();
+    } catch (err) {
+      toast.error("Sipariş onaya gönderilemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    }
+  }
+
+  async function handleApprove() {
+    try {
+      await approvePurchaseOrder(id);
+      toast.success("Sipariş onaylandı.");
+      refetch();
+    } catch (err) {
+      toast.error("Sipariş onaylanamadı", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    }
+  }
+
+  async function handleReject() {
+    try {
+      await rejectPurchaseOrderApproval(id);
+      toast.success("Onay reddedildi.");
+      refetch();
+    } catch (err) {
+      toast.error("Onay reddedilemedi", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
       });
     }
@@ -163,10 +205,11 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
   const receivePercent = orderedTotal > 0 ? Math.round((receivedTotal / orderedTotal) * 100) : 0;
   const pendingUnits = orderedTotal - receivedTotal;
 
-  const { canEdit, canDelete, canMarkOrdered, canReceive, canCancel } = getAvailableActions({
-    status: view.status,
-    hasReceivedProgress: receivedTotal > 0,
-  });
+  const { canEdit, canDelete, canMarkOrdered, canRequestApproval, canApprove, canReject, canReceive, canCancel } =
+    getAvailableActions({
+      status: view.status,
+      hasReceivedProgress: receivedTotal > 0,
+    });
 
   const fields: { icon: typeof Building2; label: string; value: React.ReactNode }[] = [
     { icon: Building2, label: "Tedarikçi", value: <Link href={`/tedarikciler/${view.supplierId}`} className="hover:underline">{view.supplierName}</Link> },
@@ -198,6 +241,24 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                   <Button size="sm" variant="outline" onClick={handleMarkOrdered}>
                     <Send className="size-4" />
                     Siparişi Gönder
+                  </Button>
+                )}
+                {canRequestApproval && (
+                  <Button size="sm" variant="outline" onClick={handleRequestApproval}>
+                    <Hourglass className="size-4" />
+                    Onaya Gönder
+                  </Button>
+                )}
+                {canApprove && (
+                  <Button size="sm" variant="outline" onClick={handleApprove}>
+                    <BadgeCheck className="size-4" />
+                    Siparişi Onayla
+                  </Button>
+                )}
+                {canReject && (
+                  <Button size="sm" variant="outline" onClick={handleReject}>
+                    <Undo2 className="size-4" />
+                    Siparişi Reddet
                   </Button>
                 )}
                 {canReceive && (

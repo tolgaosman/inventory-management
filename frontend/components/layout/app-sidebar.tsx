@@ -4,8 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { SidebarNav } from "./sidebar-nav";
 import { MiniCalendar } from "./mini-calendar";
-import siteLogo from "@/assets/siteLogo.png";
-import siteDarkLogo from "@/assets/siteDarkLogo.png";
+import browserLogo from "@/assets/browserLogo.png";
 
 /** The brand block. Shared by the desktop rail and the mobile drawer. */
 export function SidebarBrand({ onNavigate }: { onNavigate?: () => void }) {
@@ -13,15 +12,13 @@ export function SidebarBrand({ onNavigate }: { onNavigate?: () => void }) {
     <Link
       href="/panel"
       onClick={onNavigate}
-      className="flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border/50"
+      className="flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border/50 gap-1.5"
     >
-      <Image src={siteLogo} alt="Stok Yönetimi" className="h-10 w-auto object-contain dark:hidden" priority />
-      <Image
-        src={siteDarkLogo}
-        alt="Stok Yönetimi"
-        className="hidden h-10 w-auto object-contain dark:block"
-        priority
-      />
+      <Image src={browserLogo} alt="Envanter Yönetimi" className="h-[34px] w-auto object-contain" priority />
+      <div className="text-[0.95rem] font-semibold tracking-tight mt-0.5 whitespace-nowrap">
+        <span className="text-[#0a1629] dark:text-white">Envanter</span>{" "}
+        <span className="text-[#14b8a6]">Yönetimi</span>
+      </div>
     </Link>
   );
 }

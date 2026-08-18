@@ -104,6 +104,10 @@ function setWorksheetFormatting(
           fillColor = { fgColor: { rgb: "F2F2F2" } }; // Output Fill
           fontColor = { rgb: "3F3F3F" }; // Output Text
           isBold = true;
+        } else if (trimmedVal === "Onay Bekliyor") {
+          fillColor = { fgColor: { rgb: "FCE0A5" } }; // Amber Fill
+          fontColor = { rgb: "925B04" }; // Amber Text
+          isBold = true;
         }
       }
 

@@ -370,3 +370,22 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.7);
 }
+/*
+ * Google Translate widget: üstte açtığı çubuğu ve gövdeye eklediği `top`
+ * kaymasını bastırır — dil seçimi uygulamanın kendi ayar sayfasından yapılır.
+ */
+iframe.skiptranslate,
+.goog-te-banner-frame,
+#goog-gt-tt,
+.goog-tooltip {
+  display: none !important;
+}
+
+body {
+  top: 0 !important;
+}
+
+font.goog-text-highlight {
+  background: none !important;
+  box-shadow: none !important;
+}

@@ -5,6 +5,7 @@ import type {
   Product,
   PurchaseOrder,
   PurchaseOrderStatus,
+  QuoteRequest,
   Role,
   StockLevel,
   StockMovement,
@@ -376,6 +377,7 @@ export const stockMovements: StockMovement[] = buildMovements();
 // ---------------------------------------------------------------------------
 const poStatuses: PurchaseOrderStatus[] = [
   "draft",
+  "pending_approval",
   "ordered",
   "partially_received",
   "received",
@@ -424,12 +426,15 @@ function buildPurchaseOrders(): PurchaseOrder[] {
         ? new Date(new Date(expectedAt).getTime() + deliveryJitterDays * 24 * 60 * 60 * 1000).toISOString()
         : undefined;
 
+    const priority = pick(rand, ["low", "medium", "high"] as const);
+
     list.push({
       id: id("po", n),
       code: `NET-PO-${2026}${String(n).padStart(4, "0")}`,
       supplierId: supplier.id,
       warehouseId: warehouse.id,
       status,
+      priority,
       items,
       createdAt,
       expectedAt,
@@ -445,3 +450,8 @@ export const purchaseOrders: PurchaseOrder[] = buildPurchaseOrders();
 export function purchaseOrderTotal(po: PurchaseOrder): number {
   return po.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
 }
+
+// ---------------------------------------------------------------------------
+// Near East Technology - Teklif İstekleri (RFQ)
+// ---------------------------------------------------------------------------
+export const quoteRequests: QuoteRequest[] = [];

@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   Wallet,
   Palette,
+  Globe,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { SubmitButton } from "@/components/common/submit-button";
@@ -40,6 +41,7 @@ import { useSettings } from "@/lib/settings-context";
 import { TIMEZONE_OPTIONS } from "@/lib/constants";
 import { relativeTimeFromNow } from "@/lib/format";
 import { TINTS, type TintName } from "@/lib/tints";
+import { LANGUAGE_OPTIONS } from "@/lib/translate";
 import type { Role } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -245,8 +247,16 @@ function passwordStrength(pw: string): { score: number; label: string; tone: "cr
 }
 
 export default function SettingsPage() {
-  const { userProfile, notifications, timezone, updateUserProfile, updateNotifications, setTimezone } =
-    useSettings();
+  const {
+    userProfile,
+    notifications,
+    timezone,
+    language,
+    updateUserProfile,
+    updateNotifications,
+    setTimezone,
+    setLanguage,
+  } = useSettings();
 
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, rates, isLoading, lastUpdated, refreshRates } = useCurrency();
@@ -395,7 +405,7 @@ export default function SettingsPage() {
             icon={Sun}
             tint="indigo"
             title="Görünüm & Bölge"
-            description="Arayüz teması ve saat dilimi ayarlarını yönetin."
+            description="Arayüz teması, dil ve saat dilimi ayarlarını yönetin."
             hint="Değişiklikler anında uygulanır."
           >
             <div className="space-y-4">
@@ -419,22 +429,63 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              <div className="space-y-1.5 pt-3 pb-1">
-                <Label className="text-xs font-semibold text-foreground">Saat Dilimi</Label>
-                <Select value={timezone} onValueChange={(v) => v && setTimezone(v as string)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue>
-                      {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label ?? "Saat dilimi seçin"}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIMEZONE_OPTIONS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5 notranslate flex flex-col">
+                  <Label className="text-xs font-semibold text-foreground">Arayüz Dili</Label>
+                  {mounted ? (
+                    <div className="grid grid-cols-2 gap-2 flex-1">
+                      {LANGUAGE_OPTIONS.map((l) => (
+                        <OptionCard
+                          compact
+                          key={l.value}
+                          icon={() => (
+                            <img
+                              src={`https://flagcdn.com/w40/${l.value === "en" ? "gb" : l.value}.png`}
+                              srcSet={`https://flagcdn.com/w80/${l.value === "en" ? "gb" : l.value}.png 2x`}
+                              width="24"
+                              alt={l.value.toUpperCase()}
+                              className="rounded-[3px]"
+                            />
+                          )}
+                          label={l.value.toUpperCase()}
+                          tint="teal"
+                          selected={language === l.value}
+                          onClick={() => l.value !== language && setLanguage(l.value)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <Skeleton className="flex-1 min-h-[60px] w-full" />
+                  )}
+                </div>
+
+                <div className="space-y-1.5 flex flex-col">
+                  <Label className="text-xs font-semibold text-foreground">Saat Dilimi</Label>
+                  {mounted ? (
+                    <div className="grid grid-cols-3 gap-2 flex-1">
+                      {TIMEZONE_OPTIONS.map((t) => {
+                        const match = t.label.match(/\((.*?)\)\s+(.*)/);
+                        const sublabel = match ? match[1] : "";
+                        const label = match ? match[2] : t.label;
+
+                        return (
+                          <OptionCard
+                            compact
+                            key={t.value}
+                            icon={Globe}
+                            label={label}
+                            sublabel={sublabel}
+                            tint="indigo"
+                            selected={timezone === t.value}
+                            onClick={() => t.value !== timezone && setTimezone(t.value)}
+                          />
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <Skeleton className="h-full min-h-[68px] w-full" />
+                  )}
+                </div>
               </div>
             </div>
           </SectionCard>

@@ -26,6 +26,8 @@ declare module "@tanstack/react-table" {
     className?: string;
     /** Applied to the header cell only, in addition to `className`. */
     headClassName?: string;
+    /** Rendered next to the column header title, typically a filter dropdown. */
+    filterElement?: React.ReactNode;
   }
 }
 
@@ -103,28 +105,35 @@ export function DataTable<T>({
                         key={header.id}
                         className={cn(meta?.className, meta?.headClassName)}
                       >
-                        {header.isPlaceholder ? null : sortable ? (
-                          <button
-                            type="button"
-                            onClick={header.column.getToggleSortingHandler()}
-                            className={cn(
-                              "inline-flex items-center gap-1 select-none hover:text-foreground",
-                              String(meta?.className ?? "").includes("text-right") && "justify-end w-full",
-                              String(meta?.className ?? "").includes("text-center") && "justify-center w-full",
-                            )}
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {sortDir === "asc" ? (
-                              <ChevronUp className="size-3.5" />
-                            ) : sortDir === "desc" ? (
-                              <ChevronDown className="size-3.5" />
-                            ) : (
-                              <ChevronsUpDown className="size-3.5 opacity-40" />
-                            )}
-                          </button>
-                        ) : (
-                          flexRender(header.column.columnDef.header, header.getContext())
-                        )}
+                        <div className={cn(
+                          "flex items-center gap-1",
+                          String(meta?.className ?? "").includes("text-right") && "justify-end",
+                          String(meta?.className ?? "").includes("text-center") && "justify-center",
+                        )}>
+                          {header.isPlaceholder ? null : sortable ? (
+                            <button
+                              type="button"
+                              onClick={header.column.getToggleSortingHandler()}
+                              className="inline-flex items-center gap-1 select-none hover:text-foreground"
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {sortDir === "asc" ? (
+                                <ChevronUp className="size-3.5" />
+                              ) : sortDir === "desc" ? (
+                                <ChevronDown className="size-3.5" />
+                              ) : (
+                                <ChevronsUpDown className="size-3.5 opacity-40" />
+                              )}
+                            </button>
+                          ) : (
+                            flexRender(header.column.columnDef.header, header.getContext())
+                          )}
+                          {meta?.filterElement && (
+                            <div className="ml-1 inline-flex shrink-0">
+                              {meta.filterElement}
+                            </div>
+                          )}
+                        </div>
                       </TableHead>
                     );
                   })}

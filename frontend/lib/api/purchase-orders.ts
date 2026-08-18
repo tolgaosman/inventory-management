@@ -8,8 +8,7 @@ export interface PurchaseOrderQuery extends PagedQuery {
   status?: PurchaseOrderStatus;
   supplierId?: string;
   warehouseId?: string;
-  /** Only orders past their `expectedAt` that aren't received/cancelled yet. */
-  overdue?: boolean;
+  priority?: "low" | "medium" | "high";
   dateFrom?: string;
   dateTo?: string;
 }
@@ -53,10 +52,7 @@ export async function listPurchaseOrders(query: PurchaseOrderQuery = {}) {
   if (query.warehouseId) rows = rows.filter((r) => r.warehouseId === query.warehouseId);
   if (query.dateFrom) rows = rows.filter((r) => r.createdAt >= query.dateFrom!);
   if (query.dateTo) rows = rows.filter((r) => r.createdAt <= query.dateTo!);
-  if (query.overdue) {
-    const now = new Date().toISOString();
-    rows = rows.filter((r) => isOverdue(r, now));
-  }
+  if (query.priority) rows = rows.filter((r) => r.priority === query.priority);
   rows = rows.filter((r) =>
     matchesSearch([r.code, suppliers.find((s) => s.id === r.supplierId)?.name], query.search),
   );
@@ -94,6 +90,8 @@ export interface PurchaseOrderStats {
   overdueValue: number;
   /** Drafts nobody has sent yet. */
   draftCount: number;
+  /** Drafts submitted for internal approval, awaiting a decision. */
+  pendingApprovalCount: number;
   /** Open orders due within the next 7 days. */
   arrivingThisWeek: number;
   /** `null` until at least one order has actually been received. */
@@ -116,7 +114,7 @@ export async function getPurchaseOrderStats(): Promise<PurchaseOrderStats> {
   );
   const nonCancelled = purchaseOrders.filter((po) => po.status !== "cancelled");
   const totalValue = nonCancelled
-    .filter((po) => po.status !== "draft")
+    .filter((po) => po.status !== "draft" && po.status !== "pending_approval")
     .reduce((sum, po) => sum + purchaseOrderTotal(po), 0);
   const openValue = openOrders.reduce((sum, po) => sum + purchaseOrderTotal(po), 0);
   const pendingUnits = openOrders.reduce(
@@ -154,6 +152,7 @@ export async function getPurchaseOrderStats(): Promise<PurchaseOrderStats> {
     overdueCount: overdue.length,
     overdueValue,
     draftCount: purchaseOrders.filter((po) => po.status === "draft").length,
+    pendingApprovalCount: purchaseOrders.filter((po) => po.status === "pending_approval").length,
     arrivingThisWeek,
     onTimeRatePercent,
   });
@@ -169,6 +168,7 @@ export interface CreatePurchaseOrderInput {
   supplierId: string;
   warehouseId: string;
   expectedAt: string;
+  priority?: "low" | "medium" | "high";
   notes?: string;
   items: PurchaseOrderItemInput[];
 }
@@ -206,6 +206,7 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
     supplierId: input.supplierId,
     warehouseId: input.warehouseId,
     status: "draft",
+    priority: input.priority || "medium",
     items: input.items.map((i) => ({ ...i, receivedQuantity: 0 })),
     createdAt: new Date().toISOString(),
     expectedAt: input.expectedAt,
@@ -220,6 +221,7 @@ export interface UpdatePurchaseOrderInput {
   supplierId?: string;
   warehouseId?: string;
   expectedAt?: string;
+  priority?: "low" | "medium" | "high";
   notes?: string;
   items?: PurchaseOrderItemInput[];
 }
@@ -227,8 +229,8 @@ export interface UpdatePurchaseOrderInput {
 export async function updatePurchaseOrder(id: string, input: UpdatePurchaseOrderInput): Promise<PurchaseOrder> {
   const po = purchaseOrders.find((p) => p.id === id);
   if (!po) throw new ApiError("Satın alma siparişi bulunamadı.", "NOT_FOUND");
-  if (po.status !== "draft" && po.status !== "ordered") {
-    throw new ApiError("Yalnızca taslak veya sipariş edilmiş siparişler düzenlenebilir.", "CONFLICT");
+  if (po.status !== "draft" && po.status !== "pending_approval" && po.status !== "ordered") {
+    throw new ApiError("Yalnızca taslak, onay bekleyen veya sipariş edilmiş siparişler düzenlenebilir.", "CONFLICT");
   }
   if (po.items.some((i) => i.receivedQuantity > 0)) {
     throw new ApiError("Kısmen de olsa teslim alınmış bir sipariş düzenlenemez.", "CONFLICT");
@@ -243,6 +245,7 @@ export async function updatePurchaseOrder(id: string, input: UpdatePurchaseOrder
     po.warehouseId = input.warehouseId;
   }
   if (input.expectedAt !== undefined) po.expectedAt = input.expectedAt;
+  if (input.priority !== undefined) po.priority = input.priority;
   if (input.notes !== undefined) po.notes = input.notes;
   if (input.items !== undefined) {
     validateItems(input.items);
@@ -270,6 +273,37 @@ export async function markPurchaseOrderOrdered(id: string): Promise<PurchaseOrde
   if (!po) throw new ApiError("Satın alma siparişi bulunamadı.", "NOT_FOUND");
   if (po.status !== "draft") throw new ApiError("Yalnızca taslak siparişler gönderilebilir.", "CONFLICT");
   po.status = "ordered";
+  return delay(po, 400);
+}
+
+/** Submits a draft for internal approval before it's sent to the supplier. */
+export async function requestPurchaseOrderApproval(id: string): Promise<PurchaseOrder> {
+  const po = purchaseOrders.find((p) => p.id === id);
+  if (!po) throw new ApiError("Satın alma siparişi bulunamadı.", "NOT_FOUND");
+  if (po.status !== "draft") throw new ApiError("Yalnızca taslak siparişler onaya gönderilebilir.", "CONFLICT");
+  po.status = "pending_approval";
+  return delay(po, 400);
+}
+
+/** Approves a "pending_approval" order — equivalent to sending it, moving it straight to "ordered". */
+export async function approvePurchaseOrder(id: string): Promise<PurchaseOrder> {
+  const po = purchaseOrders.find((p) => p.id === id);
+  if (!po) throw new ApiError("Satın alma siparişi bulunamadı.", "NOT_FOUND");
+  if (po.status !== "pending_approval") {
+    throw new ApiError("Yalnızca onay bekleyen siparişler onaylanabilir.", "CONFLICT");
+  }
+  po.status = "ordered";
+  return delay(po, 400);
+}
+
+/** Rejects a "pending_approval" order, sending it back to "draft" for rework. */
+export async function rejectPurchaseOrderApproval(id: string): Promise<PurchaseOrder> {
+  const po = purchaseOrders.find((p) => p.id === id);
+  if (!po) throw new ApiError("Satın alma siparişi bulunamadı.", "NOT_FOUND");
+  if (po.status !== "pending_approval") {
+    throw new ApiError("Yalnızca onay bekleyen siparişler reddedilebilir.", "CONFLICT");
+  }
+  po.status = "draft";
   return delay(po, 400);
 }
 
@@ -423,7 +457,7 @@ export async function getReplenishmentSuggestions(): Promise<ReplenishmentSugges
       for (const item of po.items) {
         onOrderMap.set(item.productId, (onOrderMap.get(item.productId) ?? 0) + (item.quantity - item.receivedQuantity));
       }
-    } else if (po.status === "draft") {
+    } else if (po.status === "draft" || po.status === "pending_approval") {
       for (const item of po.items) {
         draftOnOrderMap.set(item.productId, (draftOnOrderMap.get(item.productId) ?? 0) + item.quantity);
       }

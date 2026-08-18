@@ -90,6 +90,7 @@ export interface StockMovement {
 
 export type PurchaseOrderStatus =
   | "draft"
+  | "pending_approval"
   | "ordered"
   | "partially_received"
   | "received"
@@ -109,12 +110,44 @@ export interface PurchaseOrder {
   /** Delivery warehouse — where receiving this order adds stock. */
   warehouseId: string;
   status: PurchaseOrderStatus;
+  priority: "low" | "medium" | "high";
   items: PurchaseOrderItem[];
   createdAt: string;
   expectedAt: string;
   /** Stamped when `status` transitions to "received" — the only real delivery timestamp in the schema. */
   receivedAt?: string;
   currency: "TRY";
+  notes?: string;
+}
+
+export type QuoteCurrency = "try" | "usd" | "eur" | "gbp";
+
+/** Snapshot of a purchase-order line at the moment a quote request was sent — the source order can change later without altering the document. */
+export interface QuoteRequestItem {
+  purchaseOrderId: string;
+  productId: string;
+  quantity: number;
+  /** Copied from the source order's line at send time so the document's prices never drift. */
+  unitPrice: number;
+}
+
+/** A "teklif formu" sent to a supplier, bundling one or more of their draft purchase orders into a single priced document. */
+export interface QuoteRequest {
+  id: string;
+  code: string; // NET-TKL-20260001
+  supplierId: string;
+  purchaseOrderIds: string[];
+  items: QuoteRequestItem[];
+  createdAt: string;
+  createdBy: string;
+  validUntil: string;
+  deliveryDate: string;
+  deliveryAddress: string;
+  paymentTerms: string;
+  requestedCurrency: QuoteCurrency;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
   notes?: string;
 }
 

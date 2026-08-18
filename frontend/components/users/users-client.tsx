@@ -22,6 +22,7 @@ import {
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
 import { ForbiddenState } from "@/components/common/forbidden-state";
+import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
 import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { Card, CardContent } from "@/components/ui/card";
@@ -95,7 +96,7 @@ export function UsersClient() {
   const [deleting, setDeleting] = useState<AppUser | undefined>(undefined);
 
   const filtered = useMemo(() => {
-    return userList.filter((u) => {
+    let result: AppUser[] = userList.filter((u) => {
       if (roleFilter !== "all" && u.role !== roleFilter) return false;
       if (!searchInput) return true;
       const q = searchInput.toLocaleLowerCase("tr-TR");
@@ -219,19 +220,6 @@ export function UsersClient() {
                     className="h-9 pl-8"
                   />
                 </div>
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="w-full sm:w-fit sm:min-w-[180px]">
-                    <SelectValue>
-                      {roleFilter === "all" ? "Tüm Roller" : ROLE_LABELS[roleFilter as Role]}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tüm Roller</SelectItem>
-                    <SelectItem value="yonetici">Yönetici</SelectItem>
-                    <SelectItem value="depo">Depo Personeli</SelectItem>
-                    <SelectItem value="satinalma">Satın Alma Personeli</SelectItem>
-                  </SelectContent>
-                </Select>
                 {isFiltered && (
                   <Button
                     variant="ghost"
@@ -243,7 +231,7 @@ export function UsersClient() {
                     className="shrink-0"
                   >
                     <X className="size-4" />
-                    Filtreleri Temizle
+                    Temizle
                   </Button>
                 )}
               </CardContent>
@@ -258,16 +246,29 @@ export function UsersClient() {
                     <TableHead className="text-left">Kullanıcı</TableHead>
                     <TableHead className="text-center">ID</TableHead>
                     <TableHead className="text-center">E-posta</TableHead>
-                    <TableHead 
-                      className="text-center cursor-pointer select-none hover:text-foreground transition-colors group"
-                      onClick={() => setSortByRole((prev) => !prev)}
-                    >
-                      <div className="flex items-center justify-center gap-1.5">
-                        Rol
-                        <ArrowUpDown className={cn(
-                          "size-3.5 transition-colors", 
-                          sortByRole ? "text-foreground" : "text-muted-foreground/50 group-hover:text-muted-foreground"
-                        )} />
+                    <TableHead className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setSortByRole((prev) => !prev)}
+                          className="flex items-center gap-1.5 cursor-pointer select-none hover:text-foreground transition-colors group"
+                        >
+                          Rol
+                          <ArrowUpDown className={cn(
+                            "size-3.5 transition-colors", 
+                            sortByRole ? "text-foreground" : "text-muted-foreground/50 group-hover:text-muted-foreground"
+                          )} />
+                        </button>
+                        <DataTableColumnFilter
+                          value={roleFilter}
+                          onValueChange={setRoleFilter}
+                          options={[
+                            { label: "Yönetici", value: "yonetici" },
+                            { label: "Depo Personeli", value: "depo" },
+                            { label: "Satın Alma Personeli", value: "satinalma" }
+                          ]}
+                          title="Rol Seç"
+                        />
                       </div>
                     </TableHead>
                     <TableHead className="w-16 pr-5 text-right" />

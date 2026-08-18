@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CurrencyProvider } from "@/lib/currency-context";
+import { GoogleTranslate } from "@/components/google-translate";
 
 import { SettingsProvider } from "@/lib/settings-context";
 
@@ -23,7 +24,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stok Yönetimi",
+  title: "Envanter Yönetimi",
   description: "Yakın Doğu Teknoloji sunucu, ağ, bilgisayar ve lisans envanter yönetim sistemi.",
   icons: {
     icon: [
@@ -50,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <TooltipProvider delay={150}>{children}</TooltipProvider>
               </AuthProvider>
               <Toaster position="top-center" />
+              <GoogleTranslate />
             </SettingsProvider>
           </CurrencyProvider>
         </ThemeProvider>

@@ -57,6 +57,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DataTable } from "@/components/data-table/data-table";
+import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
 import { StockStatusBadge, ProductStatusBadge } from "@/components/common/status-badge";
 import { ProductFormSheet } from "@/components/products/product-form-sheet";
 import { ProductsCommandHero } from "@/components/products/products-command-hero";
@@ -428,9 +429,19 @@ export function ProductsClient() {
         id: "categoryName",
         accessorKey: "categoryName",
         header: "Kategori",
-        meta: { className: "w-[12%] text-center" },
+        meta: { 
+          className: "w-[12%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={categoryId}
+              onValueChange={setCategoryId}
+              options={categories.map((c) => ({ label: c.name, value: c.id }))}
+              title="Kategori Seç"
+            />
+          )
+        },
         cell: ({ row }) => (
-          <span className="block truncate" title={row.original.categoryName}>
+          <span className="block truncate text-center" title={row.original.categoryName}>
             {row.original.categoryName}
           </span>
         ),
@@ -439,9 +450,19 @@ export function ProductsClient() {
         id: "totalStock",
         accessorKey: "totalStock",
         header: "Stok",
-        meta: { className: "w-[13%] text-center" },
+        meta: { 
+          className: "w-[13%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={warehouseId}
+              onValueChange={setWarehouseId}
+              options={warehouses.map((w) => ({ label: w.name, value: w.id }))}
+              title="Depo Seç"
+            />
+          )
+        },
         cell: ({ row }) => (
-          <div className="tabular-nums">
+          <div className="tabular-nums text-center">
             <span className="font-medium text-foreground">{formatNumber(row.original.totalStock)}</span>{" "}
             <span className="text-xs text-muted-foreground">{row.original.unit}</span>
             {row.original.warehouseStock != null ? (
@@ -461,7 +482,20 @@ export function ProductsClient() {
         id: "stockLevel",
         header: "Stok Durumu",
         enableSorting: false,
-        meta: { className: "w-[12%] text-center" },
+        meta: { 
+          className: "w-[12%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={stockStatus}
+              onValueChange={setStockStatus}
+              options={["ok", "low", "out"].map((k) => ({ 
+                label: k === "ok" ? "Yeterli" : k === "low" ? "Kritik Seviye" : "Stok Yok", 
+                value: k 
+              }))}
+              title="Stok Durumu"
+            />
+          )
+        },
         cell: ({ row }) => (
           <div className="flex justify-center">
             <StockStatusBadge level={stockLevel(row.original)} />
@@ -476,7 +510,7 @@ export function ProductsClient() {
         cell: ({ row }) => {
           const rate = rates?.[currency] || 1;
           return (
-            <div className="tabular-nums">
+            <div className="tabular-nums text-center">
               <span className="font-medium text-foreground">{formatCurrency(row.original.salePrice, currency, rate, showKurus)}</span>
               <p className="text-xs text-muted-foreground">Alış {formatCurrency(row.original.purchasePrice, currency, rate, showKurus)}</p>
             </div>
@@ -487,7 +521,17 @@ export function ProductsClient() {
         id: "status",
         accessorKey: "status",
         header: "Durum",
-        meta: { className: "w-[11%] text-center" },
+        meta: { 
+          className: "w-[11%] text-center",
+          filterElement: (
+            <DataTableColumnFilter
+              value={statusFilter}
+              onValueChange={setStatusFilter}
+              options={["aktif", "pasif"].map((k) => ({ label: PRODUCT_STATUS_LABELS[k as "aktif" | "pasif"], value: k }))}
+              title="Durum"
+            />
+          )
+        },
         cell: ({ row }) => (
           <div className="flex justify-center">
             <ProductStatusBadge status={row.original.status} />
@@ -642,92 +686,11 @@ export function ProductsClient() {
             {isFiltered && (
               <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
                 <X className="size-4" />
-                Filtreleri Temizle
+                Temizle
               </Button>
             )}
           </div>
-
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Select value={categoryId} onValueChange={(v) => setCategoryId((v as string) ?? "all")}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {categoryId === "all" ? "Tüm Kategoriler" : categories.find(c => c.id === categoryId)?.name || "Kategori"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Kategoriler</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={stockStatus} onValueChange={(v) => setStockStatus((v as string) ?? "all")}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {stockStatus === "all" ? "Tüm Stok Durumları" : STOCK_STATUS_LABELS[stockStatus as keyof typeof STOCK_STATUS_LABELS] || "Stok Durumu"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Stok Durumları</SelectItem>
-                {(Object.keys(STOCK_STATUS_LABELS) as Array<keyof typeof STOCK_STATUS_LABELS>).map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {STOCK_STATUS_LABELS[k]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter((v as string) ?? "all")}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {statusFilter === "all" ? "Tüm Durumlar" : PRODUCT_STATUS_LABELS[statusFilter as "aktif" | "pasif"]}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Durumlar</SelectItem>
-                {(Object.keys(PRODUCT_STATUS_LABELS) as Array<"aktif" | "pasif">).map((k) => (
-                  <SelectItem key={k} value={k}>
-                    {PRODUCT_STATUS_LABELS[k]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={warehouseId} onValueChange={(v) => setWarehouseId((v as string) ?? "all")}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {warehouseId === "all" ? "Tüm Depolar" : warehouses.find(w => w.id === warehouseId)?.name || "Depo"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Depolar</SelectItem>
-                {warehouses.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={supplierId} onValueChange={(v) => setSupplierId((v as string) ?? "all")}>
-              <SelectTrigger className="w-full">
-                <SelectValue>
-                  {supplierId === "all" ? "Tüm Tedarikçiler" : suppliers.find(s => s.id === supplierId)?.name || "Tedarikçi"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tüm Tedarikçiler</SelectItem>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Input
                 type="number"
@@ -781,26 +744,7 @@ export function ProductsClient() {
               <CircleDot className="size-3.5 text-status-warning-foreground" />
               Toplu Pasife Al
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleExportFormat("excel", true)}
-              disabled={exportGuard.pending}
-              className="h-8 gap-1 text-xs border-primary text-primary hover:bg-primary/10 "
-            >
-              <FileSpreadsheet className="size-3.5 text-primary" />
-              Dışa Aktar (Excel)
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleExportFormat("pdf", true)}
-              disabled={exportGuard.pending}
-              className="h-8 gap-1 text-xs border-status-critical text-status-critical hover:bg-status-critical/10 "
-            >
-              <Download className="size-3.5 text-status-critical" />
-              Dışa Aktar (PDF)
-            </Button>
+
             <Button
               size="sm"
               variant="destructive"

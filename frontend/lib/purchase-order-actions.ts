@@ -13,6 +13,12 @@ export interface PurchaseOrderActionInput {
 
 export interface PurchaseOrderActions {
   canMarkOrdered: boolean;
+  /** Submit a draft for internal approval before it's sent to the supplier. */
+  canRequestApproval: boolean;
+  /** Approve a "pending_approval" order, moving it straight to "ordered". */
+  canApprove: boolean;
+  /** Reject a "pending_approval" order, sending it back to "draft" for rework. */
+  canReject: boolean;
   canEdit: boolean;
   canReceive: boolean;
   canCancel: boolean;
@@ -28,7 +34,13 @@ export interface PurchaseOrderActions {
 export function getAvailableActions(po: PurchaseOrderActionInput): PurchaseOrderActions {
   return {
     canMarkOrdered: po.status === "draft",
-    canEdit: po.status === "draft" || (po.status === "ordered" && !po.hasReceivedProgress),
+    canRequestApproval: po.status === "draft",
+    canApprove: po.status === "pending_approval",
+    canReject: po.status === "pending_approval",
+    canEdit:
+      po.status === "draft" ||
+      po.status === "pending_approval" ||
+      (po.status === "ordered" && !po.hasReceivedProgress),
     canReceive: po.status === "ordered" || po.status === "partially_received",
     canCancel: po.status !== "received" && po.status !== "cancelled",
     canDelete: po.status === "draft",

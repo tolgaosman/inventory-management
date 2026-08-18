@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, CircleDot, Clock, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, CircleDot, Clock, Hourglass, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MovementType, ProductStatus, PurchaseOrderStatus } from "@/lib/types";
 import { MOVEMENT_TYPE_LABELS, PRODUCT_STATUS_LABELS, PURCHASE_STATUS_LABELS } from "@/lib/constants";
@@ -58,6 +58,7 @@ export function MovementTypeBadge({ type }: { type: MovementType }) {
 export function PurchaseStatusBadge({ status }: { status: PurchaseOrderStatus }) {
   const map: Record<PurchaseOrderStatus, { cls: string; Icon: typeof CheckCircle2 }> = {
     draft: { cls: "bg-muted text-muted-foreground", Icon: CircleDot },
+    pending_approval: { cls: "bg-tint-amber/12 text-tint-amber", Icon: Hourglass },
     ordered: { cls: "bg-primary/10 text-primary", Icon: Clock },
     partially_received: { cls: "bg-status-warning/12 text-status-warning-foreground", Icon: Clock },
     received: { cls: "bg-status-good/10 text-status-good", Icon: CheckCircle2 },

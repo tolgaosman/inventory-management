@@ -6,45 +6,18 @@
 import { formatCurrency, formatDateTime, formatNumber } from "@/lib/format";
 import type { ReportData, ReportSection } from "./report-data";
 import { matchSectionId } from "./report-data";
-
-/** Palette lifted from logo & branding (Turquoise, Sapphire Blue, Emerald). */
-const COLORS = {
-  brand: [8, 145, 178] as [number, number, number], // Turquoise / Cyan (#0891B2) matching logo!
-  brandDark: [15, 76, 129] as [number, number, number], // Deep Sapphire Blue (#0F4C81) matching logo!
-  brandTint: [238, 248, 250] as [number, number, number], // Soft Cyan tint
-  ink: [17, 24, 39] as [number, number, number], // Slate 900
-  secondary: [75, 85, 99] as [number, number, number], // Gray 600
-  muted: [156, 163, 175] as [number, number, number], // Gray 400
-  grid: [229, 231, 235] as [number, number, number], // Gray 200
-  zebra: [248, 250, 252] as [number, number, number], // Slate 50
-  white: [255, 255, 255] as [number, number, number],
-  critical: [225, 29, 72] as [number, number, number], // Rose 600
-  criticalTint: [255, 241, 242] as [number, number, number], // Rose 50
-  inbound: [16, 185, 129] as [number, number, number], // Emerald green (#10B981) matching logo!
-  outbound: [37, 99, 235] as [number, number, number], // Royal Blue (#2563EB) matching logo!
-};
-
-const MARGIN = 40;
-const HEADER_HEIGHT = 74;
-const FOOTER_HEIGHT = 30;
-
-const FONT = "Roboto";
-
-type Doc = import("jspdf").jsPDF;
-
-function accentColor(accent: string | undefined): [number, number, number] {
-  switch (accent) {
-    case "critical":
-      return COLORS.critical;
-    case "in":
-    case "good":
-      return COLORS.inbound;
-    case "out":
-      return COLORS.outbound;
-    default:
-      return COLORS.brand;
-  }
-}
+import {
+  COLORS,
+  MARGIN,
+  HEADER_HEIGHT,
+  FOOTER_HEIGHT,
+  FONT,
+  type Doc,
+  accentColor,
+  createPdfDoc,
+  drawFooter as drawFooterBand,
+  drawSectionTitle,
+} from "./pdf-theme";
 
 /** Report title band, repeated at the top of every page. */
 function drawHeader(doc: Doc, data: ReportData) {
@@ -80,31 +53,7 @@ function drawHeader(doc: Doc, data: ReportData) {
 }
 
 function drawFooter(doc: Doc, data: ReportData, pageNumber: number, pageCount: number) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const y = pageHeight - 18;
-
-  doc.setDrawColor(...COLORS.grid);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, y - 12, pageWidth - MARGIN, y - 12);
-
-  doc.setFont(FONT, "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.muted);
-  doc.text(`${data.company} · ${data.title}`, MARGIN, y);
-  doc.text(`Sayfa ${pageNumber} / ${pageCount}`, pageWidth - MARGIN, y, { align: "right" });
-}
-
-/** Section heading: a coloured vertical bar plus bold label. */
-function drawSectionTitle(doc: Doc, title: string, y: number): number {
-  doc.setFillColor(...COLORS.brand);
-  doc.rect(MARGIN, y - 9, 3.5, 12, "F");
-
-  doc.setFont(FONT, "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(...COLORS.brandDark);
-  doc.text(title, MARGIN + 10, y);
-  return y + 8;
+  drawFooterBand(doc, `${data.company} · ${data.title}`, pageNumber, pageCount);
 }
 
 /** KPI cards: 3 per row, rounded outline, label above value. */
@@ -147,19 +96,10 @@ function drawKpiGrid(doc: Doc, data: ReportData, startY: number): number {
 }
 
 export async function buildReportPdf(data: ReportData, selectedSections: string[] = ["all"]): Promise<Blob> {
-  const [{ jsPDF }, { autoTable }, fonts] = await Promise.all([
-    import("jspdf"),
-    import("jspdf-autotable"),
-    import("./fonts/roboto"),
-  ]);
-
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4", compress: true });
-
-  doc.addFileToVFS("Roboto-Regular.ttf", fonts.ROBOTO_REGULAR_BASE64);
-  doc.addFont("Roboto-Regular.ttf", FONT, "normal");
-  doc.addFileToVFS("Roboto-Bold.ttf", fonts.ROBOTO_BOLD_BASE64);
-  doc.addFont("Roboto-Bold.ttf", FONT, "bold");
-  doc.setFont(FONT, "normal");
+  // Landscape — these tables can run to a dozen-plus columns (e.g. the full
+  // product catalog); the extra width keeps every cell on one line without
+  // crushing it down to a couple of ellipsized characters.
+  const { doc, autoTable } = await createPdfDoc("landscape");
 
   doc.setProperties({
     title: `${data.company} — ${data.title}`,
@@ -245,13 +185,16 @@ function renderSection(
       font: FONT,
       fontStyle: "normal",
       fontSize: 10,
-      cellPadding: 4,
+      cellPadding: { top: 7, right: 6, bottom: 7, left: 6 },
       textColor: COLORS.secondary,
       lineColor: COLORS.grid,
       lineWidth: 0.4,
-      overflow: "linebreak",
+      // Keep every cell to a single line — long values get an ellipsis
+      // instead of wrapping and blowing up the row height.
+      overflow: "ellipsize",
       halign: "center",
       valign: "middle",
+      minCellHeight: 24,
     },
     headStyles: {
       font: FONT,
@@ -260,8 +203,10 @@ function renderSection(
       textColor: COLORS.white,
       fontSize: 10,
       lineWidth: 0.4,
+      overflow: "ellipsize",
       halign: "center",
       valign: "middle",
+      minCellHeight: 26,
     },
     alternateRowStyles: { fillColor: COLORS.zebra },
     didParseCell: (hook) => {
@@ -281,6 +226,9 @@ function renderSection(
         hook.cell.styles.fillColor = [255, 235, 156]; // Neutral Fill (#FFEB9C)
         hook.cell.styles.textColor = [156, 101, 0]; // Neutral Text (#9C6500)
         hook.cell.styles.fontStyle = "bold";
+        if (rawText === "Kısmen Teslim Alındı") {
+          hook.cell.styles.fontSize = 8.5; // Biraz küçülttük ki sığsın
+        }
       } else if (rawText === "Sipariş Edildi") {
         hook.cell.styles.fillColor = [180, 198, 231]; // 60% Accent 5 (#B4C6E7)
         hook.cell.styles.textColor = [31, 73, 125]; // Dark Blue, Text 2, Darker 50% (#1F497D)
@@ -288,6 +236,10 @@ function renderSection(
       } else if (rawText === "Taslak") {
         hook.cell.styles.fillColor = [242, 242, 242]; // Output Fill (#F2F2F2)
         hook.cell.styles.textColor = [63, 63, 63]; // Output Text (#3F3F3F)
+        hook.cell.styles.fontStyle = "bold";
+      } else if (rawText === "Onay Bekliyor") {
+        hook.cell.styles.fillColor = [252, 224, 165]; // Amber Fill (#FCE0A5)
+        hook.cell.styles.textColor = [146, 91, 4]; // Amber Text (#925B04)
         hook.cell.styles.fontStyle = "bold";
       } else if (isCritical) {
         // Flag under-stocked rows, and make the shortfall itself stand out.
