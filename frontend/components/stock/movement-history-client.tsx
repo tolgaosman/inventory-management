@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
-import { Search, X, Download, Loader2 } from "lucide-react";
+import { Search, X, Download, Loader2, FileSpreadsheet, FileText } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
@@ -394,8 +394,12 @@ export function MovementHistoryClient() {
               }
             />
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExportFormat("excel")}>Excel (.xlsx)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExportFormat("pdf")}>PDF (.pdf)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExportFormat("excel")}>
+                <FileSpreadsheet className="size-4 text-status-good" /> Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExportFormat("pdf")}>
+                <FileText className="size-4 text-status-bad" /> PDF (.pdf)
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         }

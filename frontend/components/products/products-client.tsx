@@ -27,6 +27,7 @@ import {
   ArrowUpFromLine,
   ArrowLeftRight,
   FileSpreadsheet,
+  FileText,
   CheckCircle2,
 } from "lucide-react";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
@@ -643,8 +644,12 @@ export function ProductsClient() {
                 }
               />
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleExportFormat("excel")}>Excel (.xlsx)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExportFormat("pdf")}>PDF (.pdf)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportFormat("excel")}>
+                  <FileSpreadsheet className="size-4 text-status-good" /> Excel (.xlsx)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportFormat("pdf")}>
+                  <FileText className="size-4 text-status-bad" /> PDF (.pdf)
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <Can permission="products.manage">

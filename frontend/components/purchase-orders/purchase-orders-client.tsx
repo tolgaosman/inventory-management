@@ -908,6 +908,9 @@ export function PurchaseOrdersClient() {
                   <DropdownMenuItem onClick={() => handleExport("excel")}>
                     <FileSpreadsheet className="size-4 text-status-good" /> Excel (.xlsx)
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                    <FileText className="size-4 text-status-bad" /> PDF (.pdf)
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Can permission="purchase.manage">

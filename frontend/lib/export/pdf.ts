@@ -218,7 +218,7 @@ function renderSection(
         hook.cell.styles.fillColor = [198, 239, 206]; // Good Fill (#C6EFCE)
         hook.cell.styles.textColor = [0, 97, 0]; // Good Text (#006100)
         hook.cell.styles.fontStyle = "bold";
-      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış" || lowerText === "pasif" || rawText === "İptal Edildi") {
+      } else if (rawText === "Stok Çıkışı" || rawText === "Çıkış" || lowerText === "pasif" || rawText === "İptal Edildi" || rawText === "İptal/Ret") {
         hook.cell.styles.fillColor = [255, 199, 206]; // Bad Fill (#FFC7CE)
         hook.cell.styles.textColor = [156, 0, 6]; // Bad Text (#9C0006)
         hook.cell.styles.fontStyle = "bold";

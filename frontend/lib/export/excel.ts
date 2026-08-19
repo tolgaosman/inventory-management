@@ -94,7 +94,7 @@ function setWorksheetFormatting(
           fillColor = { fgColor: { rgb: "C6EFCE" } }; // Good Fill (#C6EFCE)
           fontColor = { rgb: "006100" }; // Good Text (#006100)
           isBold = true;
-        } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış" || lowerVal === "pasif" || trimmedVal === "İptal Edildi") {
+        } else if (trimmedVal === "Stok Çıkışı" || trimmedVal === "Çıkış" || lowerVal === "pasif" || trimmedVal === "İptal Edildi" || trimmedVal === "İptal/Ret") {
           fillColor = { fgColor: { rgb: "FFC7CE" } }; // Bad Fill (#FFC7CE)
           fontColor = { rgb: "9C0006" }; // Bad Text (#9C0006)
           isBold = true;
