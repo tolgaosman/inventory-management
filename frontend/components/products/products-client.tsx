@@ -33,6 +33,7 @@ import { ProductImageThumbnail } from "@/components/common/product-image-thumbna
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
+import { ForbiddenState } from "@/components/common/forbidden-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,7 +103,7 @@ export function ProductsClient() {
   const searchParams = useSearchParams();
   const { currency, rates } = useCurrency();
   const { company, showKurus } = useSettings();
-  const { name } = useAuth();
+  const { name, can } = useAuth();
 
   const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
   const [search, setSearch] = useState(searchInput);
@@ -559,30 +560,38 @@ export function ProductsClient() {
                   <Eye className="size-4" />
                   Detay Göster
                 </DropdownMenuItem>
+                <Can permission={["stock.in", "stock.out", "stock.transfer", "products.manage"]}>
+                  <DropdownMenuSeparator />
+                </Can>
+                <Can permission="stock.in">
+                  <DropdownMenuItem
+                    disabled={product.status === "pasif"}
+                    onClick={() => setMovement({ product, mode: "giris" })}
+                  >
+                    <ArrowDownToLine className="size-4 text-status-good" />
+                    Stok Girişi Yap
+                  </DropdownMenuItem>
+                </Can>
+                <Can permission="stock.out">
+                  <DropdownMenuItem
+                    disabled={product.status === "pasif"}
+                    onClick={() => setMovement({ product, mode: "cikis" })}
+                  >
+                    <ArrowUpFromLine className="size-4 text-status-critical" />
+                    Stok Çıkışı Yap
+                  </DropdownMenuItem>
+                </Can>
+                <Can permission="stock.transfer">
+                  <DropdownMenuItem
+                    disabled={product.status === "pasif"}
+                    onClick={() => setMovement({ product, mode: "transfer" })}
+                  >
+                    <ArrowLeftRight className="size-4 text-primary" />
+                    Depolar Arası Transfer
+                  </DropdownMenuItem>
+                </Can>
                 <Can permission="products.manage">
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      disabled={product.status === "pasif"}
-                      onClick={() => setMovement({ product, mode: "giris" })}
-                    >
-                      <ArrowDownToLine className="size-4 text-status-good" />
-                      Stok Girişi Yap
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={product.status === "pasif"}
-                      onClick={() => setMovement({ product, mode: "cikis" })}
-                    >
-                      <ArrowUpFromLine className="size-4 text-status-critical" />
-                      Stok Çıkışı Yap
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={product.status === "pasif"}
-                      onClick={() => setMovement({ product, mode: "transfer" })}
-                    >
-                      <ArrowLeftRight className="size-4 text-primary" />
-                      Depolar Arası Transfer
-                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => {
@@ -609,11 +618,15 @@ export function ProductsClient() {
         },
       },
     ],
-    [currency, rates, warehouses, warehouseId, selectedIds, view, handleToggleStatus],
-  );
+    [currency, rates, warehouses, warehouseId, selectedIds, view, handleToggleStatus, can],
+  ).filter((col) => {
+    if (col.id === "salePrice" && !can("financial.view")) return false;
+    return true;
+  });
 
   return (
-    <div className="space-y-6">
+    <Can permission="products.view" fallback={<Forbidden />}>
+      <div className="space-y-6">
       <PageHeader
         title="Ürün Yönetimi"
         description="Katalogdaki tüm ürünler, stok seviyeleri ve fiyatlar."
@@ -690,27 +703,29 @@ export function ProductsClient() {
               </Button>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                min={0}
-                value={minPrice}
-                onChange={(e) => setMinPrice(e.target.value)}
-                placeholder={`Min (${currency.toUpperCase()})`}
-                className="h-9"
-              />
-              <span className="text-muted-foreground">–</span>
-              <Input
-                type="number"
-                min={0}
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
-                placeholder={`Maks (${currency.toUpperCase()})`}
-                className="h-9"
-              />
+          <Can permission="financial.view">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  placeholder={`Min (${currency.toUpperCase()})`}
+                  className="h-9"
+                />
+                <span className="text-muted-foreground">–</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  placeholder={`Maks (${currency.toUpperCase()})`}
+                  className="h-9"
+                />
+              </div>
             </div>
-          </div>
+          </Can>
         </CardContent>
       </Card>
       </Section>
@@ -724,37 +739,41 @@ export function ProductsClient() {
             <span>Ürün Seçildi</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleBulkStatus("aktif")}
-              disabled={isBulkProcessing}
-              className="h-8 gap-1 text-xs border-status-good text-status-good hover:bg-status-good/10"
-            >
-              <CheckCircle2 className="size-3.5 text-status-good" />
-              Toplu Aktife Al
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => handleBulkStatus("pasif")}
-              disabled={isBulkProcessing}
-              className="h-8 gap-1 text-xs border-status-warning/30 text-status-warning-foreground hover:bg-status-warning/10 "
-            >
-              <CircleDot className="size-3.5 text-status-warning-foreground" />
-              Toplu Pasife Al
-            </Button>
+            <Can permission="products.manage">
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkStatus("aktif")}
+                  disabled={isBulkProcessing}
+                  className="h-8 gap-1 text-xs border-status-good text-status-good hover:bg-status-good/10"
+                >
+                  <CheckCircle2 className="size-3.5 text-status-good" />
+                  Toplu Aktife Al
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBulkStatus("pasif")}
+                  disabled={isBulkProcessing}
+                  className="h-8 gap-1 text-xs border-status-warning/30 text-status-warning-foreground hover:bg-status-warning/10 "
+                >
+                  <CircleDot className="size-3.5 text-status-warning-foreground" />
+                  Toplu Pasife Al
+                </Button>
 
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => setBulkConfirmOpen(true)}
-              disabled={isBulkProcessing}
-              className="h-8 gap-1 text-xs"
-            >
-              <Trash2 className="size-3.5" />
-              Toplu Sil
-            </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setBulkConfirmOpen(true)}
+                  disabled={isBulkProcessing}
+                  className="h-8 gap-1 text-xs"
+                >
+                  <Trash2 className="size-3.5" />
+                  Toplu Sil
+                </Button>
+              </>
+            </Can>
             <Button
               size="sm"
               variant="ghost"
@@ -848,6 +867,16 @@ export function ProductsClient() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
+    </Can>
+  );
+}
+
+function Forbidden() {
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Ürün Yönetimi" />
+      <ForbiddenState message="Ürünleri görüntülemek için yetkiniz yok." />
     </div>
   );
 }

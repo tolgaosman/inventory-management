@@ -20,7 +20,7 @@ export interface NavItem {
   label: string;
   href: string;
   icon: LucideIcon;
-  permission?: Permission;
+  permission?: Permission | Permission[];
   children?: NavItem[];
 }
 
@@ -51,22 +51,21 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Envanter Hareketleri",
         href: "/stok/hareketler",
         icon: History,
-        permission: "stock.in",
+        permission: ["stock.in", "stock.view"],
         children: [
           { label: "Giriş / Çıkış / Transfer", href: "/stok/islem", icon: ArrowLeftRight, permission: "stock.in" },
-          { label: "Hareket Geçmişi", href: "/stok/hareketler", icon: History, permission: "stock.in" },
+          { label: "Hareket Geçmişi", href: "/stok/hareketler", icon: History, permission: "stock.view" },
         ],
       },
       { label: "Tedarikçiler", href: "/tedarikciler", icon: Truck, permission: "suppliers.view" },
-      { label: "Satın Alma", href: "/satin-alma", icon: ShoppingCart, permission: "purchase.view" },
+      { label: "Satın Alma", href: "/satin-alma", icon: ShoppingCart, permission: ["purchase.view", "purchase.receive"] },
     ],
   },
   {
     label: "Yönetim",
     items: [
-      { label: "Raporlar", href: "/raporlar", icon: BarChart3, permission: "reports.view" },
+      { label: "Raporlar", href: "/raporlar", icon: BarChart3, permission: ["reports.stock", "reports.financial"] },
       { label: "Kullanıcılar", href: "/kullanicilar", icon: Users, permission: "users.manage" },
-      { label: "Ayarlar", href: "/ayarlar", icon: Settings },
     ],
   },
 ];

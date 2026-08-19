@@ -22,7 +22,18 @@ class PurchaseOrderTest extends TestCase
         Storage::fake('public');
     }
 
+    /**
+     * An approver (purchase.approve) — most of the lifecycle mechanics below
+     * (draft → ordered → received, edit, cancel, delete) are orthogonal to who's
+     * doing it, so they use an approver to skip the approval-routing behavior
+     * that's covered separately in the approval-routing tests below.
+     */
     private function buyer(): User
+    {
+        return User::factory()->role('satinalma_yonetici')->create();
+    }
+
+    private function staff(): User
     {
         return User::factory()->role('satinalma')->create();
     }
@@ -216,6 +227,63 @@ class PurchaseOrderTest extends TestCase
         ]);
 
         $response->assertStatus(409)->assertJsonPath('code', 'CONFLICT');
+    }
+
+    public function test_order_created_by_staff_without_approve_starts_pending_approval(): void
+    {
+        [$po] = $this->createDraftOrder($this->staff());
+
+        $this->assertSame('pending_approval', $po['status']);
+    }
+
+    public function test_staff_cannot_mark_a_pending_order_as_ordered_directly(): void
+    {
+        $staff = $this->staff();
+        [$po] = $this->createDraftOrder($staff);
+
+        // Already pending_approval (see test above), so /order is doubly blocked:
+        // no purchase.approve, and the transition guard only allows draft -> ordered.
+        $this->actingAs($staff, 'sanctum')->postJson("/api/purchase-orders/{$po['id']}/order")
+            ->assertStatus(403);
+    }
+
+    public function test_approver_can_approve_a_staff_created_order(): void
+    {
+        $staff = $this->staff();
+        $approver = $this->buyer();
+        [$po] = $this->createDraftOrder($staff);
+
+        $this->assertSame('pending_approval', $po['status']);
+
+        $this->actingAs($approver, 'sanctum')->postJson("/api/purchase-orders/{$po['id']}/approve")
+            ->assertOk()->assertJsonPath('status', 'ordered');
+    }
+
+    public function test_staff_cannot_edit_an_ordered_order(): void
+    {
+        $approver = $this->buyer();
+        [$po] = $this->createDraftOrder($approver);
+        $id = $po['id'];
+        $this->actingAs($approver, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
+
+        $this->actingAs($this->staff(), 'sanctum')->putJson("/api/purchase-orders/{$id}", ['notes' => 'x'])
+            ->assertStatus(403);
+    }
+
+    public function test_depo_can_receive_and_invoice_but_not_create_orders(): void
+    {
+        $approver = $this->buyer();
+        [$po, $product] = $this->createDraftOrder($approver, quantity: 5);
+        $id = $po['id'];
+        $this->actingAs($approver, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
+
+        $depo = User::factory()->role('depo')->create();
+        $this->actingAs($depo, 'sanctum')->postJson('/api/purchase-orders', [])->assertStatus(403);
+
+        $this->attachInvoice($depo, $id);
+        $this->actingAs($depo, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
+            'receivedQuantities' => [$product->id => 5],
+        ])->assertOk()->assertJsonPath('status', 'received');
     }
 
     public function test_bulk_cancel_reports_per_id_failures(): void

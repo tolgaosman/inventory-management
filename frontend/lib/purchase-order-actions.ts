@@ -43,7 +43,7 @@ export function getAvailableActions(po: PurchaseOrderActionInput): PurchaseOrder
       (po.status === "ordered" && !po.hasReceivedProgress),
     canReceive: po.status === "ordered" || po.status === "partially_received",
     canCancel: po.status !== "received" && po.status !== "cancelled",
-    canDelete: po.status === "draft",
+    canDelete: po.status === "draft" || po.status === "cancelled",
   };
 }
 

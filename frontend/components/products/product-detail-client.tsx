@@ -41,6 +41,7 @@ import {
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import { ProductFormSheet } from "@/components/products/product-form-sheet";
 import { StockMovementSheet, type StockMovementMode } from "@/components/products/stock-movement-sheet";
+import { useAuth } from "@/lib/auth";
 import { useAsync } from "@/lib/hooks/use-async";
 import { getProduct, getProductHistory, getProductStockByWarehouse, updateProduct } from "@/lib/api/products";
 import { listWarehouses, listCategories, listSuppliers } from "@/lib/api/catalog";
@@ -63,6 +64,7 @@ export function ProductDetailClient({ id }: { id: string }) {
   const [imageLightBoxOpen, setImageLightBoxOpen] = useState(false);
   const { currency, rates } = useCurrency();
   const { showKurus } = useSettings();
+  const { can } = useAuth();
 
   const { status, data, staleData, error, refetch } = useAsync(
     () =>
@@ -135,8 +137,10 @@ export function ProductDetailClient({ id }: { id: string }) {
     { label: "Marka", value: product.brand },
     { label: "Birim", value: product.unit },
     { label: "Tedarikçi", value: supplierName },
-    { label: "Alış Fiyatı", value: formatCurrency(product.purchasePrice, currency, rates?.[currency] || 1, showKurus) },
-    { label: "Satış Fiyatı", value: formatCurrency(product.salePrice, currency, rates?.[currency] || 1, showKurus) },
+    ...(can("financial.view") ? [
+      { label: "Alış Fiyatı", value: formatCurrency(product.purchasePrice, currency, rates?.[currency] || 1, showKurus) },
+      { label: "Satış Fiyatı", value: formatCurrency(product.salePrice, currency, rates?.[currency] || 1, showKurus) },
+    ] : []),
     { label: "Minimum Stok", value: formatNumber(product.minStock) },
     { label: "Maksimum Stok", value: formatNumber(product.maxStock) },
     { label: "Durum", value: <ProductStatusBadge status={product.status} /> },
@@ -247,17 +251,19 @@ export function ProductDetailClient({ id }: { id: string }) {
               </div>
             </CardContent>
           </Card>
-          <Card className="py-5 gap-2">
-            <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-status-good/10 text-status-good">
-                <Wallet className="size-4.5" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">Stok Değeri</p>
-                <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus)}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <Can permission="financial.view">
+            <Card className="py-5 gap-2">
+              <CardContent className="flex items-center gap-3 px-5">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-status-good/10 text-status-good">
+                  <Wallet className="size-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Stok Değeri</p>
+                  <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus)}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Can>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">

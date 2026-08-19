@@ -49,7 +49,7 @@ export function CombinedMovementPage() {
   }
 
   return (
-    <Can permission="stock.in" fallback={<Forbidden />}>
+    <Can permission={["stock.in", "stock.out", "stock.transfer"]} fallback={<Forbidden />}>
       <div className="space-y-6">
         <PageHeader title="Giriş / Çıkış / Transfer" description="Deponuza yeni giren, çıkan ve transfer edilen stok hareketlerini tek ekrandan yönetin." />
 
@@ -87,54 +87,60 @@ export function CombinedMovementPage() {
           </Section>
 
           <Section index={1} className="grid items-stretch gap-4 lg:grid-cols-[5fr_7fr] xl:grid-cols-[4fr_8fr]">
-            <StockEntryForm
-              mode="giris"
-              warehouses={warehouses ?? []}
-              suppliers={supplierResult?.rows ?? []}
-              onDone={handleDone}
-            />
-            <div className="lg:relative">
-              <div className="lg:absolute lg:inset-0">
-                <RecentSideMovementsList
-                  className="h-full"
-                  mode="giris"
-                  movements={girisStats?.rows.slice(0, 10) ?? []}
-                  products={productResult?.rows ?? []}
-                />
+            <Can permission="stock.in">
+              <StockEntryForm
+                mode="giris"
+                warehouses={warehouses ?? []}
+                suppliers={supplierResult?.rows ?? []}
+                onDone={handleDone}
+              />
+              <div className="lg:relative">
+                <div className="lg:absolute lg:inset-0">
+                  <RecentSideMovementsList
+                    className="h-full"
+                    mode="giris"
+                    movements={girisStats?.rows.slice(0, 10) ?? []}
+                    products={productResult?.rows ?? []}
+                  />
+                </div>
               </div>
-            </div>
-            
-            <StockEntryForm
-              mode="cikis"
-              warehouses={warehouses ?? []}
-              suppliers={supplierResult?.rows ?? []}
-              onDone={handleDone}
-            />
-            <div className="lg:relative">
-              <div className="lg:absolute lg:inset-0">
-                <RecentSideMovementsList
-                  className="h-full"
-                  mode="cikis"
-                  movements={cikisStats?.rows.slice(0, 10) ?? []}
-                  products={productResult?.rows ?? []}
-                />
+            </Can>
+
+            <Can permission="stock.out">
+              <StockEntryForm
+                mode="cikis"
+                warehouses={warehouses ?? []}
+                suppliers={supplierResult?.rows ?? []}
+                onDone={handleDone}
+              />
+              <div className="lg:relative">
+                <div className="lg:absolute lg:inset-0">
+                  <RecentSideMovementsList
+                    className="h-full"
+                    mode="cikis"
+                    movements={cikisStats?.rows.slice(0, 10) ?? []}
+                    products={productResult?.rows ?? []}
+                  />
+                </div>
               </div>
-            </div>
-            
-            <TransferForm
-              warehouses={warehouses ?? []}
-              onDone={handleDone}
-            />
-            <div className="lg:relative">
-              <div className="lg:absolute lg:inset-0">
-                <RecentTransfersList
-                  className="h-full"
-                  movements={transferStats?.rows.slice(0, 10) ?? []}
-                  products={productResult?.rows ?? []}
-                  warehouses={warehouses ?? []}
-                />
+            </Can>
+
+            <Can permission="stock.transfer">
+              <TransferForm
+                warehouses={warehouses ?? []}
+                onDone={handleDone}
+              />
+              <div className="lg:relative">
+                <div className="lg:absolute lg:inset-0">
+                  <RecentTransfersList
+                    className="h-full"
+                    movements={transferStats?.rows.slice(0, 10) ?? []}
+                    products={productResult?.rows ?? []}
+                    warehouses={warehouses ?? []}
+                  />
+                </div>
               </div>
-            </div>
+            </Can>
           </Section>
         </SectionStack>
       </div>

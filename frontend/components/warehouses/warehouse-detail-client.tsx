@@ -46,6 +46,7 @@ import { WarehouseFormSheet } from "@/components/warehouses/warehouse-form-sheet
 import { useAsync } from "@/lib/hooks/use-async";
 import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
+import { useAuth } from "@/lib/auth";
 import { getWarehouse, listUsers, listWarehouses } from "@/lib/api/catalog";
 import { listWarehousesDetailed, getProductStockMatrix, updateWarehouseInput, deleteWarehouseInput } from "@/lib/api/warehouses";
 import { listMovements } from "@/lib/api/movements";
@@ -60,6 +61,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const { currency, rates } = useCurrency();
   const { showKurus } = useSettings();
+  const { can } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -71,9 +73,9 @@ export function WarehouseDetailClient({ id }: { id: string }) {
         getProductStockMatrix({ warehouseId: id }),
         listMovements({ warehouseId: id, pageSize: 50 }),
         listWarehouses(),
-        listUsers(),
+        can("users.manage") ? listUsers().catch(() => []) : Promise.resolve([]),
       ]),
-    [id],
+    [id, can],
   );
   const view = data ?? staleData;
 
@@ -160,7 +162,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
           description={`${warehouse.city} · ${warehouse.address}`}
           actions={
             <>
-              <Can permission="products.manage">
+              <Can permission="warehouses.manage">
                 <Button size="sm" onClick={() => setFormOpen(true)}>
                   <Pencil className="size-4" />
                   Düzenle

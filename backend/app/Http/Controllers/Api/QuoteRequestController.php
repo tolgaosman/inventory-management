@@ -146,12 +146,17 @@ class QuoteRequestController extends Controller
                 throw ApiException::validation('Seçilen siparişler aynı tedarikçiye ait olmalı.');
             }
 
+            $user = $request->user();
+            // Same rule as purchase orders: approvers' own quotes go out immediately,
+            // everyone else's waits for an approver to sign off.
+            $isApprover = $user->can('purchase.approve');
+
             $quote = QuoteRequest::query()->create([
                 'id' => IdGenerator::nextId('quote_requests', 'id', 'qr', 4),
                 'code' => IdGenerator::nextCode('quote_requests', 'code', 'NET-TKL-'),
                 'supplier_id' => $supplierId,
                 'created_at' => Carbon::now(),
-                'created_by' => $request->user()->getKey(),
+                'created_by' => $user->getKey(),
                 'valid_until' => $data['validUntil'],
                 'delivery_date' => $data['deliveryDate'],
                 'delivery_address' => trim($data['deliveryAddress']),
@@ -161,6 +166,9 @@ class QuoteRequestController extends Controller
                 'contact_email' => trim($data['contactEmail']),
                 'contact_phone' => trim($data['contactPhone']),
                 'notes' => trim($data['notes'] ?? '') ?: null,
+                'status' => $isApprover ? 'approved' : 'pending_approval',
+                'approved_by' => $isApprover ? $user->getKey() : null,
+                'approved_at' => $isApprover ? Carbon::now() : null,
             ]);
 
             foreach ($orders as $po) {
@@ -178,6 +186,38 @@ class QuoteRequestController extends Controller
         });
 
         return response()->json(Present::quoteRequest($quote->fresh(['items'])), 201);
+    }
+
+    private function transitionApproval(Request $request, string $id, string $to, string $conflictMessage): object
+    {
+        $quote = DB::transaction(function () use ($request, $id, $to, $conflictMessage) {
+            $quote = QuoteRequest::query()->lockForUpdate()->find($id);
+            if (! $quote) {
+                throw ApiException::notFound('Teklif isteği bulunamadı.');
+            }
+            if ($quote->status !== 'pending_approval') {
+                throw ApiException::conflict($conflictMessage);
+            }
+
+            $quote->status = $to;
+            $quote->approved_by = $request->user()->getKey();
+            $quote->approved_at = Carbon::now();
+            $quote->save();
+
+            return $quote;
+        });
+
+        return response()->json(Present::quoteRequest($quote->fresh(['items'])));
+    }
+
+    public function approve(Request $request, string $id)
+    {
+        return $this->transitionApproval($request, $id, 'approved', 'Yalnızca onay bekleyen teklifler onaylanabilir.');
+    }
+
+    public function reject(Request $request, string $id)
+    {
+        return $this->transitionApproval($request, $id, 'rejected', 'Yalnızca onay bekleyen teklifler reddedilebilir.');
     }
 
     /** Quotable orders grouped by supplier, for the supplier-selection dialog. */

@@ -44,6 +44,8 @@ import {
 } from "lucide-react";
 import { useAsync } from "@/lib/hooks/use-async";
 import { PageHeader } from "@/components/common/page-header";
+import { Can } from "@/components/common/can";
+import { ForbiddenState } from "@/components/common/forbidden-state";
 import { Section, SectionStack } from "@/components/common/section";
 import { PanelCard } from "@/components/common/panel-card";
 import { StatGrid } from "@/components/common/stat-card";
@@ -59,7 +61,7 @@ import { CHART_GRID, CHART_X_AXIS, ChartSwatch, ChartLegend, ChartTooltip } from
 import { WarehouseCapacityRadials } from "@/components/reports/warehouse-capacity-radials";
 import { WarehouseValueChart } from "@/components/reports/warehouse-value-chart";
 import { WarehouseMoversChart } from "@/components/reports/warehouse-movers-chart";
-import { useAuth } from "@/lib/auth";
+import { useAuth, type Permission } from "@/lib/auth";
 import { useSettings } from "@/lib/settings-context";
 import { useCurrency } from "@/lib/currency-context";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
@@ -86,11 +88,11 @@ const RANGE_OPTIONS: DateRangePreset[] = ["bu-ay", "son-3-ay", "son-6-ay", "bu-y
 
 type ReportTab = "urunler" | "depolar" | "hareketler" | "satin-alma";
 
-const REPORT_TABS: { value: ReportTab; label: string; icon: React.ElementType }[] = [
-  { value: "urunler", label: "Ürünler", icon: Package },
-  { value: "depolar", label: "Depolar", icon: Warehouse },
-  { value: "hareketler", label: "Hareketler", icon: ArrowLeftRight },
-  { value: "satin-alma", label: "Satın Alma", icon: ShoppingCart },
+const REPORT_TABS: { value: ReportTab; label: string; icon: React.ElementType; permission: Permission | Permission[] }[] = [
+  { value: "urunler", label: "Ürünler", icon: Package, permission: ["reports.stock", "reports.financial"] },
+  { value: "depolar", label: "Depolar", icon: Warehouse, permission: "reports.stock" },
+  { value: "hareketler", label: "Hareketler", icon: ArrowLeftRight, permission: ["reports.stock", "reports.financial"] },
+  { value: "satin-alma", label: "Satın Alma", icon: ShoppingCart, permission: "reports.financial" },
 ];
 
 const MOVEMENT_TYPE_COLOR: Record<string, string> = {
@@ -123,13 +125,22 @@ const EMPTY_KPIS = {
 };
 
 export function ReportsClient() {
-  const { name } = useAuth();
+  const { name, can } = useAuth();
   const { company } = useSettings();
   const { currency, rates } = useCurrency();
+  const visibleReportTabs = useMemo(() => REPORT_TABS.filter((t) => can(t.permission)), [can]);
   const [range, setRange] = useState<DateRangePreset>("son-6-ay");
   const [tab, setTab] = useState<ReportTab>("urunler");
   const [moversWarehouseId, setMoversWarehouseId] = useState<string>("all");
   const [purchasePage, setPurchasePage] = useState(1);
+
+  // Land on the first tab the user can actually see, in case "urunler" (the
+  // default) isn't one of them — e.g. a reports.financial-only role.
+  useEffect(() => {
+    if (visibleReportTabs.length > 0 && !visibleReportTabs.some((t) => t.value === tab)) {
+      setTab(visibleReportTabs[0].value);
+    }
+  }, [visibleReportTabs, tab]);
 
   useEffect(() => {
     setPurchasePage(1);
@@ -313,7 +324,8 @@ export function ReportsClient() {
   }, [warehouseCategoryShares]);
 
   return (
-    <div className={cn("space-y-6", datasetStatus === "loading" && !dataset && "opacity-60 transition-opacity")}>
+    <Can permission={["reports.stock", "reports.financial"]} fallback={<Forbidden />}>
+      <div className={cn("space-y-6", datasetStatus === "loading" && !dataset && "opacity-60 transition-opacity")}>
       <PageHeader
         title="Raporlar"
         description="Envanter ve stok operasyonlarınızı görsellerle analiz edin."
@@ -340,7 +352,7 @@ export function ReportsClient() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as ReportTab)} className="gap-4">
         <TabsList variant="line" className="w-full justify-start overflow-x-auto custom-scrollbar sm:w-fit">
-          {REPORT_TABS.map(({ value, label, icon: Icon }) => (
+          {visibleReportTabs.map(({ value, label, icon: Icon }) => (
             <TabsTrigger key={value} value={value}>
               <Icon className="size-4" />
               {label}
@@ -909,6 +921,7 @@ export function ReportsClient() {
         </TabsContent>
       </Tabs>
     </div>
+    </Can>
   );
 }
 
@@ -1229,5 +1242,14 @@ function MovementTable({
         </div>
       )}
     </PanelCard>
+  );
+}
+
+function Forbidden() {
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Raporlar" />
+      <ForbiddenState message="Raporları görüntülemek için yetkiniz yok." />
+    </div>
   );
 }

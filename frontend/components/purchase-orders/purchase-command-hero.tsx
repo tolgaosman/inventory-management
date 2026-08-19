@@ -12,20 +12,16 @@ import type { PurchaseOrderStats } from "@/lib/api/purchase-orders";
  */
 export function PurchaseCommandHero({
   stats,
-  replenishmentCount,
   currency,
   rate,
   onOverdueClick,
-  onReplenishmentClick,
   onDraftClick,
   onArrivingClick,
 }: {
   stats?: PurchaseOrderStats;
-  replenishmentCount?: number;
   currency: string;
   rate: number;
   onOverdueClick: () => void;
-  onReplenishmentClick: () => void;
   onDraftClick: () => void;
   onArrivingClick: () => void;
 }) {
@@ -33,7 +29,6 @@ export function PurchaseCommandHero({
 
   const chips: CommandHeroChip[] = [
     { key: "overdue", icon: Clock, label: "geciken sipariş", value: stats?.overdueCount, onClick: onOverdueClick },
-    { key: "replenishment", icon: AlertTriangle, label: "ikmal gerekli", value: replenishmentCount, onClick: onReplenishmentClick },
     { key: "draft", icon: Send, label: "taslak bekliyor", value: stats?.draftCount, onClick: onDraftClick },
     { key: "arriving", icon: PackageCheck, label: "bu hafta teslim", value: stats?.arrivingThisWeek, onClick: onArrivingClick },
   ];

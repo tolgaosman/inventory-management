@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
+import { ForbiddenState } from "@/components/common/forbidden-state";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { StatGrid } from "@/components/common/stat-card";
@@ -258,7 +259,8 @@ export function CategoriesClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <Can permission="products.view" fallback={<Forbidden />}>
+      <div className="space-y-6">
       <PageHeader
         title="Kategori Yönetimi"
         description="Ürünleri üst ve alt kategorilere ayırın; stok dağılımını kategori bazında izleyin."
@@ -511,6 +513,16 @@ export function CategoriesClient() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
+    </Can>
+  );
+}
+
+function Forbidden() {
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Kategori Yönetimi" />
+      <ForbiddenState message="Kategorileri görüntülemek için yetkiniz yok." />
     </div>
   );
 }

@@ -21,7 +21,16 @@ class UserController extends Controller
 {
     public function index()
     {
-        return response()->json(User::query()->get()->map(fn ($u) => Present::user($u))->all());
+        $query = User::query();
+        $user = auth()->user();
+        
+        if ($user->role === 'depo_yonetici') {
+            $query->whereIn('role', ['depo', 'depo_yonetici']);
+        } elseif ($user->role === 'satinalma_yonetici') {
+            $query->whereIn('role', ['satinalma', 'satinalma_yonetici']);
+        }
+
+        return response()->json($query->get()->map(fn ($u) => Present::user($u))->all());
     }
 
     private function initialsFor(string $name): string
@@ -42,6 +51,22 @@ class UserController extends Controller
             'email' => ['required', 'string'],
             'role' => ['required', 'in:admin,depo_yonetici,satinalma_yonetici,depo,satinalma'],
         ]);
+
+        $authUser = request()->user();
+        // Same department scoping as update()/destroy(): a manager may only
+        // create accounts for their own department, never the other side or
+        // another admin/manager. Only admin can create outside that box.
+        if ($authUser->role === 'depo_yonetici') {
+            if (! in_array($data['role'], ['depo', 'depo_yonetici'], true)) {
+                throw ApiException::forbidden('Sadece kendi departmanınızda kullanıcı oluşturabilirsiniz.');
+            }
+        } elseif ($authUser->role === 'satinalma_yonetici') {
+            if (! in_array($data['role'], ['satinalma', 'satinalma_yonetici'], true)) {
+                throw ApiException::forbidden('Sadece kendi departmanınızda kullanıcı oluşturabilirsiniz.');
+            }
+        } elseif ($authUser->role !== 'admin') {
+            throw ApiException::forbidden('Kullanıcı oluşturma yetkiniz yok.');
+        }
 
         $user = DB::transaction(function () use ($data) {
             $exists = User::query()->whereRaw('lower(email) = ?', [mb_strtolower(trim($data['email']))])->exists();
@@ -81,6 +106,21 @@ class UserController extends Controller
                 throw ApiException::notFound('Kullanıcı bulunamadı.');
             }
 
+            $authUser = request()->user();
+            if ($authUser->role !== 'admin' && isset($data['role'])) {
+                throw ApiException::forbidden('Rol değiştirme yetkiniz yok.');
+            }
+
+            if ($authUser->role === 'depo_yonetici') {
+                if (!in_array($user->role, ['depo', 'depo_yonetici'])) {
+                    throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları düzenleyebilirsiniz.');
+                }
+            } elseif ($authUser->role === 'satinalma_yonetici') {
+                if (!in_array($user->role, ['satinalma', 'satinalma_yonetici'])) {
+                    throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları düzenleyebilirsiniz.');
+                }
+            }
+
             if (array_key_exists('email', $data)) {
                 $taken = User::query()
                     ->whereKeyNot($id)
@@ -113,6 +153,14 @@ class UserController extends Controller
             $user = User::query()->lockForUpdate()->find($id);
             if (! $user) {
                 throw ApiException::notFound('Kullanıcı bulunamadı.');
+            }
+
+            $authUser = request()->user();
+            if ($authUser->role === 'depo_yonetici' && !in_array($user->role, ['depo', 'depo_yonetici'])) {
+                throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları silebilirsiniz.');
+            }
+            if ($authUser->role === 'satinalma_yonetici' && !in_array($user->role, ['satinalma', 'satinalma_yonetici'])) {
+                throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları silebilirsiniz.');
             }
 
             if ($request->user()?->getKey() === $user->getKey()) {

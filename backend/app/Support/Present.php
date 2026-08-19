@@ -154,6 +154,8 @@ class Present
             'receivedAt' => self::date($po->received_at),
             'currency' => $po->currency,
             'notes' => $po->notes,
+            'createdBy' => $po->relationLoaded('createdByUser') ? ($po->createdByUser->name ?? null) : null,
+            'approvedBy' => $po->relationLoaded('approvedByUser') ? ($po->approvedByUser->name ?? null) : null,
         ], fn ($v) => $v !== null);
     }
 
@@ -185,6 +187,9 @@ class Present
             'contactEmail' => $q->contact_email,
             'contactPhone' => $q->contact_phone,
             'notes' => $q->notes,
+            'status' => $q->status,
+            'approvedBy' => $q->approved_by,
+            'approvedAt' => self::date($q->approved_at),
         ], fn ($v) => $v !== null);
     }
 

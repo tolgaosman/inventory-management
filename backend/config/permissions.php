@@ -1,8 +1,12 @@
 <?php
 
-// Direct PHP port of frontend/lib/auth.tsx's ROLE_PERMISSIONS map (12 permissions, 3 roles).
-// Keep in sync manually — the frontend still enforces its own copy client-side for UI gating,
-// but this is now the source of truth servers must not be bypassed by editing requests.
+// Source of truth for authorization (17 permissions, 5 roles). The frontend receives this
+// role's permission list on login and uses it only to hide UI the user couldn't use anyway —
+// every route is enforced here too, so editing requests client-side buys nothing.
+//
+// Department split: the two "depo" roles own stock and warehouses, the two "satinalma" roles
+// own purchasing and suppliers. Managers add users.manage (scoped to their own department by
+// UserController) plus the reports permission for their side.
 
 return [
     'roles' => ['admin', 'depo_yonetici', 'satinalma_yonetici', 'depo', 'satinalma'],
@@ -10,35 +14,56 @@ return [
     'permissions' => [
         'products.view', 'products.manage',
         'warehouses.manage',
-        'stock.in', 'stock.out', 'stock.transfer',
-        'purchase.view', 'purchase.manage',
+        'stock.view', 'stock.in', 'stock.out', 'stock.transfer',
+        'purchase.view', 'purchase.manage', 'purchase.approve', 'purchase.receive',
         'suppliers.view', 'suppliers.manage',
-        'reports.view',
+        'reports.stock', 'reports.financial',
+        'financial.view',
         'users.manage',
     ],
 
     'role_permissions' => [
-        'depo' => ['products.view', 'stock.in', 'stock.out', 'stock.transfer'],
-        'satinalma' => ['products.view', 'purchase.view', 'purchase.manage', 'suppliers.view', 'suppliers.manage'],
+        'depo' => [
+            'products.view', 'products.manage',
+            'stock.view', 'stock.in', 'stock.out', 'stock.transfer',
+            'purchase.view', 'purchase.receive',
+            'suppliers.view',
+            'financial.view',
+        ],
+        'satinalma' => [
+            'products.view',
+            'stock.view',
+            'purchase.view', 'purchase.manage',
+            'suppliers.view',
+            'financial.view',
+        ],
         'depo_yonetici' => [
             'products.view', 'products.manage',
             'warehouses.manage',
-            'stock.in', 'stock.out', 'stock.transfer',
-            'reports.view',
+            'stock.view', 'stock.in', 'stock.out', 'stock.transfer',
+            'purchase.view', 'purchase.receive',
+            'suppliers.view',
+            'reports.stock',
+            'financial.view',
+            'users.manage',
         ],
         'satinalma_yonetici' => [
             'products.view',
-            'purchase.view', 'purchase.manage',
+            'stock.view',
+            'purchase.view', 'purchase.manage', 'purchase.approve', 'purchase.receive',
             'suppliers.view', 'suppliers.manage',
-            'reports.view',
+            'reports.financial',
+            'financial.view',
+            'users.manage',
         ],
         'admin' => [
             'products.view', 'products.manage',
             'warehouses.manage',
-            'stock.in', 'stock.out', 'stock.transfer',
-            'purchase.view', 'purchase.manage',
+            'stock.view', 'stock.in', 'stock.out', 'stock.transfer',
+            'purchase.view', 'purchase.manage', 'purchase.approve', 'purchase.receive',
             'suppliers.view', 'suppliers.manage',
-            'reports.view',
+            'reports.stock', 'reports.financial',
+            'financial.view',
             'users.manage',
         ],
     ],

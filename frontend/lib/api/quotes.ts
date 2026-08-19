@@ -62,6 +62,14 @@ export async function createQuoteRequest(input: CreateQuoteRequestInput): Promis
   return apiFetch<QuoteRequest>("/quote-requests", { method: "POST", body: input });
 }
 
+export async function approveQuoteRequest(id: string): Promise<QuoteRequest> {
+  return apiFetch<QuoteRequest>(`/quote-requests/${id}/approve`, { method: "POST" });
+}
+
+export async function rejectQuoteRequest(id: string): Promise<QuoteRequest> {
+  return apiFetch<QuoteRequest>(`/quote-requests/${id}/reject`, { method: "POST" });
+}
+
 /** For the supplier-selection dialog: quotable (draft or pending-approval) orders grouped by supplier, with totals for display. */
 export interface DraftOrderOption {
   id: string;

@@ -211,35 +211,6 @@ const ROLE_TINTS: Record<Role, TintName> = {
   depo: "amber",
 };
 
-const NOTIFICATION_ROWS: {
-  id: "notifyStock" | "notifyOrder" | "notifySystem";
-  label: string;
-  description: string;
-  icon: LucideIcon;
-  tint: TintName;
-}[] = [
-  {
-    id: "notifyStock",
-    label: "Kritik Stok Uyarıları",
-    description: "Ürünler kritik stok seviyesinin altına düştüğünde üst çubukta bildir.",
-    icon: AlertTriangle,
-    tint: "red",
-  },
-  {
-    id: "notifyOrder",
-    label: "Yeni Sipariş Uyarıları",
-    description: "Yeni bir satın alma siparişi oluşturulduğunda bildir.",
-    icon: ShoppingCart,
-    tint: "blue",
-  },
-  {
-    id: "notifySystem",
-    label: "Sistem Güncellemeleri",
-    description: "Planlı bakım ve sistem güncellemeleri hakkında bilgi al.",
-    icon: RefreshCw,
-    tint: "violet",
-  },
-];
 
 function passwordStrength(pw: string): { score: number; label: string; tone: "critical" | "warning" | "good" } {
   if (!pw) return { score: 0, label: "", tone: "critical" };
@@ -557,53 +528,6 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
         </div>
-
-        {/* Row 2: Bildirim Tercihleri */}
-        <SectionCard
-          icon={Bell}
-          tint="amber"
-          title="Bildirim Tercihleri"
-          description="Hangi durumlarda bildirim almak istediğinizi seçin."
-          hint="Değişiklikler anında uygulanır."
-        >
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {NOTIFICATION_ROWS.map((row) => {
-              const checked = notifications[row.id];
-              return (
-                <div
-                  key={row.id}
-                  className={cn(
-                    "flex items-start gap-3 rounded-xl border p-3 transition-colors",
-                    checked ? PILL[row.tint] : "border-border/60 hover:bg-muted/50",
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                      checked ? TINTS[row.tint] : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    <row.icon className="size-4" />
-                  </div>
-                  <div className="flex flex-1 items-start justify-between gap-3">
-                    <div className="space-y-1 leading-none">
-                      <Label htmlFor={row.id} className="cursor-pointer">
-                        {row.label}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">{row.description}</p>
-                    </div>
-                    <Checkbox
-                      id={row.id}
-                      checked={checked}
-                      onCheckedChange={(c) => updateNotifications({ [row.id]: Boolean(c) })}
-                      className="mt-0.5 shrink-0"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
       </Section>
       </SectionStack>
     </div>

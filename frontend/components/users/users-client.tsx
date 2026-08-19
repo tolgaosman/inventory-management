@@ -61,6 +61,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { createAppUser, deleteAppUser, listAppUsers, updateAppUser } from "@/lib/api/users";
 import { ApiError } from "@/lib/api/client";
 import { useAsync } from "@/lib/hooks/use-async";
+import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -86,6 +87,7 @@ function RoleBadge({ role }: { role: Role }) {
 }
 
 export function UsersClient() {
+  const { role: currentUserRole } = useAuth();
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const { data, staleData, status, refetch } = useAsync(() => listAppUsers(), []);
@@ -129,7 +131,7 @@ export function UsersClient() {
 
   function openCreate() {
     setEditing(undefined);
-    setFormValues({ name: "", email: "", role: "depo" });
+    setFormValues({ name: "", email: "", role: currentUserRole === "satinalma_yonetici" ? "satinalma" : "depo" });
     setFormOpen(true);
   }
 
@@ -204,6 +206,31 @@ export function UsersClient() {
   }
 
   const isFiltered = Boolean(searchInput || roleFilter !== "all");
+
+  const roleOptions = useMemo(() => {
+    if (currentUserRole === "admin") {
+      return [
+        { label: "Admin", value: "admin" },
+        { label: "Depo Müdürü", value: "depo_yonetici" },
+        { label: "Satın Alma Müdürü", value: "satinalma_yonetici" },
+        { label: "Depo Personeli", value: "depo" },
+        { label: "Satın Alma Personeli", value: "satinalma" },
+      ];
+    }
+    if (currentUserRole === "depo_yonetici") {
+      return [
+        { label: "Depo Müdürü", value: "depo_yonetici" },
+        { label: "Depo Personeli", value: "depo" },
+      ];
+    }
+    if (currentUserRole === "satinalma_yonetici") {
+      return [
+        { label: "Satın Alma Müdürü", value: "satinalma_yonetici" },
+        { label: "Satın Alma Personeli", value: "satinalma" },
+      ];
+    }
+    return [];
+  }, [currentUserRole]);
 
   return (
     <Can permission="users.manage" fallback={<Forbidden />}>
@@ -288,13 +315,7 @@ export function UsersClient() {
                         <DataTableColumnFilter
                           value={roleFilter}
                           onValueChange={setRoleFilter}
-                          options={[
-                            { label: "Admin", value: "admin" },
-                            { label: "Depo Müdürü", value: "depo_yonetici" },
-                            { label: "Satın Alma Müdürü", value: "satinalma_yonetici" },
-                            { label: "Depo Personeli", value: "depo" },
-                            { label: "Satın Alma Personeli", value: "satinalma" }
-                          ]}
+                          options={roleOptions}
                           title="Rol Seç"
                         />
                       </div>
@@ -369,13 +390,13 @@ export function UsersClient() {
                                 <Pencil className="size-4" />
                                 Düzenle
                               </DropdownMenuItem>
-                              {(user.role === "depo" || user.role === "satinalma") && (
+                              {currentUserRole === "admin" && (user.role === "depo" || user.role === "satinalma") && (
                                 <DropdownMenuItem onClick={() => handlePromote(user)}>
                                   <ShieldCheck className="size-4 text-primary" />
                                   Müdür Yap
                                 </DropdownMenuItem>
                               )}
-                              {(user.role === "depo_yonetici" || user.role === "satinalma_yonetici") && (
+                              {currentUserRole === "admin" && (user.role === "depo_yonetici" || user.role === "satinalma_yonetici") && (
                                 <DropdownMenuItem onClick={() => handleDemote(user)}>
                                   <UserCog className="size-4 text-muted-foreground" />
                                   Personel Yap
@@ -433,37 +454,61 @@ export function UsersClient() {
                   placeholder="ahmet@sirket.com"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-role">Rol</Label>
-                <Select
-                  value={formValues.role}
-                  onValueChange={(v) => setFormValues((prev) => ({ ...prev, role: v as Role }))}
-                >
-                  <SelectTrigger id="user-role" className="w-full">
-                    <SelectValue>{ROLE_LABELS[formValues.role]}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="size-3.5 text-tint-plum" />
-                        Admin
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="depo">
-                      <div className="flex items-center gap-2">
-                        <Warehouse className="size-3.5 text-tint-teal" />
-                        Depo Personeli
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="satinalma">
-                      <div className="flex items-center gap-2">
-                        <ShoppingCart className="size-3.5 text-tint-amber" />
-                        Satın Alma Personeli
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {currentUserRole === "admin" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="user-role">Rol</Label>
+                  <Select
+                    value={formValues.role}
+                    onValueChange={(v) => setFormValues((prev) => ({ ...prev, role: v as Role }))}
+                  >
+                    <SelectTrigger id="user-role" className="w-full">
+                      <SelectValue>{ROLE_LABELS[formValues.role]}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="size-3.5 text-tint-plum" />
+                          Admin
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="depo_yonetici">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="size-3.5 text-tint-blue" />
+                          Depo Müdürü
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="depo">
+                        <div className="flex items-center gap-2">
+                          <Warehouse className="size-3.5 text-tint-teal" />
+                          Depo Personeli
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="satinalma_yonetici">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="size-3.5 text-tint-blue" />
+                          Satın Alma Müdürü
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="satinalma">
+                        <div className="flex items-center gap-2">
+                          <ShoppingCart className="size-3.5 text-tint-amber" />
+                          Satın Alma Personeli
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-2 opacity-70 pointer-events-none">
+                  <Label htmlFor="user-role">Rol</Label>
+                  <Select value={formValues.role} disabled>
+                    <SelectTrigger id="user-role" className="w-full">
+                      <SelectValue>{ROLE_LABELS[formValues.role]}</SelectValue>
+                    </SelectTrigger>
+                  </Select>
+                  <p className="text-[0.8rem] text-muted-foreground mt-1">Rol değiştirme işlemi sadece Admin tarafından yapılabilir.</p>
+                </div>
+              )}
             </div>
 
             <DialogFooter>

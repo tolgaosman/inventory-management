@@ -21,10 +21,13 @@ import {
   BadgeCheck,
   Undo2,
   Receipt,
+  User,
+  UserCheck,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { ErrorState } from "@/components/common/error-state";
 import { Can } from "@/components/common/can";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -70,6 +73,7 @@ import { useRouter } from "next/navigation";
 export function PurchaseOrderDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const { currency, rates } = useCurrency();
+  const { can } = useAuth();
   const rate = rates?.[currency] || 1;
 
   const [formOpen, setFormOpen] = useState(false);
@@ -220,6 +224,8 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
     ...(view.receivedAt
       ? [{ icon: CalendarClock, label: "Teslim Alındı", value: formatDateTime(view.receivedAt) }]
       : []),
+    ...(view.createdBy ? [{ icon: User, label: "Oluşturan", value: view.createdBy }] : []),
+    ...(view.approvedBy ? [{ icon: UserCheck, label: "Onaylayan", value: view.approvedBy }] : []),
   ];
 
   const invoiceUrl = view.invoiceFilePath
@@ -240,96 +246,106 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
           title={view.code}
           description={`${view.supplierName} · ${formatDate(view.createdAt)}`}
           actions={
-            <Can permission="purchase.manage">
-              <>
-                {canMarkOrdered && (
-                  <Button size="sm" variant="outline" onClick={handleMarkOrdered}>
-                    <Send className="size-4" />
-                    Siparişi Gönder
-                  </Button>
-                )}
-                {canRequestApproval && (
-                  <Button size="sm" variant="outline" onClick={handleRequestApproval}>
-                    <Hourglass className="size-4" />
-                    Onaya Gönder
-                  </Button>
-                )}
-                {canApprove && (
-                  <Button size="sm" variant="outline" onClick={handleApprove}>
-                    <BadgeCheck className="size-4" />
-                    Siparişi Onayla
-                  </Button>
-                )}
-                {canReject && (
-                  <Button size="sm" variant="outline" onClick={handleReject}>
-                    <Undo2 className="size-4" />
-                    Siparişi Reddet
-                  </Button>
-                )}
-                {canReceive && (
-                  <Button size="sm" onClick={() => setReceiveOpen(true)}>
-                    <PackageCheck className="size-4" />
-                    Teslim Al
-                  </Button>
-                )}
-                {invoiceUrl && (
-                  <Button size="sm" variant="outline" onClick={() => window.open(invoiceUrl, '_blank', 'noopener,noreferrer')}>
-                    <Receipt className="size-4" />
-                    Faturayı Gör
-                  </Button>
-                )}
-                {canEdit && (
-                  <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
-                    <Pencil className="size-4" />
-                    Düzenle
-                  </Button>
-                )}
-                {(canCancel || canDelete) && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={
-                        <Button variant="outline" size="icon" className="size-9">
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      }
-                    />
-                    <DropdownMenuContent align="end">
-                      {canCancel && (
-                        <DropdownMenuItem variant="destructive" onClick={() => setCancelling(true)}>
-                          <Ban className="size-4" />
-                          İptal Et
-                        </DropdownMenuItem>
-                      )}
-                      {canDelete && (
-                        <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}>
-                          <Trash2 className="size-4" />
-                          Sil
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </>
-            </Can>
+            <>
+              {canMarkOrdered && can("purchase.approve") && (
+                <Button size="sm" variant="outline" onClick={handleMarkOrdered}>
+                  <Send className="size-4" />
+                  Siparişi Gönder
+                </Button>
+              )}
+              <Can permission="purchase.manage">
+                <>
+                  {canRequestApproval && (
+                    <Button size="sm" variant="outline" onClick={handleRequestApproval}>
+                      <Hourglass className="size-4" />
+                      Onaya Gönder
+                    </Button>
+                  )}
+                </>
+              </Can>
+              {canApprove && can("purchase.approve") && (
+                <Button size="sm" variant="outline" onClick={handleApprove}>
+                  <BadgeCheck className="size-4" />
+                  Siparişi Onayla
+                </Button>
+              )}
+              {canReject && can("purchase.approve") && (
+                <Button size="sm" variant="outline" onClick={handleReject}>
+                  <Undo2 className="size-4" />
+                  Siparişi Reddet
+                </Button>
+              )}
+              {canReceive && (can("purchase.manage") || can("purchase.receive")) && (
+                <Button size="sm" onClick={() => setReceiveOpen(true)}>
+                  <PackageCheck className="size-4" />
+                  Teslim Al
+                </Button>
+              )}
+              {invoiceUrl && (can("purchase.manage") || can("purchase.receive")) && (
+                <Button size="sm" variant="outline" onClick={() => window.open(invoiceUrl, '_blank', 'noopener,noreferrer')}>
+                  <Receipt className="size-4" />
+                  Faturayı Gör
+                </Button>
+              )}
+              <Can permission="purchase.manage">
+                <>
+                  {canEdit && (
+                    <Button size="sm" variant="outline" onClick={() => setFormOpen(true)}>
+                      <Pencil className="size-4" />
+                      Düzenle
+                    </Button>
+                  )}
+                  {(canCancel || canDelete) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="outline" size="icon" className="size-9">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end">
+                        {canCancel && (
+                          <DropdownMenuItem variant="destructive" onClick={() => setCancelling(true)}>
+                            <Ban className="size-4" />
+                            İptal Et
+                          </DropdownMenuItem>
+                        )}
+                        <Can permission="purchase.approve">
+                          {canDelete && (
+                            <DropdownMenuItem variant="destructive" onClick={() => setDeleting(true)}>
+                              <Trash2 className="size-4" />
+                              Sil
+                            </DropdownMenuItem>
+                          )}
+                        </Can>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </>
+              </Can>
+            </>
           }
         />
       </div>
 
       <div className={status === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <Card className="py-5 gap-2">
-            <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Wallet className="size-4.5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Toplam Tutar</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">
-                  {formatCurrency(view.total / rate, currency, 1, true)}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <Can permission="financial.view">
+            <Card className="py-5 gap-2">
+              <CardContent className="flex items-center gap-3 px-5">
+                <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Wallet className="size-4.5" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Toplam Tutar</p>
+                  <p className="text-lg font-semibold tabular-nums text-foreground">
+                    {formatCurrency(view.total / rate, currency, 1, true)}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </Can>
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
               <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -425,14 +441,16 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                             <p className="text-xs text-muted-foreground font-mono">{item.product.sku}</p>
                           </div>
                         </Link>
-                        <div className="shrink-0 text-right">
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {formatCurrency(lineTotal / rate, currency, 1, true)}
-                          </p>
-                          <p className="text-xs text-muted-foreground tabular-nums">
-                            {formatNumber(item.quantity)} × {formatCurrency(item.unitPrice / rate, currency, 1, true)}
-                          </p>
-                        </div>
+                        <Can permission="financial.view">
+                          <div className="shrink-0 text-right">
+                            <p className="text-sm font-semibold tabular-nums text-foreground">
+                              {formatCurrency(lineTotal / rate, currency, 1, true)}
+                            </p>
+                            <p className="text-xs text-muted-foreground tabular-nums">
+                              {formatNumber(item.quantity)} × {formatCurrency(item.unitPrice / rate, currency, 1, true)}
+                            </p>
+                          </div>
+                        </Can>
                       </div>
                       <div className="mt-2 flex items-center gap-2">
                         <Progress value={percent} className="h-1.5 flex-1">

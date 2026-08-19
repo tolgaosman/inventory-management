@@ -21,7 +21,16 @@ class EnsurePermission
             throw ApiException::forbidden('Oturum bulunamadı, lütfen giriş yapın.');
         }
 
-        if (! $user->can($permission)) {
+        $permissions = explode('|', $permission);
+        $hasPermission = false;
+        foreach ($permissions as $p) {
+            if ($user->can($p)) {
+                $hasPermission = true;
+                break;
+            }
+        }
+
+        if (! $hasPermission) {
             throw ApiException::forbidden('Bu işlem için yetkiniz yok.');
         }
 

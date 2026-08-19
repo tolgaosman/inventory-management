@@ -5,14 +5,19 @@ export type Permission =
   | "products.view"
   | "products.manage"
   | "warehouses.manage"
+  | "stock.view"
   | "stock.in"
   | "stock.out"
   | "stock.transfer"
   | "purchase.view"
   | "purchase.manage"
+  | "purchase.approve"
+  | "purchase.receive"
   | "suppliers.view"
   | "suppliers.manage"
-  | "reports.view"
+  | "reports.stock"
+  | "reports.financial"
+  | "financial.view"
   | "users.manage";
 
 export interface Session {

@@ -67,8 +67,7 @@ import { PurchaseStatusBadge } from "@/components/common/status-badge";
 import { PurchaseOrderFormSheet } from "@/components/purchase-orders/purchase-order-form-sheet";
 import { PurchaseOrderReceiveSheet } from "@/components/purchase-orders/purchase-order-receive-sheet";
 import { PurchaseCommandHero } from "@/components/purchase-orders/purchase-command-hero";
-import { ReplenishmentPanel } from "@/components/purchase-orders/replenishment-panel";
-import { ReplenishmentOrderDialog } from "@/components/purchase-orders/replenishment-order-dialog";
+
 import { SupplierScorecardPanel } from "@/components/purchase-orders/supplier-scorecard-panel";
 import { QuoteRequestDialog } from "@/components/purchase-orders/quote-request-dialog";
 import { QuoteRequestFormSheet } from "@/components/purchase-orders/quote-request-form-sheet";
@@ -85,7 +84,6 @@ import {
   listPurchaseOrders,
   getPurchaseOrder,
   getPurchaseOrderStats,
-  getReplenishmentSuggestions,
   getSupplierScorecards,
   createPurchaseOrder,
   updatePurchaseOrder,
@@ -95,7 +93,6 @@ import {
   approvePurchaseOrder,
   rejectPurchaseOrderApproval,
   cancelPurchaseOrder,
-  createPurchaseOrdersFromSuggestions,
   bulkMarkPurchaseOrdersOrdered,
   bulkCancelPurchaseOrders,
   bulkDeletePurchaseOrders,
@@ -115,7 +112,7 @@ import type { PurchaseOrderStatus } from "@/lib/types";
 
 type PurchaseOrderRow = Awaited<ReturnType<typeof listPurchaseOrders>>["rows"][number];
 type PurchaseOrderDetail = Awaited<ReturnType<typeof getPurchaseOrder>>;
-type CommandTab = "orders" | "replenishment" | "scorecard" | "quotes";
+type CommandTab = "orders" | "pending_approvals" | "scorecard" | "quotes";
 
 const STATUS_OPTIONS: PurchaseOrderStatus[] = [
   "draft",
@@ -135,12 +132,12 @@ export function PurchaseOrdersClient() {
   const searchParams = useSearchParams();
   const { currency, rates } = useCurrency();
   const rate = rates?.[currency] || 1;
-  const { name } = useAuth();
+  const { name, can } = useAuth();
   const { company } = useSettings();
 
   const [tab, setTab] = useState<CommandTab>(() => {
     const fromUrl = searchParams.get("tab");
-    return fromUrl === "replenishment" || fromUrl === "scorecard" ? fromUrl : "orders";
+    return fromUrl === "scorecard" || fromUrl === "pending_approvals" ? fromUrl : "orders";
   });
 
   const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
@@ -168,8 +165,7 @@ export function PurchaseOrdersClient() {
   const [cancelling, setCancelling] = useState<PurchaseOrderRow | undefined>(undefined);
   const [deleting, setDeleting] = useState<PurchaseOrderRow | undefined>(undefined);
 
-  const [replenishOrderOpen, setReplenishOrderOpen] = useState(false);
-  const [replenishLines, setReplenishLines] = useState<{ productId: string; quantity: number }[]>([]);
+
 
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteFormOpen, setQuoteFormOpen] = useState(false);
@@ -188,7 +184,8 @@ export function PurchaseOrdersClient() {
   const query: PurchaseOrderQuery = useMemo(
     () => ({
       search: search || undefined,
-      status: status === "all" ? undefined : status,
+      status: tab === "pending_approvals" ? "pending_approval" : (status === "all" ? undefined : status),
+      excludeStatus: tab === "orders" && status === "all" ? "pending_approval" : undefined,
       supplierId: supplierId === "all" ? undefined : supplierId,
       warehouseId: warehouseFilter === "all" ? undefined : warehouseFilter,
       priority: priorityFilter === "all" ? undefined : priorityFilter,
@@ -197,7 +194,7 @@ export function PurchaseOrdersClient() {
       sortBy: sorting[0]?.id,
       sortDir: sorting[0]?.desc ? "desc" : "asc",
     }),
-    [search, status, supplierId, warehouseFilter, priorityFilter, page, sorting],
+    [search, status, supplierId, warehouseFilter, priorityFilter, page, sorting, tab],
   );
 
   const filterKey = JSON.stringify({ search, status, supplierId, warehouseFilter, priorityFilter, sorting });
@@ -231,11 +228,7 @@ export function PurchaseOrdersClient() {
 
   const { data: stats, refetch: refetchStats } = useAsync(() => getPurchaseOrderStats(), []);
 
-  const { data: suggestionsData, status: replenishStatus, refetch: refetchReplenishment } = useAsync(
-    () => getReplenishmentSuggestions(),
-    [],
-  );
-  const suggestions = suggestionsData ?? [];
+
 
   const { data: scorecardData, status: scorecardStatus, refetch: refetchScorecards } = useAsync(
     () => getSupplierScorecards(),
@@ -246,7 +239,6 @@ export function PurchaseOrdersClient() {
   function refetchAll() {
     refetch();
     refetchStats();
-    refetchReplenishment();
     refetchScorecards();
   }
 
@@ -298,9 +290,7 @@ export function PurchaseOrdersClient() {
     setTab("orders");
     setStatus("all");
   }
-  function goToReplenishment() {
-    setTab("replenishment");
-  }
+
   function goToDrafts() {
     setTab("orders");
     setStatus("draft");
@@ -396,7 +386,7 @@ export function PurchaseOrdersClient() {
   async function handleReject(row: PurchaseOrderRow) {
     try {
       await rejectPurchaseOrderApproval(row.id);
-      toast.success("Onay reddedildi.", { description: `${row.code} tekrar "Taslak" durumuna alındı.` });
+      toast.success("Onay reddedildi.", { description: `${row.code} iptal edildi.` });
       refetchAll();
     } catch (err) {
       toast.error("Onay reddedilemedi", {
@@ -525,32 +515,6 @@ export function PurchaseOrdersClient() {
     });
   }
 
-  function openReplenishOrderDialog(lines: { productId: string; quantity: number }[]) {
-    setReplenishLines(lines);
-    setReplenishOrderOpen(true);
-  }
-
-  async function handleConfirmReplenishOrder(input: {
-    warehouseId: string;
-    expectedAt: string;
-    lines: { productId: string; quantity: number }[];
-  }) {
-    try {
-      const created = await createPurchaseOrdersFromSuggestions(input);
-      toast.success(`${created.length} taslak sipariş oluşturuldu.`, {
-        description: `${input.lines.length} ürün için tedarikçi başına ayrı sipariş hazırlandı.`,
-      });
-      refetchAll();
-      setTab("orders");
-      setStatus("draft");
-      setPriorityFilter("all");
-    } catch (err) {
-      toast.error("Sipariş oluşturulamadı", {
-        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
-      });
-      throw err;
-    }
-  }
 
   const columns = useMemo<ColumnDef<PurchaseOrderRow, unknown>[]>(
     () => [
@@ -761,12 +725,23 @@ export function PurchaseOrdersClient() {
         id: "actions",
         header: "",
         enableSorting: false,
-        meta: { className: "w-16 pr-5 text-right" },
+        meta: { className: tab === "pending_approvals" && can("purchase.approve") ? "w-28 pr-5 text-right" : "w-16 pr-5 text-right" },
         cell: ({ row }) => {
           const po = row.original;
           const actions = getAvailableActions({ status: po.status, hasReceivedProgress: po.receivedTotal > 0 });
           return (
-            <DropdownMenu>
+            <div className="flex items-center justify-end gap-0.5">
+              {tab === "pending_approvals" && can("purchase.approve") && (
+                <>
+                  <Button variant="ghost" size="icon" className="size-8 text-status-good hover:text-status-good/80 hover:bg-status-good/10" onClick={() => handleApprove(po)} title="Onayla">
+                    <BadgeCheck className="size-5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="size-8 text-status-critical hover:text-status-critical/80 hover:bg-status-critical/10" onClick={() => handleReject(po)} title="Reddet">
+                    <X className="size-5" />
+                  </Button>
+                </>
+              )}
+              <DropdownMenu>
               <DropdownMenuTrigger
                 render={
                   <Button variant="ghost" size="icon" className="size-8">
@@ -779,58 +754,71 @@ export function PurchaseOrdersClient() {
                   <Eye className="size-4" />
                   Detay Göster
                 </DropdownMenuItem>
+                {(actions.canMarkOrdered ||
+                  actions.canRequestApproval ||
+                  actions.canApprove ||
+                  actions.canReject ||
+                  actions.canEdit ||
+                  actions.canReceive ||
+                  actions.canCancel ||
+                  actions.canDelete) &&
+                  (can("purchase.manage") || can("purchase.receive")) && <DropdownMenuSeparator />}
+                {actions.canMarkOrdered && can("purchase.approve") && (
+                  <DropdownMenuItem onClick={() => handleMarkOrdered(po)}>
+                    <Send className="size-4" />
+                    Siparişi Gönder
+                  </DropdownMenuItem>
+                )}
                 <Can permission="purchase.manage">
                   <>
-                    {(actions.canMarkOrdered ||
-                      actions.canRequestApproval ||
-                      actions.canApprove ||
-                      actions.canReject ||
-                      actions.canEdit ||
-                      actions.canReceive ||
-                      actions.canCancel ||
-                      actions.canDelete) && <DropdownMenuSeparator />}
-                    {actions.canMarkOrdered && (
-                      <DropdownMenuItem onClick={() => handleMarkOrdered(po)}>
-                        <Send className="size-4" />
-                        Siparişi Gönder
-                      </DropdownMenuItem>
-                    )}
                     {actions.canRequestApproval && (
                       <DropdownMenuItem onClick={() => handleRequestApproval(po)}>
                         <Hourglass className="size-4" />
                         Onaya Gönder
                       </DropdownMenuItem>
                     )}
-                    {actions.canApprove && (
-                      <DropdownMenuItem onClick={() => handleApprove(po)}>
-                        <BadgeCheck className="size-4" />
-                        Siparişi Onayla
-                      </DropdownMenuItem>
-                    )}
-                    {actions.canReject && (
-                      <DropdownMenuItem onClick={() => handleReject(po)}>
-                        <Undo2 className="size-4" />
-                        Siparişi Reddet
-                      </DropdownMenuItem>
-                    )}
+                  </>
+                </Can>
+                {actions.canApprove && can("purchase.approve") && tab !== "pending_approvals" && (
+                  <DropdownMenuItem onClick={() => handleApprove(po)}>
+                    <BadgeCheck className="size-4" />
+                    Siparişi Onayla
+                  </DropdownMenuItem>
+                )}
+                {actions.canReject && can("purchase.approve") && tab !== "pending_approvals" && (
+                  <DropdownMenuItem onClick={() => handleReject(po)}>
+                    <Undo2 className="size-4" />
+                    Siparişi Reddet
+                  </DropdownMenuItem>
+                )}
+                <Can permission="purchase.manage">
+                  <>
                     {actions.canEdit && (
                       <DropdownMenuItem onClick={() => openEdit(po)}>
                         <Pencil className="size-4" />
                         Düzenle
                       </DropdownMenuItem>
                     )}
-                    {actions.canReceive && (
-                      <DropdownMenuItem onClick={() => openReceive(po)}>
-                        <PackageCheck className="size-4" />
-                        Teslim Al
-                      </DropdownMenuItem>
-                    )}
-                    {actions.canCancel && (
+                  </>
+                </Can>
+                {actions.canReceive && (can("purchase.manage") || can("purchase.receive")) && (
+                  <DropdownMenuItem onClick={() => openReceive(po)}>
+                    <PackageCheck className="size-4" />
+                    Teslim Al
+                  </DropdownMenuItem>
+                )}
+                <Can permission="purchase.manage">
+                  <>
+                    {actions.canCancel && tab !== "pending_approvals" && (
                       <DropdownMenuItem variant="destructive" onClick={() => setCancelling(po)}>
                         <Ban className="size-4" />
                         İptal Et
                       </DropdownMenuItem>
                     )}
+                  </>
+                </Can>
+                <Can permission="purchase.approve">
+                  <>
                     {actions.canDelete && (
                       <DropdownMenuItem variant="destructive" onClick={() => setDeleting(po)}>
                         <Trash2 className="size-4" />
@@ -841,12 +829,17 @@ export function PurchaseOrdersClient() {
                 </Can>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           );
         },
       },
     ],
-    [currency, rate, selectedIds, view?.rows],
-  );
+    [selectedIds, view, currency, rates, handleMarkOrdered, handleRequestApproval, handleApprove, handleReject, can, tab],
+  ).filter((col) => {
+    if (col.id === "total" && !can("financial.view")) return false;
+    if (col.id === "progress" && tab === "pending_approvals") return false;
+    return true;
+  });
 
   return (
     <Can permission="purchase.view" fallback={<Forbidden />}>
@@ -900,11 +893,9 @@ export function PurchaseOrdersClient() {
 
         <PurchaseCommandHero
           stats={stats}
-          replenishmentCount={suggestions.length}
           currency={currency}
           rate={rate}
           onOverdueClick={goToOverdue}
-          onReplenishmentClick={goToReplenishment}
           onDraftClick={goToDrafts}
           onArrivingClick={goToArrivingSoon}
         />
@@ -915,23 +906,28 @@ export function PurchaseOrdersClient() {
               <ShoppingCart className="size-4" />
               Siparişler
             </TabsTrigger>
-            <TabsTrigger value="replenishment">
-              <AlertTriangle className="size-4" />
-              İkmal Önerileri
-              {suggestions.length > 0 && (
-                <Badge variant="secondary" className="ml-1 px-1.5 text-micro">
-                  {suggestions.length}
-                </Badge>
-              )}
-            </TabsTrigger>
+            {can("purchase.manage") && (
+              <TabsTrigger value="pending_approvals">
+                <BadgeCheck className="size-4" />
+                Onay Bekleyenler
+                {stats?.pendingApprovalCount ? (
+                  <Badge variant="secondary" className="ml-1 px-1.5 text-micro">
+                    {stats.pendingApprovalCount}
+                  </Badge>
+                ) : null}
+              </TabsTrigger>
+            )}
+
             <TabsTrigger value="scorecard">
               <Truck className="size-4" />
               Tedarikçi Karnesi
             </TabsTrigger>
-            <TabsTrigger value="quotes">
-              <FileSignature className="size-4" />
-              Teklifler
-            </TabsTrigger>
+            {can("purchase.manage") && (
+              <TabsTrigger value="quotes">
+                <FileSignature className="size-4" />
+                Teklifler
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="orders">
@@ -986,36 +982,42 @@ export function PurchaseOrdersClient() {
                     <span>Sipariş Seçildi</span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleBulkMarkOrdered}
-                      disabled={bulkProcessing}
-                      className="h-8 gap-1 border-primary text-xs text-primary hover:bg-primary/10"
-                    >
-                      <Send className="size-3.5" />
-                      Toplu Gönder
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setBulkAction("cancel")}
-                      disabled={bulkProcessing}
-                      className="h-8 gap-1 border-status-warning/30 text-xs text-status-warning-foreground hover:bg-status-warning/10"
-                    >
-                      <Ban className="size-3.5" />
-                      Toplu İptal
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setBulkAction("delete")}
-                      disabled={bulkProcessing}
-                      className="h-8 gap-1 text-xs"
-                    >
-                      <Trash2 className="size-3.5" />
-                      Toplu Sil
-                    </Button>
+                    <Can permission="purchase.approve">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleBulkMarkOrdered}
+                        disabled={bulkProcessing}
+                        className="h-8 gap-1 border-primary text-xs text-primary hover:bg-primary/10"
+                      >
+                        <Send className="size-3.5" />
+                        Toplu Gönder
+                      </Button>
+                    </Can>
+                    <Can permission="purchase.manage">
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setBulkAction("cancel")}
+                          disabled={bulkProcessing}
+                          className="h-8 gap-1 border-status-warning/30 text-xs text-status-warning-foreground hover:bg-status-warning/10"
+                        >
+                          <Ban className="size-3.5" />
+                          Toplu İptal
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => setBulkAction("delete")}
+                          disabled={bulkProcessing}
+                          className="h-8 gap-1 text-xs"
+                        >
+                          <Trash2 className="size-3.5" />
+                          Toplu Sil
+                        </Button>
+                      </>
+                    </Can>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -1049,15 +1051,32 @@ export function PurchaseOrdersClient() {
             </SectionStack>
           </TabsContent>
 
-          <TabsContent value="replenishment">
-            <ReplenishmentPanel
-              suggestions={suggestions}
-              loading={replenishStatus === "loading" && suggestions.length === 0}
-              currency={currency}
-              rate={rate}
-              onCreateOrders={openReplenishOrderDialog}
-            />
-          </TabsContent>
+          {can("purchase.manage") && (
+            <TabsContent value="pending_approvals">
+              <SectionStack className={fetchStatus === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
+                <Section index={0}>
+                  <DataTable
+                    columns={columns}
+                    data={view?.rows ?? []}
+                    total={view?.total ?? 0}
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setPage}
+                    loading={!view}
+                    error={fetchStatus === "error" && !view ? error : undefined}
+                    onRetry={refetch}
+                    sorting={sorting}
+                    onSortingChange={setSorting}
+                    isFiltered={false}
+                    emptyTitle="Onay bekleyen sipariş yok"
+                    emptyDescription="Şu anda onayınızı bekleyen herhangi bir satın alma siparişi bulunmuyor."
+                  />
+                </Section>
+              </SectionStack>
+            </TabsContent>
+          )}
+
+
 
           <TabsContent value="scorecard">
             <SupplierScorecardPanel
@@ -1068,9 +1087,11 @@ export function PurchaseOrdersClient() {
             />
           </TabsContent>
 
-          <TabsContent value="quotes">
-            <QuotesAndOrdersPanel refreshKey={quoteRefreshKey} />
-          </TabsContent>
+          {can("purchase.manage") && (
+            <TabsContent value="quotes">
+              <QuotesAndOrdersPanel refreshKey={quoteRefreshKey} />
+            </TabsContent>
+          )}
         </Tabs>
 
         <PurchaseOrderFormSheet
@@ -1094,14 +1115,7 @@ export function PurchaseOrdersClient() {
           onDone={refetchAll}
         />
 
-        <ReplenishmentOrderDialog
-          open={replenishOrderOpen}
-          onOpenChange={setReplenishOrderOpen}
-          lines={replenishLines}
-          suggestions={suggestions}
-          warehouses={warehouses}
-          onConfirm={handleConfirmReplenishOrder}
-        />
+
 
         <QuoteRequestDialog
           open={quoteDialogOpen}

@@ -13,7 +13,16 @@ class QuoteRequestTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** An approver — used where the test needs a mechanic (e.g. marking an order
+     *  "ordered") that isn't itself what's being tested. Approval-routing behavior
+     *  for quotes is covered separately below using staff().
+     */
     private function buyer(): User
+    {
+        return User::factory()->role('satinalma_yonetici')->create();
+    }
+
+    private function staff(): User
     {
         return User::factory()->role('satinalma')->create();
     }
@@ -98,5 +107,82 @@ class QuoteRequestTest extends TestCase
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/quote-requests', $this->quotePayload([]));
 
         $response->assertStatus(422);
+    }
+
+    public function test_quote_created_by_an_approver_is_approved_immediately(): void
+    {
+        $approver = $this->buyer();
+        $supplier = Supplier::factory()->create();
+        $order = $this->createDraftOrder($approver, $supplier);
+
+        $response = $this->actingAs($approver, 'sanctum')->postJson('/api/quote-requests', $this->quotePayload([$order['id']]));
+
+        $response->assertCreated()->assertJsonPath('status', 'approved');
+    }
+
+    public function test_quote_created_by_staff_without_approve_starts_pending_approval(): void
+    {
+        $staff = $this->staff();
+        $supplier = Supplier::factory()->create();
+        $order = $this->createDraftOrder($staff, $supplier);
+
+        $response = $this->actingAs($staff, 'sanctum')->postJson('/api/quote-requests', $this->quotePayload([$order['id']]));
+
+        $response->assertCreated()->assertJsonPath('status', 'pending_approval');
+    }
+
+    public function test_approver_can_approve_a_staff_created_quote(): void
+    {
+        $staff = $this->staff();
+        $approver = $this->buyer();
+        $supplier = Supplier::factory()->create();
+        $order = $this->createDraftOrder($staff, $supplier);
+        $quote = $this->actingAs($staff, 'sanctum')
+            ->postJson('/api/quote-requests', $this->quotePayload([$order['id']]))
+            ->json();
+
+        $this->actingAs($approver, 'sanctum')->postJson("/api/quote-requests/{$quote['id']}/approve")
+            ->assertOk()->assertJsonPath('status', 'approved');
+    }
+
+    public function test_approver_can_reject_a_staff_created_quote(): void
+    {
+        $staff = $this->staff();
+        $approver = $this->buyer();
+        $supplier = Supplier::factory()->create();
+        $order = $this->createDraftOrder($staff, $supplier);
+        $quote = $this->actingAs($staff, 'sanctum')
+            ->postJson('/api/quote-requests', $this->quotePayload([$order['id']]))
+            ->json();
+
+        $this->actingAs($approver, 'sanctum')->postJson("/api/quote-requests/{$quote['id']}/reject")
+            ->assertOk()->assertJsonPath('status', 'rejected');
+    }
+
+    public function test_staff_cannot_approve_their_own_quote(): void
+    {
+        $staff = $this->staff();
+        $supplier = Supplier::factory()->create();
+        $order = $this->createDraftOrder($staff, $supplier);
+        $quote = $this->actingAs($staff, 'sanctum')
+            ->postJson('/api/quote-requests', $this->quotePayload([$order['id']]))
+            ->json();
+
+        $this->actingAs($staff, 'sanctum')->postJson("/api/quote-requests/{$quote['id']}/approve")
+            ->assertStatus(403);
+    }
+
+    public function test_approving_a_non_pending_quote_is_rejected(): void
+    {
+        $approver = $this->buyer();
+        $supplier = Supplier::factory()->create();
+        $order = $this->createDraftOrder($approver, $supplier);
+        $quote = $this->actingAs($approver, 'sanctum')
+            ->postJson('/api/quote-requests', $this->quotePayload([$order['id']]))
+            ->json();
+
+        // Already approved on creation (approver-authored).
+        $this->actingAs($approver, 'sanctum')->postJson("/api/quote-requests/{$quote['id']}/approve")
+            ->assertStatus(409)->assertJsonPath('code', 'CONFLICT');
     }
 }

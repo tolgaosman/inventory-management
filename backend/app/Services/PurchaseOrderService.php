@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
+use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\IdGenerator;
 use App\Support\Present;
@@ -103,7 +104,7 @@ class PurchaseOrderService
         }
     }
 
-    public function create(array $input): array
+    public function create(array $input, User $user): array
     {
         if (! Supplier::query()->whereKey($input['supplierId'])->exists()) {
             throw ApiException::validation('Tedarikçi bulunamadı.');
@@ -116,15 +117,20 @@ class PurchaseOrderService
         }
         $this->validateItems($input['items']);
 
-        $po = DB::transaction(function () use ($input) {
+        // Approvers open orders as drafts they can send straight through; everyone
+        // else's order lands in the approval queue immediately.
+        $initialStatus = $user->can('purchase.approve') ? 'draft' : 'pending_approval';
+
+        $po = DB::transaction(function () use ($input, $initialStatus, $user) {
             $po = PurchaseOrder::query()->create([
                 'id' => IdGenerator::nextId('purchase_orders', 'id', 'po', 4),
                 'code' => IdGenerator::nextCode('purchase_orders', 'code', 'NET-PO-'),
                 'supplier_id' => $input['supplierId'],
                 'warehouse_id' => $input['warehouseId'],
-                'status' => 'draft',
+                'status' => $initialStatus,
                 'priority' => $input['priority'] ?? 'medium',
                 'created_at' => Carbon::now(),
+                'created_by' => $user->getKey(),
                 'expected_at' => $input['expectedAt'],
                 'received_at' => null,
                 'currency' => 'TRY',
@@ -138,15 +144,20 @@ class PurchaseOrderService
         return Present::purchaseOrder($po->fresh(['items']));
     }
 
-    public function update(string $id, array $input): array
+    public function update(string $id, array $input, User $user): array
     {
-        $po = DB::transaction(function () use ($id, $input) {
+        $po = DB::transaction(function () use ($id, $input, $user) {
             $po = $this->findOrFail($id, lock: true);
 
             // Editing stays open while an order is still being negotiated:
             // draft, awaiting approval, or sent but with nothing received yet.
             if (! in_array($po->status, ['draft', 'pending_approval', 'ordered'], true)) {
                 throw ApiException::conflict('Yalnızca taslak, onay bekleyen veya sipariş edilmiş siparişler düzenlenebilir.');
+            }
+            // Once an order has been approved and sent (`ordered`), only an approver
+            // can still change it — staff would otherwise edit around the approval.
+            if ($po->status === 'ordered' && ! $user->can('purchase.approve')) {
+                throw ApiException::forbidden('Sipariş edilmiş bir siparişi yalnızca onay yetkisi olanlar düzenleyebilir.');
             }
             if ($po->items->contains(fn ($i) => (int) $i->received_quantity > 0)) {
                 throw ApiException::conflict('Kısmen de olsa teslim alınmış bir sipariş düzenlenemez.');
@@ -189,29 +200,31 @@ class PurchaseOrderService
     {
         DB::transaction(function () use ($id) {
             $po = $this->findOrFail($id, lock: true);
-            if ($po->status !== 'draft') {
-                throw ApiException::conflict('Yalnızca taslak siparişler silinebilir; gönderilmiş siparişleri iptal edin.');
+            if (! in_array($po->status, ['draft', 'cancelled'], true)) {
+                throw ApiException::conflict('Yalnızca taslak ve iptal edilmiş siparişler silinebilir.');
             }
             $po->items()->delete();
             $po->delete();
         });
     }
 
-    /** Applies a single status transition guarded by $allowedFrom. */
-    private function transition(string $id, array $allowedFrom, string $to, string $conflictMessage): array
+    private function transition(string $id, array $allowedFrom, string $to, string $conflictMessage, ?callable $onTransition = null): array
     {
-        $po = DB::transaction(function () use ($id, $allowedFrom, $to, $conflictMessage) {
+        $po = DB::transaction(function () use ($id, $allowedFrom, $to, $conflictMessage, $onTransition) {
             $po = $this->findOrFail($id, lock: true);
             if (! in_array($po->status, $allowedFrom, true)) {
                 throw ApiException::conflict($conflictMessage);
             }
             $po->status = $to;
+            if ($onTransition) {
+                $onTransition($po);
+            }
             $po->save();
 
             return $po;
         });
 
-        return $this->toRow($po->fresh(['items', 'supplier', 'warehouse']));
+        return $this->toRow($po->fresh(['items', 'supplier', 'warehouse', 'createdByUser', 'approvedByUser']));
     }
 
     public function markOrdered(string $id): array
@@ -224,14 +237,16 @@ class PurchaseOrderService
         return $this->transition($id, ['draft'], 'pending_approval', 'Yalnızca taslak siparişler onaya gönderilebilir.');
     }
 
-    public function approve(string $id): array
+    public function approve(string $id, User $user): array
     {
-        return $this->transition($id, ['pending_approval'], 'ordered', 'Yalnızca onay bekleyen siparişler onaylanabilir.');
+        return $this->transition($id, ['pending_approval'], 'ordered', 'Yalnızca onay bekleyen siparişler onaylanabilir.', function ($po) use ($user) {
+            $po->approved_by = $user->getKey();
+        });
     }
 
     public function reject(string $id): array
     {
-        return $this->transition($id, ['pending_approval'], 'draft', 'Yalnızca onay bekleyen siparişler reddedilebilir.');
+        return $this->transition($id, ['pending_approval'], 'cancelled', 'Yalnızca onay bekleyen siparişler reddedilebilir.');
     }
 
     public function cancel(string $id): array
@@ -375,8 +390,8 @@ class PurchaseOrderService
     public function bulkDelete(array $ids): array
     {
         return $this->bulk($ids, function (PurchaseOrder $po) {
-            if ($po->status !== 'draft') {
-                return 'Yalnızca taslak siparişler silinebilir.';
+            if (! in_array($po->status, ['draft', 'cancelled'], true)) {
+                return 'Yalnızca taslak ve iptal edilmiş siparişler silinebilir.';
             }
             $po->items()->delete();
             $po->delete();

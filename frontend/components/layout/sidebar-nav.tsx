@@ -93,7 +93,25 @@ export function SidebarNav({ onNavigate, className }: { onNavigate?: () => void;
 
   const sections = NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => !item.permission || can(item.permission)),
+    items: section.items
+      .map((item) => {
+        if (!item.children) return item;
+        const filteredChildren = item.children.filter((child) => {
+          if (!child.permission) return true;
+          if (Array.isArray(child.permission)) return child.permission.some(can);
+          return can(child.permission);
+        });
+        if (filteredChildren.length === 1) {
+          const only = filteredChildren[0];
+          return { ...item, href: only.href, label: only.label, icon: only.icon, children: undefined };
+        }
+        return { ...item, children: filteredChildren.length > 0 ? filteredChildren : undefined };
+      })
+      .filter((item) => {
+        if (!item.permission) return true;
+        if (Array.isArray(item.permission)) return item.permission.some(can);
+        return can(item.permission);
+      }),
   })).filter((section) => section.items.length > 0);
 
   return (

@@ -120,6 +120,8 @@ export interface PurchaseOrder {
   currency: "TRY";
   notes?: string;
   invoiceFilePath?: string | null;
+  createdBy?: string;
+  approvedBy?: string;
 }
 
 export type QuoteCurrency = "try" | "usd" | "eur" | "gbp";
@@ -151,7 +153,12 @@ export interface QuoteRequest {
   contactEmail: string;
   contactPhone: string;
   notes?: string;
+  status: QuoteRequestStatus;
+  approvedBy?: string;
+  approvedAt?: string;
 }
+
+export type QuoteRequestStatus = "pending_approval" | "approved" | "rejected";
 
 export interface PagedQuery {
   page?: number;

@@ -1,51 +1,46 @@
 @AGENTS.md
 
-# Recent Work (uncommitted, since the CLAUDE.md file was created 2026-08-10)
+# Recent Work (uncommitted, since the last commit `a665a1b` on 2026-08-17)
 
-Everything below is still sitting in the working tree — `git status` shows it as modified/untracked, not yet committed. Written so a fresh session knows what exists in the app right now without re-deriving it from a cold read of every file.
+Everything below is still sitting in the working tree — `git status` shows it as modified/untracked, not yet committed. Written so a fresh session knows what exists in the app right now without re-deriving it from a cold read of every file. This supersedes anything below that talks about replenishment/İkmal Önerileri — that feature was ripped out (see below).
 
-## Satın Alma (Purchase Orders) — flagship page
+## RBAC overhaul: finer-grained permissions + department scoping
 
-`/satin-alma` was rebuilt into the app's most functionally dense page: full CRUD (list/detail/create/edit), receive-to-stock, cancel, delete, all gated through `Can`/`useAuth` permissions (`purchase.view`/`purchase.manage`).
+The permission set (`backend/config/permissions.php`, `frontend/lib/api/auth.ts`) was split more finely:
+- `reports.view` → split into `reports.stock` and `reports.financial`.
+- New `stock.view` (read-only movement history, distinct from `stock.in`/`stock.out`/`stock.transfer` which are write actions).
+- New `purchase.approve` (gate on the approve/reject actions, previously bundled into `purchase.manage`) and `purchase.receive` (gate on receive/invoice-upload, so warehouse roles can receive POs without full `purchase.manage`).
+- New `financial.view` — gates purchase/sale price visibility everywhere (see below).
+- `depo_yonetici` and `satinalma_yonetici` both gained `users.manage`, but scoped: `UserController` (`backend/app/Http/Controllers/Api/UserController.php`) now filters `index()` and enforces on `store`/`update`/`destroy` so a `depo_yonetici` can only see/create/edit/delete `depo`/`depo_yonetici` users (and `satinalma_yonetici` likewise for `satinalma`/`satinalma_yonetici`), and only `admin` can change a user's `role`. `users-client.tsx` mirrors this in the UI: `roleOptions` is now computed from `currentUserRole` (via `useAuth`), and the promote/demote menu items are admin-only.
+- `EnsurePermission` middleware (`backend/app/Http/Middleware/EnsurePermission.php`) now accepts pipe-delimited alternatives in the route middleware string (`perm:purchase.manage|purchase.receive`) and passes if the user has *any* one of them — used throughout `routes/api.php` for the new split permissions (receive, reports).
+- Frontend `Can` (`components/common/can.tsx`) and `NavItem.permission` (`components/layout/nav-config.ts`) now accept `Permission | Permission[]` (any-of), not just a single permission — needed for the same OR-permission cases.
 
-Structure is "command center": a dark hero block (`components/purchase-orders/purchase-command-hero.tsx`) above three tabs (`components/purchase-orders/purchase-orders-client.tsx`):
-- **Siparişler** — the order list/table, with row selection, bulk send/cancel/delete, a depo filter, an "sadece gecikenler" toggle, and filtered/selection-aware Excel/PDF export.
-- **İkmal Önerileri** (`replenishment-panel.tsx` + `replenishment-order-dialog.tsx`) — a reorder-suggestion engine: cross-references stock, open-order coverage, and `Product.maxStock` to flag what needs reordering, with editable quantities and one-click bulk draft-order creation grouped by supplier.
-- **Tedarikçi Karnesi** (`supplier-scorecard-panel.tsx`) — per-supplier fill rate, on-time-delivery %, and average lead time, sortable.
+**financial.view** gates purchase/sale prices and stock-value figures across the app: `product-detail-client.tsx` (Alış/Satış Fiyatı fields, Stok Değeri card), `products-client.tsx` (salePrice column, min/max price filter). Roles without it (e.g. plain `depo`) see products/stock but not money.
 
-Backing logic lives in `lib/api/purchase-orders.ts` (`getPurchaseOrderStats`, `getReplenishmentSuggestions`, `createPurchaseOrdersFromSuggestions`, `getSupplierScorecards`, `bulkMarkPurchaseOrdersOrdered`/`bulkCancelPurchaseOrders`/`bulkDeletePurchaseOrders`) and `lib/purchase-order-actions.ts` (`getAvailableActions` — the single source of truth for which actions a PO status allows, shared by the list and detail views so they can't drift).
+## Purchase-order approval workflow surfaced in the header
 
-**Schema additions** (additive, in `lib/types.ts`): `PurchaseOrder.receivedAt` (stamped when a PO is fully received — the only real delivery timestamp in the schema) and `StockMovement.purchaseOrderId` (ties a "giriş" movement back to the PO that created it). Backfilled into the mock seed (`lib/mock/data.ts`) with realistic ±jitter so on-time-delivery % isn't a suspicious 100%.
+`app-header.tsx` was reworked: for `satinalma_yonetici`, the notification bell now has two tabs (`Tabs`/`TabsList`/`TabsContent`) — "Kritik Stok" (unchanged critical-stock list) and "Onay Bekleyen" (pending-approval purchase orders, fetched via `listPurchaseOrders({ status: "pending_approval" })`). Other roles still see the old single-list bell. The old `notifications.notifyStock` on/off toggle gate was removed — critical-stock notifications are now always fetched, since the "Bildirim Tercihleri" settings section that controlled it was deleted from `ayarlar/page.tsx` (see below).
 
-The tab state reads an optional `?tab=` query param on mount (not fully URL-synced, just a one-time deep-link read) so other pages can link straight into e.g. the scorecard tab.
+`purchase-orders-client.tsx`'s tab set changed from `orders | replenishment | scorecard | quotes` to `orders | pending_approvals | scorecard | quotes`. The "Siparişler" tab now excludes `pending_approval`-status orders by default (`excludeStatus` on the query when no explicit status filter is set) since they have their own dedicated tab/status filter now.
 
-## Command-hero pattern rolled out to 4 more pages
+## İkmal Önerileri (replenishment) — removed entirely
 
-The dark "hero" surface + big headline number + tick meter + clickable filter chips, originally built for satın alma, was extracted into a shared primitive: `components/common/command-hero.tsx` (`CommandHero`). `purchase-command-hero.tsx` now just wraps it. Four more pages adopted it, each with its own thin wrapper component:
+The reorder-suggestion feature described earlier in this file no longer exists:
+- Backend: `ReplenishmentController.php` deleted, its two routes (`/replenishment/suggestions`, `/replenishment/orders`) removed from `routes/api.php`.
+- Frontend: `replenishment-panel.tsx` and `replenishment-order-dialog.tsx` deleted; `purchase-orders-client.tsx` no longer imports them or the `getReplenishmentSuggestions`/`createPurchaseOrdersFromSuggestions` API functions (also removed from `lib/api/purchase-orders.ts`), and the "İkmal Önerileri" tab is gone from the Satın Alma command center. Tedarikçi Karnesi (scorecard) tab is unaffected.
 
-- **Ürünler** — `products-command-hero.tsx`. Headline: total inventory value. Chips: toplam ürün, kritik stok, düşük stok, **stok fazlası** (new — first use of `Product.maxStock` as an aggregate), pasif ürün (new — `ProductQuery` gained a `status` filter that didn't exist before).
-- **Depolar** — `warehouse-command-hero.tsx`. Headline: total inventory value across warehouses. Chips: toplam depo, toplam stok adedi, kritik doluluk (≥90%, new — drives a `capacityFilter` that narrows the warehouse card grid), atıl kapasite (<30%, new), en değerli depo (reuses the existing warehouse-select-to-filter-matrix mechanism).
-- **Stok Hareketleri** — `movement-command-hero.tsx`. Headline: today's net stock change (today wasn't a concept anywhere else on this page before — everything was all-time totals). Chips: toplam kayıt/giriş/çıkış/transfer (set the `type` filter), bugün (sets date range to today), fire/iade (new — `MovementQuery` gained a `reason` filter), en hareketli depo.
-- **Tedarikçiler** — `supplier-command-hero.tsx`. Reuses `getSupplierScorecards()` from the satın alma module instead of recomputing anything; added two new columns to the supplier table (Açık Sipariş Hacmi, Zamanında Teslimat %). Chips: toplam tedarikçi/ürün çeşidi/şehir (overview), riskli tedarikçi (on-time < 60%, deep-links to `/satin-alma?tab=scorecard` rather than rebuilding the sortable scorecard on this page), ürünsüz tedarikçi (client-side filter toggle).
+## Ayarlar (Settings) — Bildirim Tercihleri section removed
 
-On all four pages, the old separate white `StatGrid` card row below the hero was removed — its numbers were folded into the hero itself as additional chips so nothing is shown twice.
+The notification-preferences card (kritik stok / yeni sipariş / sistem güncellemeleri checkboxes) was deleted from `ayarlar/page.tsx` along with its `NOTIFICATION_ROWS` config. Notification behavior is no longer user-toggleable; see the app-header note above.
 
-Panel (`/panel`) was deliberately left untouched — it already uses the `inverse`/`hero` `PanelCard` variants throughout, just in a different (grid-embedded) composition.
+## Still-relevant context from before this round
 
-## Stok module consolidation
+- **Satın Alma command center** (`purchase-orders-client.tsx` + `purchase-command-hero.tsx`): full CRUD, receive-to-stock, cancel, delete, gated through `Can`/`useAuth`. Tabs are now Siparişler / Onay Bekleyen / Tedarikçi Karnesi / (quotes dialog, not a tab). `lib/purchase-order-actions.ts`'s `getAvailableActions` is still the single source of truth for which actions a PO status allows.
+- **Command-hero pattern** (`components/common/command-hero.tsx`) is shared across Ürünler, Depolar, Stok Hareketleri, Tedarikçiler, and Satın Alma — each with its own thin wrapper component.
+- `/stok/islem` combines giriş/çıkış/transfer in one page (`combined-movement-page.tsx`); `/stok/transfer` no longer exists standalone.
+- `/takvim` (`components/calendar/calendar-client.tsx`) is a monthly calendar over stock movements and purchase orders. Not linked from `nav-config.ts` — check before assuming it's reachable from the sidebar.
+- `PurchaseOrder.receivedAt` and `StockMovement.purchaseOrderId` are additive schema fields tying delivery timestamps and stock movements back to their originating PO.
 
-`/stok/transfer` (standalone transfer page/component) was deleted; transfer is now folded into `/stok/islem` alongside giriş/çıkış (`combined-movement-page.tsx`). Nav config (`nav-config.ts`) updated to match: "Giriş / Çıkış İşlemleri" + "Transfer" → single "Giriş / Çıkış / Transfer" entry.
+## Untracked scratch files
 
-## Raporlar — new Depolar tab
-
-`reports-client.tsx` gained a warehouse-focused tab: `warehouse-capacity-radials.tsx` (per-warehouse capacity donuts, using the new `capacityFillVar` helper in `lib/capacity.ts`), `warehouse-value-chart.tsx`, `warehouse-movers-chart.tsx`, plus a category-distribution-per-warehouse panel and a "Satın Alma Siparişleri" section (status breakdown, top suppliers, monthly trend).
-
-## Takvim — new page
-
-`/takvim` (`components/calendar/calendar-client.tsx`) is a new monthly calendar view over stock movements and purchase orders — filterable by movement/order type, with a day-detail dialog. Not linked from `nav-config.ts` yet (check before assuming it's reachable from the sidebar).
-
-## Shared infra touched along the way
-
-- `components/data-table/data-table.tsx`: pagination gained first-page/last-page jump buttons (`ChevronsLeft`/`ChevronsRight`), not just prev/next.
-- `lib/export/excel.ts` / `lib/export/pdf.ts`: status color-coding extended to cover all `PurchaseOrderStatus` values (Taslak/Sipariş Edildi/Kısmen Teslim Alındı/Teslim Alındı/İptal Edildi), not just stock movement types.
-- `lib/capacity.ts`: added `capacityFillVar` (SVG-fill-safe version of the existing `capacityIndicatorClass` tone logic).
+`backend/check.php` and `backend/create_users.php` are untracked, ad-hoc scripts (not part of the app) — don't assume they're wired into anything; check their contents before relying on them.

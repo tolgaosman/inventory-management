@@ -54,12 +54,15 @@ class PermissionTest extends TestCase
         $this->actingAs($user, 'sanctum')->getJson('/api/warehouses')->assertOk();
     }
 
-    public function test_depo_yonetici_can_manage_products_but_not_purchasing(): void
+    public function test_depo_yonetici_can_manage_products_but_not_create_purchase_orders(): void
     {
         $user = User::factory()->role('depo_yonetici')->create();
 
         $this->actingAs($user, 'sanctum')->getJson('/api/products')->assertOk();
-        $this->actingAs($user, 'sanctum')->getJson('/api/purchase-orders')->assertStatus(403);
+        // depo_yonetici can view purchase orders (purchase.view, to receive
+        // deliveries) but has no purchase.manage, so creating one is forbidden.
+        $this->actingAs($user, 'sanctum')->getJson('/api/purchase-orders')->assertOk();
+        $this->actingAs($user, 'sanctum')->postJson('/api/purchase-orders', [])->assertStatus(403);
     }
 
     public function test_satinalma_yonetici_can_manage_purchasing_but_not_products(): void

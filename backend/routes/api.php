@@ -8,7 +8,7 @@ use App\Http\Controllers\Api\MovementController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QuoteRequestController;
-use App\Http\Controllers\Api\ReplenishmentController;
+
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SupplierController;
@@ -66,7 +66,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/products/import', [ProductController::class, 'bulkImport'])->middleware(['perm:products.manage', 'throttle:bulk']);
 
     // Stock movements
-    Route::get('/movements', [MovementController::class, 'index'])->middleware('perm:products.view');
+    Route::get('/movements', [MovementController::class, 'index'])->middleware('perm:stock.view');
     Route::post('/stock/in', [MovementController::class, 'stockIn'])->middleware(['perm:stock.in', 'throttle:writes']);
     Route::post('/stock/out', [MovementController::class, 'stockOut'])->middleware(['perm:stock.out', 'throttle:writes']);
     Route::post('/stock/transfer', [MovementController::class, 'transfer'])->middleware(['perm:stock.transfer', 'throttle:writes']);
@@ -80,14 +80,14 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::put('/purchase-orders/{id}', [PurchaseOrderController::class, 'update'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::delete('/purchase-orders/{id}', [PurchaseOrderController::class, 'destroy'])->middleware(['perm:purchase.manage', 'throttle:writes']);
-    Route::post('/purchase-orders/{id}/order', [PurchaseOrderController::class, 'markOrdered'])->middleware(['perm:purchase.manage', 'throttle:writes']);
+    Route::post('/purchase-orders/{id}/order', [PurchaseOrderController::class, 'markOrdered'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/request-approval', [PurchaseOrderController::class, 'requestApproval'])->middleware(['perm:purchase.manage', 'throttle:writes']);
-    Route::post('/purchase-orders/{id}/approve', [PurchaseOrderController::class, 'approve'])->middleware(['perm:purchase.manage', 'throttle:writes']);
-    Route::post('/purchase-orders/{id}/reject', [PurchaseOrderController::class, 'reject'])->middleware(['perm:purchase.manage', 'throttle:writes']);
-    Route::post('/purchase-orders/{id}/receive', [PurchaseOrderController::class, 'receive'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
-    Route::post('/purchase-orders/{id}/invoice', [PurchaseOrderController::class, 'uploadInvoice'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
+    Route::post('/purchase-orders/{id}/approve', [PurchaseOrderController::class, 'approve'])->middleware(['perm:purchase.approve', 'throttle:writes']);
+    Route::post('/purchase-orders/{id}/reject', [PurchaseOrderController::class, 'reject'])->middleware(['perm:purchase.approve', 'throttle:writes']);
+    Route::post('/purchase-orders/{id}/receive', [PurchaseOrderController::class, 'receive'])->middleware(['perm:purchase.manage|purchase.receive', 'throttle:bulk']);
+    Route::post('/purchase-orders/{id}/invoice', [PurchaseOrderController::class, 'uploadInvoice'])->middleware(['perm:purchase.manage|purchase.receive', 'throttle:bulk']);
     Route::post('/purchase-orders/{id}/cancel', [PurchaseOrderController::class, 'cancel'])->middleware(['perm:purchase.manage', 'throttle:writes']);
-    Route::post('/purchase-orders/bulk-order', [PurchaseOrderController::class, 'bulkOrder'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
+    Route::post('/purchase-orders/bulk-order', [PurchaseOrderController::class, 'bulkOrder'])->middleware(['perm:purchase.approve', 'throttle:bulk']);
     Route::post('/purchase-orders/bulk-cancel', [PurchaseOrderController::class, 'bulkCancel'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
     Route::post('/purchase-orders/bulk-delete', [PurchaseOrderController::class, 'bulkDelete'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
 
@@ -96,20 +96,19 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::get('/quote-requests', [QuoteRequestController::class, 'index'])->middleware('perm:purchase.view');
     Route::get('/quote-requests/{id}', [QuoteRequestController::class, 'show'])->middleware('perm:purchase.view');
     Route::post('/quote-requests', [QuoteRequestController::class, 'store'])->middleware(['perm:purchase.manage', 'throttle:writes']);
+    Route::post('/quote-requests/{id}/approve', [QuoteRequestController::class, 'approve'])->middleware(['perm:purchase.approve', 'throttle:writes']);
+    Route::post('/quote-requests/{id}/reject', [QuoteRequestController::class, 'reject'])->middleware(['perm:purchase.approve', 'throttle:writes']);
 
-    // Replenishment + supplier scorecard
-    Route::get('/replenishment/suggestions', [ReplenishmentController::class, 'suggestions'])->middleware('perm:purchase.view');
-    Route::post('/replenishment/orders', [ReplenishmentController::class, 'createOrders'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
 
     // Dashboard + notifications
     Route::get('/dashboard', [DashboardController::class, 'show'])->middleware('perm:products.view');
     Route::get('/notifications/critical-stock', [DashboardController::class, 'criticalStockNotifications'])->middleware('perm:products.view');
 
     // Reports
-    Route::get('/reports/products', [ReportController::class, 'products'])->middleware('perm:reports.view');
-    Route::get('/reports/warehouses', [ReportController::class, 'warehouses'])->middleware('perm:reports.view');
-    Route::get('/reports/movements', [ReportController::class, 'movements'])->middleware('perm:reports.view');
-    Route::get('/reports/purchasing', [ReportController::class, 'purchasing'])->middleware('perm:reports.view');
+    Route::get('/reports/products', [ReportController::class, 'products'])->middleware('perm:reports.stock|reports.financial');
+    Route::get('/reports/warehouses', [ReportController::class, 'warehouses'])->middleware('perm:reports.stock|reports.financial');
+    Route::get('/reports/movements', [ReportController::class, 'movements'])->middleware('perm:reports.stock|reports.financial');
+    Route::get('/reports/purchasing', [ReportController::class, 'purchasing'])->middleware('perm:reports.stock|reports.financial');
 
     // Calendar
     Route::get('/calendar', [CalendarController::class, 'index'])->middleware('perm:products.view');

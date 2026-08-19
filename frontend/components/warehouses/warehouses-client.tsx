@@ -12,7 +12,9 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/common/page-header";
 import { Can } from "@/components/common/can";
+import { ForbiddenState } from "@/components/common/forbidden-state";
 import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
+import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -89,7 +91,7 @@ import { PAGE_SIZE } from "@/lib/constants";
 export function WarehousesClient() {
   const { currency, rates } = useCurrency();
   const { showKurus } = useSettings();
-  const { name, role } = useAuth();
+  const { name, role, can } = useAuth();
 
   // State
   const [search, setSearch] = useState("");
@@ -291,7 +293,8 @@ export function WarehousesClient() {
   };
 
   return (
-    <div className="space-y-6">
+    <Can permission="products.view" fallback={<Forbidden />}>
+      <div className="space-y-6">
       {/* Page Header */}
       <PageHeader
         title="Depo Yönetimi & Stok Matrisi"
@@ -316,7 +319,7 @@ export function WarehousesClient() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Can permission="products.manage">
+            <Can permission="warehouses.manage">
               <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" onClick={openCreate}>
                 <Plus className="mr-1.5 size-4" />
                 Yeni Depo Ekle
@@ -398,7 +401,7 @@ export function WarehousesClient() {
                       </CardTitle>
                     </div>
 
-                    <Can permission="products.manage">
+                    <Can permission="warehouses.manage">
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={
@@ -470,7 +473,7 @@ export function WarehousesClient() {
       </div>
 
       {/* Main Stock Breakdown Matrix Section */}
-      <Card className="pb-0">
+      <Card className="pb-0 gap-0">
         <CardHeader className="p-5 pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -554,7 +557,9 @@ export function WarehousesClient() {
                   </div>
                 </TableHead>
                 <TableHead style={{ width: "10%" }} className="text-center">Stok Değeri</TableHead>
-                <TableHead style={{ width: "9%" }} className="pr-5 text-center">İşlem</TableHead>
+                {can("stock.transfer") && (
+                  <TableHead style={{ width: "9%" }} className="pr-5 text-center">İşlem</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody
@@ -584,9 +589,11 @@ export function WarehousesClient() {
                     <TableCell className="text-center">
                       <Skeleton className="mx-auto h-4 w-20" />
                     </TableCell>
-                    <TableCell className="text-center">
-                      <Skeleton className="mx-auto h-7 w-16" />
-                    </TableCell>
+                    {can("stock.transfer") && (
+                      <TableCell className="text-center">
+                        <Skeleton className="mx-auto h-7 w-16" />
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : paginatedMatrix && paginatedMatrix.length > 0 ? (
@@ -668,9 +675,9 @@ export function WarehousesClient() {
                     </TableCell>
 
                     {/* Action */}
-                    <TableCell className="pr-5 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Can permission="products.manage">
+                    {can("stock.transfer") && (
+                      <TableCell className="pr-5 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="outline"
                             size="sm"
@@ -681,14 +688,14 @@ export function WarehousesClient() {
                           >
                             <ArrowLeftRight className="mr-1 size-3.5 text-primary" /> Transfer
                           </Button>
-                        </Can>
-                      </div>
-                    </TableCell>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               ) : (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5 + (warehouses?.length || 0)} className="py-12 text-center text-muted-foreground">
+                  <TableCell colSpan={(can("stock.transfer") ? 5 : 4) + (warehouses?.length || 0)} className="py-12 text-center text-muted-foreground">
                     Arama kriterlerinize uygun stok kaydı bulunamadı.
                   </TableCell>
                 </TableRow>
@@ -697,56 +704,12 @@ export function WarehousesClient() {
           </Table>
         </CardContent>
         {!isMatrixLoading && totalMatrixItems > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-muted/10 p-4 text-sm text-muted-foreground">
-            <p>
-              <span className="font-medium text-foreground">
-                {formatNumber((page - 1) * PAGE_SIZE + 1)}–{formatNumber(Math.min(page * PAGE_SIZE, totalMatrixItems))}
-              </span>{" "}
-              / {formatNumber(totalMatrixItems)} kayıt · Sayfa {page} / {totalPages}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page <= 1}
-                onClick={() => setPage(1)}
-                title="İlk Sayfa"
-              >
-                <ChevronsLeft className="size-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                title="Önceki Sayfa"
-              >
-                <ChevronLeft className="size-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-                title="Sonraki Sayfa"
-              >
-                <ChevronRight className="size-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-8"
-                disabled={page >= totalPages}
-                onClick={() => setPage(totalPages)}
-                title="Son Sayfa"
-              >
-                <ChevronsRight className="size-4" />
-              </Button>
-            </div>
-          </div>
+          <DataTablePagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={totalMatrixItems}
+            onPageChange={setPage}
+          />
         )}
       </Card>
 
@@ -797,7 +760,7 @@ export function WarehousesClient() {
                             {formatNumber(qty)} Birim
                           </span>
                           {qty > 0 && (
-                            <Can permission="products.manage">
+                            <Can permission="stock.transfer">
                               <Button
                                 variant="ghost"
                                 size="xs"
@@ -823,19 +786,21 @@ export function WarehousesClient() {
           )}
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={detailProduct?.status === "pasif"}
-              title={detailProduct?.status === "pasif" ? "Pasif durumdaki ürünlerde stok transferi yapılamaz." : undefined}
-              onClick={() => {
-                if (detailProduct) openTransferModal(detailProduct);
-                setDetailProduct(null);
-              }}
-            >
-              <ArrowLeftRight className="mr-1.5 size-3.5 text-primary" />
-              Stok Transfer Et
-            </Button>
+            <Can permission="stock.transfer">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={detailProduct?.status === "pasif"}
+                title={detailProduct?.status === "pasif" ? "Pasif durumdaki ürünlerde stok transferi yapılamaz." : undefined}
+                onClick={() => {
+                  if (detailProduct) openTransferModal(detailProduct);
+                  setDetailProduct(null);
+                }}
+              >
+                <ArrowLeftRight className="mr-1.5 size-3.5 text-primary" />
+                Stok Transfer Et
+              </Button>
+            </Can>
             <Button size="sm" onClick={() => setDetailProduct(null)}>
               Kapat
             </Button>
@@ -977,6 +942,16 @@ export function WarehousesClient() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
+    </Can>
+  );
+}
+
+function Forbidden() {
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Depo Yönetimi & Stok Matrisi" />
+      <ForbiddenState message="Depoları görüntülemek için yetkiniz yok." />
     </div>
   );
 }

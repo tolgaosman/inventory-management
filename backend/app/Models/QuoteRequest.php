@@ -16,12 +16,14 @@ class QuoteRequest extends Model
         'id', 'code', 'supplier_id', 'created_at', 'created_by',
         'valid_until', 'delivery_date', 'delivery_address', 'payment_terms',
         'requested_currency', 'contact_name', 'contact_email', 'contact_phone', 'notes',
+        'status', 'approved_by', 'approved_at',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'valid_until' => 'datetime',
         'delivery_date' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     public function supplier()
@@ -32,6 +34,11 @@ class QuoteRequest extends Model
     public function createdByUser()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function approvedByUser()
+    {
+        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function items()

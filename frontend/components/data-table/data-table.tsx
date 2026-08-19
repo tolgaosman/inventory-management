@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { formatNumber } from "@/lib/format";
+import { DataTablePagination } from "./data-table-pagination";
 import { cn } from "@/lib/utils";
 
 declare module "@tanstack/react-table" {
@@ -144,10 +145,6 @@ export function DataTable<T>({
               {loading ? (
                 Array.from({ length: pageSize }).map((_, i) => (
                   <TableRow key={i} className="border-b border-border/50">
-                    {/* Skeleton cells carry the same meta.className as real
-                        cells: under table-fixed the first rendered row sets the
-                        column grid, so without it the table would re-lay out
-                        when data arrives. */}
                     {columns.map((column, j) => (
                       <TableCell key={j} className={cn("px-4 py-3", column.meta?.className)}>
                         <Skeleton className="h-4 w-full max-w-32" />
@@ -185,60 +182,15 @@ export function DataTable<T>({
             </TableBody>
           </Table>
         </div>
+        {!loading && data.length > 0 && (
+          <DataTablePagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={onPageChange}
+          />
+        )}
       </div>
-
-      {!loading && data.length > 0 && (
-        <div className="flex flex-wrap items-center justify-start gap-4 text-sm text-muted-foreground">
-          <p>
-            <span className="font-medium text-foreground">
-              {formatNumber((page - 1) * pageSize + 1)}–{formatNumber(Math.min(page * pageSize, total))}
-            </span>{" "}
-            / {formatNumber(total)} kayıt · Sayfa {page} / {pageCount}
-          </p>
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              disabled={page <= 1}
-              onClick={() => onPageChange(1)}
-              title="İlk Sayfa"
-            >
-              <ChevronsLeft className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-              title="Önceki Sayfa"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              disabled={page >= pageCount}
-              onClick={() => onPageChange(page + 1)}
-              title="Sonraki Sayfa"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="size-8"
-              disabled={page >= pageCount}
-              onClick={() => onPageChange(pageCount)}
-              title="Son Sayfa"
-            >
-              <ChevronsRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

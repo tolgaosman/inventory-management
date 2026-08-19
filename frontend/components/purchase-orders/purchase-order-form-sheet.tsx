@@ -444,7 +444,16 @@ function PurchaseOrderItemRow({
             <FormItem>
               <FormLabel className="text-xs">Birim Fiyat ({CURRENCY_SYMBOLS.try})</FormLabel>
               <FormControl>
-                <Input type="number" step="0.01" min={0} {...field} value={field.value as number | string} />
+                <Input 
+                  type="number" 
+                  step="0.01" 
+                  min={0} 
+                  {...field} 
+                  value={field.value as number | string} 
+                  readOnly
+                  className="bg-muted/50 cursor-not-allowed"
+                  title="Birim fiyat ürün kataloğundan alınır, sadece Ürün Yönetimi sayfasından değiştirilebilir."
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

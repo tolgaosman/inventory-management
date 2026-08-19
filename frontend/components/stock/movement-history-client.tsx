@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Search, X, Download, Loader2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
+import { Can } from "@/components/common/can";
+import { ForbiddenState } from "@/components/common/forbidden-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,7 +59,7 @@ function toEndOfDayIso(dateStr: string): string {
 export function MovementHistoryClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { name } = useAuth();
+  const { name, can } = useAuth();
   const { company } = useSettings();
   const exportGuard = useSubmitGuard();
 
@@ -115,8 +117,12 @@ export function MovementHistoryClient() {
   const view = data ?? staleData;
 
   const { data: refData } = useAsync(
-    () => Promise.all([listWarehouses(), listUsers(), listProducts({ pageSize: 2000 })]),
-    [],
+    () => Promise.all([
+      listWarehouses().catch(() => []),
+      can("users.manage") ? listUsers().catch(() => []) : Promise.resolve([]),
+      listProducts({ pageSize: 2000 }).catch(() => ({ rows: [] }))
+    ]),
+    [can],
   );
   const warehouses = useMemo(() => refData?.[0] ?? [], [refData]);
   const users = useMemo(() => refData?.[1] ?? [], [refData]);
@@ -372,7 +378,8 @@ export function MovementHistoryClient() {
   );
 
   return (
-    <div className="flex flex-col space-y-6">
+    <Can permission="stock.view" fallback={<Forbidden />}>
+      <div className="flex flex-col space-y-6">
       <PageHeader
         title="Stok Hareketleri Geçmişi"
         description="Tüm stok giriş, çıkış ve transfer hareketlerinin geçmişi."
@@ -479,6 +486,16 @@ export function MovementHistoryClient() {
           />
         </Section>
       </SectionStack>
+      </div>
+    </Can>
+  );
+}
+
+function Forbidden() {
+  return (
+    <div className="space-y-6">
+      <PageHeader title="Stok Hareketleri Geçmişi" />
+      <ForbiddenState message="Stok hareketlerini görüntülemek için yetkiniz yok." />
     </div>
   );
 }

@@ -21,10 +21,13 @@ class PurchaseOrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse']);
+        $query = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse', 'createdByUser', 'approvedByUser']);
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
+        }
+        if ($excludeStatus = $request->query('excludeStatus')) {
+            $query->where('status', '!=', $excludeStatus);
         }
         if ($supplierId = $request->query('supplierId')) {
             $query->where('supplier_id', $supplierId);
@@ -74,7 +77,7 @@ class PurchaseOrderController extends Controller
 
     public function show(string $id)
     {
-        $po = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse'])->find($id);
+        $po = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse', 'createdByUser', 'approvedByUser'])->find($id);
         if (! $po) {
             throw ApiException::notFound('Satın alma siparişi bulunamadı.');
         }
@@ -156,7 +159,7 @@ class PurchaseOrderController extends Controller
             'items.*.unitPrice' => ['required', 'numeric'],
         ]);
 
-        return response()->json($this->service->create($data), 201);
+        return response()->json($this->service->create($data, $request->user()), 201);
     }
 
     public function update(Request $request, string $id)
@@ -173,7 +176,7 @@ class PurchaseOrderController extends Controller
             'items.*.unitPrice' => ['required_with:items', 'numeric'],
         ]);
 
-        return response()->json($this->service->update($id, $data));
+        return response()->json($this->service->update($id, $data, $request->user()));
     }
 
     public function destroy(string $id)
@@ -193,9 +196,9 @@ class PurchaseOrderController extends Controller
         return response()->json($this->service->requestApproval($id));
     }
 
-    public function approve(string $id)
+    public function approve(Request $request, string $id)
     {
-        return response()->json($this->service->approve($id));
+        return response()->json($this->service->approve($id, $request->user()));
     }
 
     public function reject(string $id)

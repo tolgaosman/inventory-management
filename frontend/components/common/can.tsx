@@ -8,11 +8,12 @@ export function Can({
   fallback = null,
   children,
 }: {
-  permission: Permission;
+  permission: Permission | Permission[];
   fallback?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { can } = useAuth();
-  if (!can(permission)) return <>{fallback}</>;
+  const allowed = Array.isArray(permission) ? permission.some(can) : can(permission);
+  if (!allowed) return <>{fallback}</>;
   return <>{children}</>;
 }

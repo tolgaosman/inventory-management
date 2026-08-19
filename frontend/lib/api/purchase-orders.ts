@@ -3,6 +3,7 @@ import { apiFetch } from "./client";
 
 export interface PurchaseOrderQuery extends PagedQuery {
   status?: PurchaseOrderStatus;
+  excludeStatus?: PurchaseOrderStatus;
   supplierId?: string;
   warehouseId?: string;
   priority?: "low" | "medium" | "high";
@@ -32,6 +33,7 @@ export async function listPurchaseOrders(
   return apiFetch<PagedResult<PurchaseOrderRow>>("/purchase-orders", {
     query: {
       status: query.status,
+      excludeStatus: query.excludeStatus,
       supplierId: query.supplierId,
       warehouseId: query.warehouseId,
       priority: query.priority,
@@ -181,44 +183,6 @@ export async function bulkDeletePurchaseOrders(ids: string[]): Promise<BulkOpera
   return apiFetch<BulkOperationResult>("/purchase-orders/bulk-delete", { method: "POST", body: { ids } });
 }
 
-export interface ReplenishmentSuggestion {
-  productId: string;
-  name: string;
-  sku: string;
-  unit: string;
-  imageUrl?: string;
-  supplierId: string;
-  supplierName: string;
-  totalStock: number;
-  minStock: number;
-  maxStock: number;
-  /** Remaining quantity on open (ordered/partially-received) orders. */
-  onOrder: number;
-  /** Remaining quantity on draft orders — not counted as coverage, shown separately. */
-  draftOnOrder: number;
-  /** totalStock + onOrder. */
-  projected: number;
-  shortfall: number;
-  suggestedQty: number;
-  unitPrice: number;
-  severity: "kritik" | "dusuk";
-}
-
-export async function getReplenishmentSuggestions(): Promise<ReplenishmentSuggestion[]> {
-  return apiFetch<ReplenishmentSuggestion[]>("/replenishment/suggestions");
-}
-
-export interface ReplenishmentOrderInput {
-  warehouseId: string;
-  expectedAt: string;
-  lines: { productId: string; quantity: number }[];
-}
-
-export async function createPurchaseOrdersFromSuggestions(
-  input: ReplenishmentOrderInput,
-): Promise<PurchaseOrder[]> {
-  return apiFetch<PurchaseOrder[]>("/replenishment/orders", { method: "POST", body: input });
-}
 
 export interface SupplierScorecard {
   supplierId: string;
