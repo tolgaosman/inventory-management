@@ -4,28 +4,33 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
-use App\Support\JsonStore;
+use App\Models\Product;
+use App\Models\Supplier;
+use App\Support\IdGenerator;
+use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
-/** Direct PHP port of frontend/lib/api/catalog.ts's supplier functions. */
+/** Direct port of frontend/lib/api/catalog.ts's supplier functions. */
 class SupplierController extends Controller
 {
-    public function __construct(private JsonStore $store)
-    {
-    }
-
     public function index(Request $request)
     {
-        $suppliers = $this->store->read('suppliers');
-        $products = $this->store->read('products');
+        $productCounts = DB::table('products')
+            ->groupBy('supplier_id')
+            ->select('supplier_id', DB::raw('COUNT(*) as c'))
+            ->pluck('c', 'supplier_id');
 
-        $rows = array_map(fn ($s) => $s + [
-            'productCount' => count(array_filter($products, fn ($p) => $p['supplierId'] === $s['id'])),
-        ], $suppliers);
+        $rows = Supplier::query()->get()
+            ->map(fn ($s) => Present::supplier($s) + ['productCount' => (int) ($productCounts[$s->id] ?? 0)])
+            ->all();
 
         $search = $request->query('search');
-        $rows = array_values(array_filter($rows, fn ($s) => TextTools::matches([$s['name'], $s['contactName'], $s['email'], $s['city']], $search)));
+        $rows = array_values(array_filter(
+            $rows,
+            fn ($s) => TextTools::matches([$s['name'], $s['contactName'], $s['email'], $s['city']], $search)
+        ));
 
         $page = (int) $request->query('page', 1);
         $pageSize = (int) $request->query('pageSize', 10);
@@ -35,26 +40,19 @@ class SupplierController extends Controller
 
     public function show(string $id)
     {
-        $supplier = collect($this->store->read('suppliers'))->firstWhere('id', $id);
+        $supplier = Supplier::query()->find($id);
         if (! $supplier) {
             throw ApiException::notFound('Tedarikçi bulunamadı.');
         }
 
-        $products = array_values(array_filter($this->store->read('products'), fn ($p) => $p['supplierId'] === $id));
+        $products = Product::query()->where('supplier_id', $id)->get()
+            ->map(fn ($p) => Present::product($p))->all();
 
-        return response()->json(['supplier' => $supplier, 'products' => $products]);
+        return response()->json(['supplier' => Present::supplier($supplier), 'products' => $products]);
     }
 
-    public function store(Request $request)
+    private function assertValid(array $data): void
     {
-        $data = $request->validate([
-            'name' => ['required', 'string'],
-            'contactName' => ['required', 'string'],
-            'email' => ['required', 'string'],
-            'phone' => ['required', 'string'],
-            'city' => ['required', 'string'],
-        ]);
-
         if (trim($data['name']) === '') {
             throw ApiException::validation('Tedarikçi adı gereklidir.');
         }
@@ -70,22 +68,30 @@ class SupplierController extends Controller
         if (trim($data['city']) === '') {
             throw ApiException::validation('Şehir gereklidir.');
         }
+    }
 
-        return $this->store->transaction(function () use ($data) {
-            $suppliers = $this->store->read('suppliers');
-            $newSupplier = [
-                'id' => 'sup-'.(count($suppliers) + 1),
-                'name' => trim($data['name']),
-                'contactName' => trim($data['contactName']),
-                'email' => trim($data['email']),
-                'phone' => trim($data['phone']),
-                'city' => trim($data['city']),
-            ];
-            $suppliers[] = $newSupplier;
-            $this->store->write('suppliers', $suppliers);
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string'],
+            'contactName' => ['required', 'string'],
+            'email' => ['required', 'string'],
+            'phone' => ['required', 'string'],
+            'city' => ['required', 'string'],
+        ]);
 
-            return response()->json($newSupplier, 201);
-        });
+        $this->assertValid($data);
+
+        $supplier = DB::transaction(fn () => Supplier::query()->create([
+            'id' => IdGenerator::nextId('suppliers', 'id', 'sup'),
+            'name' => trim($data['name']),
+            'contact_name' => trim($data['contactName']),
+            'email' => trim($data['email']),
+            'phone' => trim($data['phone']),
+            'city' => trim($data['city']),
+        ]));
+
+        return response()->json(Present::supplier($supplier), 201);
     }
 
     public function update(Request $request, string $id)
@@ -98,43 +104,48 @@ class SupplierController extends Controller
             'city' => ['sometimes', 'string'],
         ]);
 
-        return $this->store->transaction(function () use ($data, $id) {
-            $suppliers = $this->store->read('suppliers');
-            $index = collect($suppliers)->search(fn ($s) => $s['id'] === $id);
-            if ($index === false) {
+        $supplier = DB::transaction(function () use ($data, $id) {
+            $supplier = Supplier::query()->lockForUpdate()->find($id);
+            if (! $supplier) {
                 throw ApiException::notFound('Tedarikçi bulunamadı.');
             }
 
-            foreach (['name', 'contactName', 'email', 'phone', 'city'] as $field) {
-                if (array_key_exists($field, $data)) {
-                    $suppliers[$index][$field] = trim($data[$field]);
+            $columns = [
+                'name' => 'name',
+                'contactName' => 'contact_name',
+                'email' => 'email',
+                'phone' => 'phone',
+                'city' => 'city',
+            ];
+            foreach ($columns as $input => $column) {
+                if (array_key_exists($input, $data)) {
+                    $supplier->{$column} = trim($data[$input]);
                 }
             }
+            $supplier->save();
 
-            $this->store->write('suppliers', $suppliers);
-
-            return response()->json($suppliers[$index]);
+            return $supplier;
         });
+
+        return response()->json(Present::supplier($supplier));
     }
 
     public function destroy(string $id)
     {
-        return $this->store->transaction(function () use ($id) {
-            $suppliers = $this->store->read('suppliers');
-            $index = collect($suppliers)->search(fn ($s) => $s['id'] === $id);
-            if ($index === false) {
+        DB::transaction(function () use ($id) {
+            $supplier = Supplier::query()->lockForUpdate()->find($id);
+            if (! $supplier) {
                 throw ApiException::notFound('Tedarikçi bulunamadı.');
             }
 
-            $hasProducts = collect($this->store->read('products'))->contains(fn ($p) => $p['supplierId'] === $id);
+            $hasProducts = Product::query()->where('supplier_id', $id)->exists();
             if ($hasProducts) {
                 throw ApiException::validation('Bu tedarikçiye bağlı ürünler olduğu için silinemez. Önce ürünlerin tedarikçisini değiştiriniz.');
             }
 
-            unset($suppliers[$index]);
-            $this->store->write('suppliers', array_values($suppliers));
-
-            return response()->json(['deleted' => true]);
+            $supplier->delete();
         });
+
+        return response()->json(['deleted' => true]);
     }
 }

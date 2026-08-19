@@ -12,9 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id();
+            // String PK ("48271") to match the frontend's AppUser.id contract — not auto-increment.
+            $table->string('id')->primary();
             $table->string('name');
             $table->string('email')->unique();
+            $table->string('role'); // depo | satinalma | yonetici
+            $table->string('initials', 4);
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();

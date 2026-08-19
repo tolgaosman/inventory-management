@@ -58,14 +58,18 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/common/empty-state";
-import { users as mockUsers } from "@/lib/mock/data";
+import { createAppUser, deleteAppUser, listAppUsers, updateAppUser } from "@/lib/api/users";
+import { ApiError } from "@/lib/api/client";
+import { useAsync } from "@/lib/hooks/use-async";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AppUser, Role } from "@/lib/types";
 
 const ROLE_STYLE: Record<Role, { bg: string; text: string; icon: React.ElementType }> = {
-  yonetici: { bg: "bg-tint-plum/15", text: "text-tint-plum", icon: ShieldCheck },
+  admin: { bg: "bg-tint-plum/15", text: "text-tint-plum", icon: ShieldCheck },
+  depo_yonetici: { bg: "bg-tint-blue/15", text: "text-tint-blue", icon: ShieldCheck },
+  satinalma_yonetici: { bg: "bg-tint-blue/15", text: "text-tint-blue", icon: ShieldCheck },
   depo: { bg: "bg-tint-teal/15", text: "text-tint-teal", icon: Warehouse },
   satinalma: { bg: "bg-tint-amber/15", text: "text-tint-amber", icon: ShoppingCart },
 };
@@ -84,7 +88,9 @@ function RoleBadge({ role }: { role: Role }) {
 export function UsersClient() {
   const [searchInput, setSearchInput] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [userList, setUserList] = useState<AppUser[]>([...mockUsers]);
+  const { data, staleData, status, refetch } = useAsync(() => listAppUsers(), []);
+  const userList = data ?? staleData ?? [];
+  const [saving, setSaving] = useState(false);
   const [sortByRole, setSortByRole] = useState(false);
 
   // Form dialog state
@@ -115,10 +121,10 @@ export function UsersClient() {
 
   const stats = useMemo(() => {
     const total = userList.length;
-    const admins = userList.filter((u) => u.role === "yonetici").length;
-    const warehouse = userList.filter((u) => u.role === "depo").length;
-    const purchasing = userList.filter((u) => u.role === "satinalma").length;
-    return { total, admins, warehouse, purchasing };
+    const admins = userList.filter((u) => u.role === "admin").length;
+    const warehouseTotal = userList.filter((u) => u.role === "depo" || u.role === "depo_yonetici").length;
+    const purchasingTotal = userList.filter((u) => u.role === "satinalma" || u.role === "satinalma_yonetici").length;
+    return { total, admins, warehouseTotal, purchasingTotal };
   }, [userList]);
 
   function openCreate() {
@@ -133,48 +139,68 @@ export function UsersClient() {
     setFormOpen(true);
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!formValues.name.trim() || !formValues.email.trim()) {
       toast.error("Ad ve e-posta alanları zorunludur.");
       return;
     }
 
-    const initials = formValues.name
-      .split(" ")
-      .filter(Boolean)
-      .map((n) => n[0])
-      .join("")
-      .substring(0, 2)
-      .toUpperCase();
+    const payload = {
+      name: formValues.name.trim(),
+      email: formValues.email.trim(),
+      role: formValues.role,
+    };
 
-    if (editing) {
-      setUserList((prev) =>
-        prev.map((u) =>
-          u.id === editing.id
-            ? { ...u, name: formValues.name.trim(), email: formValues.email.trim(), role: formValues.role, initials }
-            : u,
-        ),
-      );
-      toast.success("Kullanıcı güncellendi.", { description: `${formValues.name} bilgileri kaydedildi.` });
-    } else {
-      const newUser: AppUser = {
-        id: String(10000 + Math.floor(Math.random() * 90000)),
-        name: formValues.name.trim(),
-        email: formValues.email.trim(),
-        role: formValues.role,
-        initials,
-      };
-      setUserList((prev) => [...prev, newUser]);
-      toast.success("Kullanıcı oluşturuldu.", { description: `${formValues.name} sisteme eklendi.` });
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateAppUser(editing.id, payload);
+        toast.success("Kullanıcı güncellendi.", { description: `${payload.name} bilgileri kaydedildi.` });
+      } else {
+        await createAppUser(payload);
+        toast.success("Kullanıcı oluşturuldu.", { description: `${payload.name} sisteme eklendi.` });
+      }
+      setFormOpen(false);
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Kullanıcı kaydedilemedi.");
+    } finally {
+      setSaving(false);
     }
-    setFormOpen(false);
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleting) return;
-    setUserList((prev) => prev.filter((u) => u.id !== deleting.id));
-    toast.success("Kullanıcı silindi.", { description: `${deleting.name} sistemden kaldırıldı.` });
-    setDeleting(undefined);
+    try {
+      await deleteAppUser(deleting.id);
+      toast.success("Kullanıcı silindi.", { description: `${deleting.name} sistemden kaldırıldı.` });
+      setDeleting(undefined);
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Kullanıcı silinemedi.");
+    }
+  }
+
+  async function handlePromote(user: AppUser) {
+    const newRole = user.role === "depo" ? "depo_yonetici" : "satinalma_yonetici";
+    try {
+      await updateAppUser(user.id, { role: newRole });
+      toast.success("Kullanıcı terfi ettirildi.", { description: `${user.name} artık ${ROLE_LABELS[newRole]}.` });
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Kullanıcı güncellenemedi.");
+    }
+  }
+
+  async function handleDemote(user: AppUser) {
+    const newRole = user.role === "depo_yonetici" ? "depo" : "satinalma";
+    try {
+      await updateAppUser(user.id, { role: newRole });
+      toast.success("Kullanıcı yetkisi alındı.", { description: `${user.name} artık ${ROLE_LABELS[newRole]}.` });
+      refetch();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : "Kullanıcı güncellenemedi.");
+    }
   }
 
   const isFiltered = Boolean(searchInput || roleFilter !== "all");
@@ -201,9 +227,9 @@ export function UsersClient() {
               className="grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4"
               items={[
                 { icon: Users, tint: "blue", label: "Toplam Kullanıcı", value: formatNumber(stats.total) },
-                { icon: ShieldCheck, tint: "plum", label: "Yönetici", value: formatNumber(stats.admins) },
-                { icon: Warehouse, tint: "teal", label: "Depo Personeli", value: formatNumber(stats.warehouse) },
-                { icon: ShoppingCart, tint: "amber", label: "Satın Alma", value: formatNumber(stats.purchasing) },
+                { icon: ShieldCheck, tint: "plum", label: "Admin", value: formatNumber(stats.admins) },
+                { icon: Warehouse, tint: "teal", label: "Depo Ekibi", value: formatNumber(stats.warehouseTotal) },
+                { icon: ShoppingCart, tint: "amber", label: "Satın Alma Ekibi", value: formatNumber(stats.purchasingTotal) },
               ]}
             />
           </Section>
@@ -255,7 +281,7 @@ export function UsersClient() {
                         >
                           Rol
                           <ArrowUpDown className={cn(
-                            "size-3.5 transition-colors", 
+                            "size-3.5 transition-colors",
                             sortByRole ? "text-foreground" : "text-muted-foreground/50 group-hover:text-muted-foreground"
                           )} />
                         </button>
@@ -263,7 +289,9 @@ export function UsersClient() {
                           value={roleFilter}
                           onValueChange={setRoleFilter}
                           options={[
-                            { label: "Yönetici", value: "yonetici" },
+                            { label: "Admin", value: "admin" },
+                            { label: "Depo Müdürü", value: "depo_yonetici" },
+                            { label: "Satın Alma Müdürü", value: "satinalma_yonetici" },
                             { label: "Depo Personeli", value: "depo" },
                             { label: "Satın Alma Personeli", value: "satinalma" }
                           ]}
@@ -341,6 +369,18 @@ export function UsersClient() {
                                 <Pencil className="size-4" />
                                 Düzenle
                               </DropdownMenuItem>
+                              {(user.role === "depo" || user.role === "satinalma") && (
+                                <DropdownMenuItem onClick={() => handlePromote(user)}>
+                                  <ShieldCheck className="size-4 text-primary" />
+                                  Müdür Yap
+                                </DropdownMenuItem>
+                              )}
+                              {(user.role === "depo_yonetici" || user.role === "satinalma_yonetici") && (
+                                <DropdownMenuItem onClick={() => handleDemote(user)}>
+                                  <UserCog className="size-4 text-muted-foreground" />
+                                  Personel Yap
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem variant="destructive" onClick={() => setDeleting(user)}>
                                 <Trash2 className="size-4" />
@@ -403,10 +443,10 @@ export function UsersClient() {
                     <SelectValue>{ROLE_LABELS[formValues.role]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="yonetici">
+                    <SelectItem value="admin">
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="size-3.5 text-tint-plum" />
-                        Yönetici
+                        Admin
                       </div>
                     </SelectItem>
                     <SelectItem value="depo">

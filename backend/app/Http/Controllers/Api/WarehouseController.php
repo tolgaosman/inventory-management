@@ -4,23 +4,43 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
-use App\Support\JsonStore;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\StockLevel;
+use App\Models\Warehouse;
+use App\Support\IdGenerator;
+use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
-/** Direct PHP port of frontend/lib/api/{warehouses,catalog}.ts's warehouse functions. */
+/** Direct port of frontend/lib/api/{warehouses,catalog}.ts's warehouse functions. */
 class WarehouseController extends Controller
 {
-    public function __construct(private JsonStore $store)
+    /**
+     * units + distinct-product counts per warehouse, in one grouped query.
+     *
+     * @return array<string, array{units:int, productCount:int}>
+     */
+    private function levelTotals(): array
     {
-    }
+        $rows = DB::table('stock_levels')
+            ->groupBy('warehouse_id')
+            ->select([
+                'warehouse_id',
+                DB::raw('COALESCE(SUM(quantity), 0) as units'),
+                DB::raw('COUNT(DISTINCT product_id) as product_count'),
+                DB::raw('COUNT(DISTINCT CASE WHEN quantity > 0 THEN product_id END) as stocked_product_count'),
+            ])
+            ->get();
 
-    /** units-per-warehouse, mirrors lib/mock/dashboard.ts's getWarehouseStockTotals */
-    private function unitTotals(array $stockLevels): array
-    {
         $totals = [];
-        foreach ($stockLevels as $s) {
-            $totals[$s['warehouseId']] = ($totals[$s['warehouseId']] ?? 0) + $s['quantity'];
+        foreach ($rows as $row) {
+            $totals[$row->warehouse_id] = [
+                'units' => (int) $row->units,
+                'productCount' => (int) $row->product_count,
+                'stockedProductCount' => (int) $row->stocked_product_count,
+            ];
         }
 
         return $totals;
@@ -28,132 +48,128 @@ class WarehouseController extends Controller
 
     public function index()
     {
-        $warehouses = $this->store->read('warehouses');
-        $stockLevels = $this->store->read('stock_levels');
-        $units = $this->unitTotals($stockLevels);
+        $totals = $this->levelTotals();
 
-        $rows = array_map(function ($w) use ($stockLevels, $units) {
-            $productIds = array_unique(array_column(array_filter($stockLevels, fn ($s) => $s['warehouseId'] === $w['id']), 'productId'));
-
-            return $w + [
-                'units' => $units[$w['id']] ?? 0,
-                'productCount' => count($productIds),
-            ];
-        }, $warehouses);
+        $rows = Warehouse::query()->get()->map(fn ($w) => Present::warehouse($w) + [
+            'units' => $totals[$w->id]['units'] ?? 0,
+            'productCount' => $totals[$w->id]['productCount'] ?? 0,
+        ])->all();
 
         return response()->json($rows);
     }
 
     public function detailed()
     {
-        $warehouses = $this->store->read('warehouses');
-        $stockLevels = $this->store->read('stock_levels');
-        $products = $this->store->read('products');
-        $units = $this->unitTotals($stockLevels);
-        $productsById = collect($products)->keyBy('id');
+        $totals = $this->levelTotals();
 
-        $rows = array_map(function ($w) use ($stockLevels, $units, $productsById) {
-            $warehouseLevels = array_values(array_filter($stockLevels, fn ($s) => $s['warehouseId'] === $w['id']));
-            $totalValue = array_sum(array_map(function ($level) use ($productsById) {
-                $p = $productsById->get($level['productId']);
+        // Inventory value per warehouse at purchase price, computed in SQL.
+        $valueRows = DB::table('stock_levels')
+            ->join('products', 'products.id', '=', 'stock_levels.product_id')
+            ->groupBy('stock_levels.warehouse_id')
+            ->select([
+                'stock_levels.warehouse_id',
+                DB::raw('COALESCE(SUM(stock_levels.quantity * products.purchase_price), 0) as total_value'),
+            ])
+            ->pluck('total_value', 'warehouse_id');
 
-                return $p ? $level['quantity'] * $p['purchasePrice'] : 0;
-            }, $warehouseLevels));
-            $productCount = count(array_unique(array_column(array_filter($warehouseLevels, fn ($s) => $s['quantity'] > 0), 'productId')));
-            $unitsForWarehouse = $units[$w['id']] ?? 0;
-            $capacityUsagePercent = min((int) round(($unitsForWarehouse / max($w['capacity'], 1)) * 100), 100);
+        $rows = Warehouse::query()->get()->map(function ($w) use ($totals, $valueRows) {
+            $units = $totals[$w->id]['units'] ?? 0;
+            $capacityUsagePercent = min((int) round(($units / max($w->capacity, 1)) * 100), 100);
 
-            return $w + [
-                'units' => $unitsForWarehouse,
-                'totalValue' => $totalValue,
-                'productCount' => $productCount,
+            return Present::warehouse($w) + [
+                'units' => $units,
+                'totalValue' => (float) ($valueRows[$w->id] ?? 0),
+                'productCount' => $totals[$w->id]['stockedProductCount'] ?? 0,
                 'capacityUsagePercent' => $capacityUsagePercent,
             ];
-        }, $warehouses);
+        })->all();
 
         return response()->json($rows);
     }
 
     public function show(string $id)
     {
-        $warehouses = $this->store->read('warehouses');
-        $wh = collect($warehouses)->firstWhere('id', $id);
-        if (! $wh) {
+        $warehouse = Warehouse::query()->find($id);
+        if (! $warehouse) {
             throw ApiException::notFound('Depo bulunamadı.');
         }
 
-        $products = collect($this->store->read('products'))->keyBy('id');
-        $levels = collect($this->store->read('stock_levels'))
-            ->filter(fn ($s) => $s['warehouseId'] === $id)
-            ->map(fn ($s) => $s + ['product' => $products->get($s['productId'])])
-            ->filter(fn ($s) => $s['product'] !== null)
-            ->values();
+        $levels = StockLevel::query()
+            ->with('product')
+            ->where('warehouse_id', $id)
+            ->get()
+            ->filter(fn ($l) => $l->product !== null)
+            ->map(fn ($l) => Present::stockLevel($l) + ['product' => Present::product($l->product)])
+            ->values()
+            ->all();
 
-        return response()->json(['warehouse' => $wh, 'levels' => $levels]);
+        return response()->json(['warehouse' => Present::warehouse($warehouse), 'levels' => $levels]);
     }
 
     public function stockMatrix(Request $request)
     {
-        $categories = $this->store->read('categories');
-        $products = $this->store->read('products');
-        $warehouses = $this->store->read('warehouses');
-        $stockLevels = $this->store->read('stock_levels');
-        $categoriesById = collect($categories)->keyBy('id');
+        $warehouses = Warehouse::query()->get();
+        $categoriesById = Category::query()->get()->keyBy('id');
 
+        $query = Product::query();
+
+        // Category filter walks descendants (2-level tree, so one hop is enough,
+        // but the loop keeps it correct if the depth limit ever changes).
         $categoryId = $request->query('categoryId');
-        $filtered = $products;
-
         if ($categoryId && $categoryId !== 'all') {
             $ids = [$categoryId => true];
             $added = true;
             while ($added) {
                 $added = false;
-                foreach ($categories as $c) {
-                    if ($c['parentId'] && isset($ids[$c['parentId']]) && ! isset($ids[$c['id']])) {
-                        $ids[$c['id']] = true;
+                foreach ($categoriesById as $c) {
+                    if ($c->parent_id && isset($ids[$c->parent_id]) && ! isset($ids[$c->id])) {
+                        $ids[$c->id] = true;
                         $added = true;
                     }
                 }
             }
-            $filtered = array_values(array_filter($filtered, fn ($p) => isset($ids[$p['categoryId']])));
+            $query->whereIn('category_id', array_keys($ids));
         }
+
+        $products = $query->get();
 
         $search = $request->query('search');
         if ($search) {
-            $filtered = array_values(array_filter($filtered, fn ($p) => TextTools::matches([$p['name'], $p['sku'], $p['brand']], $search)));
+            $products = $products->filter(fn ($p) => TextTools::matches([$p->name, $p->sku, $p->brand], $search))->values();
         }
 
         $levelIndex = [];
-        foreach ($stockLevels as $s) {
-            $levelIndex[$s['productId']][$s['warehouseId']] = $s['quantity'];
+        foreach (DB::table('stock_levels')->select('product_id', 'warehouse_id', 'quantity')->get() as $s) {
+            $levelIndex[$s->product_id][$s->warehouse_id] = (int) $s->quantity;
         }
 
-        $rows = array_map(function ($p) use ($warehouses, $levelIndex, $categoriesById) {
+        $rows = $products->map(function ($p) use ($warehouses, $levelIndex, $categoriesById) {
             $stocksByWarehouse = [];
             $totalStock = 0;
             foreach ($warehouses as $w) {
-                $q = $levelIndex[$p['id']][$w['id']] ?? 0;
-                $stocksByWarehouse[$w['id']] = $q;
+                $q = $levelIndex[$p->id][$w->id] ?? 0;
+                $stocksByWarehouse[$w->id] = $q;
                 $totalStock += $q;
             }
-            $category = $categoriesById->get($p['categoryId']);
+            $category = $categoriesById->get($p->category_id);
+            $unitPrice = (float) $p->purchase_price;
 
             return [
-                'productId' => $p['id'],
-                'productName' => $p['name'],
-                'sku' => $p['sku'],
-                'categoryName' => $category['name'] ?? 'Genel',
-                'brand' => $p['brand'],
-                'minStock' => $p['minStock'],
-                'unitPrice' => $p['purchasePrice'],
+                'productId' => $p->id,
+                'productName' => $p->name,
+                'sku' => $p->sku,
+                'categoryName' => $category->name ?? 'Genel',
+                'brand' => $p->brand,
+                'minStock' => (int) $p->min_stock,
+                'unitPrice' => $unitPrice,
                 'totalStock' => $totalStock,
-                'totalValue' => $totalStock * $p['purchasePrice'],
-                'isCritical' => $totalStock < $p['minStock'],
-                'status' => $p['status'],
-                'imageUrl' => $p['imageUrl'] ?? null,
+                'totalValue' => $totalStock * $unitPrice,
+                'isCritical' => $totalStock < (int) $p->min_stock,
+                'status' => $p->status,
+                'imageUrl' => $p->image_url,
                 'stocksByWarehouse' => $stocksByWarehouse,
             ];
-        }, $filtered);
+        })->all();
 
         $warehouseId = $request->query('warehouseId');
         if ($warehouseId && $warehouseId !== 'all') {
@@ -182,20 +198,15 @@ class WarehouseController extends Controller
             throw ApiException::validation("Kapasite 0'dan büyük olmalıdır.");
         }
 
-        return $this->store->transaction(function () use ($data) {
-            $warehouses = $this->store->read('warehouses');
-            $newWh = [
-                'id' => 'wh-'.(count($warehouses) + 1),
-                'name' => trim($data['name']),
-                'city' => trim($data['city']),
-                'address' => trim($data['address'] ?? '') ?: '-',
-                'capacity' => $data['capacity'],
-            ];
-            $warehouses[] = $newWh;
-            $this->store->write('warehouses', $warehouses);
+        $warehouse = DB::transaction(fn () => Warehouse::query()->create([
+            'id' => IdGenerator::nextId('warehouses', 'id', 'wh'),
+            'name' => trim($data['name']),
+            'city' => trim($data['city']),
+            'address' => trim($data['address'] ?? '') ?: '-',
+            'capacity' => (int) $data['capacity'],
+        ]));
 
-            return response()->json($newWh, 201);
-        });
+        return response()->json(Present::warehouse($warehouse), 201);
     }
 
     public function update(Request $request, string $id)
@@ -207,50 +218,46 @@ class WarehouseController extends Controller
             'capacity' => ['sometimes', 'numeric'],
         ]);
 
-        return $this->store->transaction(function () use ($data, $id) {
-            $warehouses = $this->store->read('warehouses');
-            $index = collect($warehouses)->search(fn ($w) => $w['id'] === $id);
-            if ($index === false) {
+        $warehouse = DB::transaction(function () use ($data, $id) {
+            $warehouse = Warehouse::query()->lockForUpdate()->find($id);
+            if (! $warehouse) {
                 throw ApiException::notFound('Depo bulunamadı.');
             }
 
-            if (array_key_exists('name', $data)) {
-                $warehouses[$index]['name'] = trim($data['name']);
-            }
-            if (array_key_exists('city', $data)) {
-                $warehouses[$index]['city'] = trim($data['city']);
-            }
-            if (array_key_exists('address', $data)) {
-                $warehouses[$index]['address'] = trim($data['address']);
+            foreach (['name' => 'name', 'city' => 'city', 'address' => 'address'] as $input => $column) {
+                if (array_key_exists($input, $data)) {
+                    $warehouse->{$column} = trim($data[$input]);
+                }
             }
             if (array_key_exists('capacity', $data) && $data['capacity'] > 0) {
-                $warehouses[$index]['capacity'] = $data['capacity'];
+                $warehouse->capacity = (int) $data['capacity'];
             }
+            $warehouse->save();
 
-            $this->store->write('warehouses', $warehouses);
-
-            return response()->json($warehouses[$index]);
+            return $warehouse;
         });
+
+        return response()->json(Present::warehouse($warehouse));
     }
 
     public function destroy(string $id)
     {
-        return $this->store->transaction(function () use ($id) {
-            $warehouses = $this->store->read('warehouses');
-            $index = collect($warehouses)->search(fn ($w) => $w['id'] === $id);
-            if ($index === false) {
+        DB::transaction(function () use ($id) {
+            $warehouse = Warehouse::query()->lockForUpdate()->find($id);
+            if (! $warehouse) {
                 throw ApiException::notFound('Depo bulunamadı.');
             }
 
-            $hasStock = collect($this->store->read('stock_levels'))->contains(fn ($s) => $s['warehouseId'] === $id && $s['quantity'] > 0);
+            $hasStock = StockLevel::query()->where('warehouse_id', $id)->where('quantity', '>', 0)->exists();
             if ($hasStock) {
                 throw ApiException::validation('Bu depoda henüz stok bulunduğu için silinemez. Önce stokları başka depoya transfer ediniz.');
             }
 
-            unset($warehouses[$index]);
-            $this->store->write('warehouses', array_values($warehouses));
-
-            return response()->json(['deleted' => true]);
+            // Empty levels can go; movements keep their FK and would block the delete.
+            StockLevel::query()->where('warehouse_id', $id)->delete();
+            $warehouse->delete();
         });
+
+        return response()->json(['deleted' => true]);
     }
 }

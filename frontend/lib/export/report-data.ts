@@ -1,34 +1,17 @@
 // Builds the full report payload shared by the CSV and PDF exporters.
 //
-// Deliberately does NOT reuse getDashboardData(): that one truncates its lists
-// (top 6 critical products, last 8 movements, …) for the on-screen cards,
-// whereas an exported report is expected to contain the complete data set.
+// Deliberately does NOT reuse getDashboardData() for everything: that one
+// truncates its lists (top 6 critical products, last 8 movements, …) for the
+// on-screen cards, whereas an exported report is expected to contain the
+// complete data set. It's still used for the KPI/monthlyFlow/categoryShares/
+// warehouseTotals sections, which the server already returns un-truncated.
 //
 // This layer returns plain values only — no locale formatting. Each exporter
 // decides how to render them (CSV wants raw numbers Excel can parse, the PDF
 // wants tr-TR formatted strings).
-import {
-  categories,
-  products,
-  purchaseOrderTotal,
-  purchaseOrders,
-  stockLevels,
-  stockMovements,
-  suppliers,
-  totalStockForProduct,
-  users,
-  warehouses,
-} from "@/lib/mock/data";
 import { formatDateShort, formatDateTime } from "@/lib/format";
-import {
-  getCategoryShares,
-  getDashboardKpis,
-  getMonthlyFlow,
-  getTopMovers,
-  getWarehouseStockTotals,
-  getCriticalProducts,
-} from "@/lib/mock/dashboard";
-import { MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
+import { getDashboardData, MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
+import { criticalProducts as computeCriticalProducts, fetchReportDataset, topMovers as computeTopMovers } from "@/lib/reports/dataset";
 import {
   MOVEMENT_REASON_LABELS,
   MOVEMENT_TYPE_LABELS,
@@ -115,25 +98,6 @@ export interface ReportData {
   sections: ReportSection[];
 }
 
-function warehouseName(id: string | undefined): string {
-  if (!id) return "-";
-  return warehouses.find((w) => w.id === id)?.name ?? "-";
-}
-
-function categoryName(id: string): string {
-  return categories.find((c) => c.id === id)?.name ?? "-";
-}
-
-
-
-function supplierName(id: string): string {
-  return suppliers.find((s) => s.id === id)?.name ?? "-";
-}
-
-function userName(id: string): string {
-  return users.find((u) => u.id === id)?.name ?? "-";
-}
-
 function rangeStart(range: DateRangePreset): Date {
   const start = new Date();
   start.setMonth(start.getMonth() - MONTHS_BY_RANGE[range]);
@@ -141,38 +105,39 @@ function rangeStart(range: DateRangePreset): Date {
   return start;
 }
 
-export function buildReportData(
+export async function buildReportData(
   range: DateRangePreset,
   generatedBy: string,
   currency: CurrencyCode = "try",
   rate: number = 1,
   companyName: string = COMPANY_NAME,
-): ReportData {
-  const kpis = getDashboardKpis();
+): Promise<ReportData> {
+  const [dashboard, ds] = await Promise.all([getDashboardData(range), fetchReportDataset()]);
+
   const from = rangeStart(range).toISOString();
   const symbol = CURRENCY_SYMBOLS[currency];
   const convert = (v: number) => v / (rate || 1);
 
-  // 3 — Monthly inbound/outbound over the selected window.
-  const monthlyFlow = getMonthlyFlow(Math.max(MONTHS_BY_RANGE[range], 5));
+  const categoriesById = new Map(ds.categories.map((c) => [c.id, c]));
+  const categoryName = (id: string) => categoriesById.get(id)?.name ?? "-";
+  const warehousesById = new Map(ds.warehouses.map((w) => [w.id, w]));
+  const usersById = new Map(ds.users.map((u) => [u.id, u]));
 
-  // 4 — Category distribution, with each category's share of the total.
-  const categoryShares = getCategoryShares();
+  // Server-computed and already un-truncated: KPIs, monthly flow (max(months,5)
+  // months, unscoped), category shares (unscoped), warehouse totals (all).
+  const kpis = dashboard.kpis;
+  const monthlyFlow = dashboard.monthlyFlow;
+  const categoryShares = dashboard.categoryShares;
   const categoryUnitTotal = categoryShares.reduce((sum, c) => sum + c.units, 0) || 1;
+  const warehouseTotals = dashboard.warehouseTotals;
 
-  // 5 — Stock per warehouse, with utilisation against capacity.
-  const warehouseTotals = getWarehouseStockTotals();
-
-  // 6 — Every critical product, not just the six the dashboard card shows.
-  const criticalProducts = getCriticalProducts()
-    .map((p) => {
-      const current = totalStockForProduct(p.id);
-      return { product: p, current, shortfall: Math.max(p.minStock - current, 0) };
-    })
+  // Every critical product, not just the six the dashboard card shows.
+  const criticalProducts = computeCriticalProducts(ds)
+    .map((p) => ({ product: p, current: p.totalStock, shortfall: Math.max(p.minStock - p.totalStock, 0) }))
     .sort((a, b) => b.shortfall - a.shortfall);
 
-  // 8 — All movements inside the selected period (dashboard shows only 8).
-  const movements = stockMovements
+  // All movements inside the selected period (dashboard shows only 8).
+  const movements = ds.movements
     .filter((m) => m.createdAt >= from)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
@@ -227,7 +192,7 @@ export function buildReportData(
       columns: ["Ürün", "SKU", "Hareket Sayısı", "Toplam Miktar"],
       numericColumns: [2, 3],
       emptyMessage: "Hareket verisi yok.",
-      rows: getTopMovers(15).map((t) => [t.name, t.sku, t.movementCount, t.totalQuantity]),
+      rows: computeTopMovers(ds, 15).map((t) => [t.name, t.sku, t.movementCount, t.totalQuantity]),
     },
     {
       title: "Stok Hareketleri",
@@ -247,19 +212,19 @@ export function buildReportData(
       numericColumns: [6, 7, 8],
       emptyMessage: "Seçilen dönemde stok hareketi yok.",
       rows: movements.map((m) => {
-        const product = products.find((p) => p.id === m.productId);
+        const product = ds.products.find((p) => p.id === m.productId);
         return [
           formatDateTime(m.createdAt),
           MOVEMENT_TYPE_LABELS[m.type],
           product?.name ?? "-",
           product?.sku ?? "-",
-          warehouseName(m.warehouseId),
-          m.type === "transfer" ? warehouseName(m.targetWarehouseId) : "-",
+          warehousesById.get(m.warehouseId)?.name ?? "-",
+          m.type === "transfer" ? (warehousesById.get(m.targetWarehouseId ?? "")?.name ?? "-") : "-",
           m.type === "cikis" || m.type === "transfer" ? -m.quantity : m.quantity,
           m.previousQuantity,
           m.newQuantity,
           MOVEMENT_REASON_LABELS[m.reason],
-          userName(m.userId),
+          usersById.get(m.userId)?.name ?? "-",
         ];
       }),
     },
@@ -283,20 +248,20 @@ export function buildReportData(
       numericColumns: [6, 7, 8, 9, 10],
       currencyColumns: [6, 7],
       emptyMessage: "Katalogda ürün yok.",
-      rows: products.map((p) => [
+      rows: ds.products.map((p) => [
         p.name,
         p.sku,
         p.barcode,
-        categoryName(p.categoryId),
+        p.categoryName,
         p.brand,
         p.unit,
         convert(p.purchasePrice),
         convert(p.salePrice),
         p.minStock,
         p.maxStock,
-        totalStockForProduct(p.id),
+        p.totalStock,
         PRODUCT_STATUS_LABELS[p.status],
-        supplierName(p.supplierId),
+        ds.suppliers.find((s) => s.id === p.supplierId)?.name ?? "-",
       ]),
     },
     {
@@ -304,24 +269,17 @@ export function buildReportData(
       columns: ["Depo", "Şehir", "Adres", "Kapasite", "Mevcut Birim", "Ürün Çeşidi"],
       numericColumns: [3, 4, 5],
       emptyMessage: "Depo kaydı yok.",
-      rows: warehouses.map((w) => [
-        w.name,
-        w.city,
-        w.address,
-        w.capacity,
-        warehouseTotals.find((t) => t.warehouseId === w.id)?.units ?? 0,
-        new Set(stockLevels.filter((s) => s.warehouseId === w.id).map((s) => s.productId)).size,
-      ]),
+      rows: ds.warehouses.map((w) => [w.name, w.city, w.address, w.capacity, w.units, w.productCount]),
     },
     {
       title: "Kategoriler",
       columns: ["Kategori", "Üst Kategori", "Ürün Sayısı"],
       numericColumns: [2],
       emptyMessage: "Kategori kaydı yok.",
-      rows: categories.map((c) => [
+      rows: ds.categories.map((c) => [
         c.name,
         c.parentId ? categoryName(c.parentId) : "-",
-        products.filter((p) => p.categoryId === c.id).length,
+        ds.products.filter((p) => p.categoryId === c.id).length,
       ]),
     },
     {
@@ -329,14 +287,7 @@ export function buildReportData(
       columns: ["Tedarikçi", "İlgili Kişi", "E-posta", "Telefon", "Şehir", "Ürün Sayısı"],
       numericColumns: [5],
       emptyMessage: "Tedarikçi kaydı yok.",
-      rows: suppliers.map((s) => [
-        s.name,
-        s.contactName,
-        s.email,
-        s.phone,
-        s.city,
-        products.filter((p) => p.supplierId === s.id).length,
-      ]),
+      rows: ds.suppliers.map((s) => [s.name, s.contactName, s.email, s.phone, s.city, s.productCount]),
     },
     {
       title: "Satın Alma Siparişleri",
@@ -352,12 +303,12 @@ export function buildReportData(
       numericColumns: [3, 4],
       currencyColumns: [4],
       emptyMessage: "Satın alma siparişi yok.",
-      rows: purchaseOrders.map((po) => [
+      rows: ds.orders.map((po) => [
         po.code,
-        supplierName(po.supplierId),
+        po.supplierName,
         PURCHASE_STATUS_LABELS[po.status],
-        po.items.length,
-        convert(purchaseOrderTotal(po)),
+        po.itemCount,
+        convert(po.total),
         formatDateShort(po.createdAt),
         formatDateShort(po.expectedAt),
       ]),

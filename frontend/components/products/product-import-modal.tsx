@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useRef } from "react";
-import * as XLSX from "xlsx-js-style";
+// Plain (patched) SheetJS build, not xlsx-js-style — this file parses files a
+// user uploads, and xlsx-js-style bundles the same unpatched CVE-affected
+// parser xlsx used to. No cell styling is needed here (template writer only
+// sets column widths), so the patched build is a drop-in replacement.
+import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import {
   FileSpreadsheet,
@@ -148,16 +152,31 @@ export function ProductImportModal({
   async function processFile(file: File) {
     setFileName(file.name);
     setFileSize(formatBytes(file.size));
+
+    const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      toast.error("Dosya çok büyük", { description: "Lütfen 10MB'tan küçük bir dosya yükleyin." });
+      setParsedRows([]);
+      return;
+    }
+
     setIsParsing(true);
 
+    let rawRows: Record<string, unknown>[];
     try {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array" });
       const firstSheetName = wb.SheetNames[0];
       const ws = wb.Sheets[firstSheetName];
+      rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
+    } catch {
+      toast.error("Dosya okunamadı", { description: "Dosya bozuk veya desteklenmeyen bir formatta olabilir." });
+      setParsedRows([]);
+      setIsParsing(false);
+      return;
+    }
 
-      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" });
-
+    try {
       if (rawRows.length === 0) {
         toast.error("Dosya boş", { description: "Yüklediğiniz Excel dosyasında hiç veri bulunamadı." });
         setParsedRows([]);

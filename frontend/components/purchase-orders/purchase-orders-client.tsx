@@ -869,9 +869,6 @@ export function PurchaseOrdersClient() {
                   <DropdownMenuItem onClick={() => handleExport("excel")}>
                     <FileSpreadsheet className="size-4 text-status-good" /> Excel (.xlsx)
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleExport("pdf")}>
-                    <FileText className="size-4 text-status-critical" /> PDF (.pdf)
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
               <Can permission="purchase.manage">
@@ -933,7 +930,7 @@ export function PurchaseOrdersClient() {
             </TabsTrigger>
             <TabsTrigger value="quotes">
               <FileSignature className="size-4" />
-              Teklifler ve Siparişler
+              Teklifler
             </TabsTrigger>
           </TabsList>
 

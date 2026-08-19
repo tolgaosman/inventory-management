@@ -1,7 +1,7 @@
 // Domain types for the inventory management system.
 // Mirrors the entities described in project_description.txt.
 
-export type Role = "depo" | "satinalma" | "yonetici";
+export type Role = "admin" | "depo_yonetici" | "satinalma_yonetici" | "depo" | "satinalma";
 
 export interface AppUser {
   id: string;
@@ -9,6 +9,7 @@ export interface AppUser {
   email: string;
   role: Role;
   initials: string;
+  mustChangePassword?: boolean;
 }
 
 export interface Warehouse {
@@ -118,6 +119,7 @@ export interface PurchaseOrder {
   receivedAt?: string;
   currency: "TRY";
   notes?: string;
+  invoiceFilePath?: string | null;
 }
 
 export type QuoteCurrency = "try" | "usd" | "eur" | "gbp";

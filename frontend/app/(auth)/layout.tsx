@@ -1,6 +1,5 @@
 import React from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { LanguageToggle } from "@/components/language-toggle";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,9 +22,8 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         {children}
       </div>
 
-      {/* Theme Toggle & Language Toggle */}
+      {/* Theme Toggle */}
       <div className="absolute bottom-6 right-6 z-20 flex items-center gap-2">
-        <LanguageToggle />
         <ThemeToggle />
       </div>
     </div>

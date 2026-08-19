@@ -12,17 +12,20 @@ class TextTools
 {
     public static function normalize(string $str): string
     {
-        $str = mb_strtolower($str, 'UTF-8');
+        // Map Turkish letters (both cases) to ascii *before* lowercasing —
+        // mb_strtolower('İ') decomposes to "i" + a combining dot above
+        // (U+0307), which the old post-lowercase map never matched, so any
+        // search containing a capital İ (İstanbul, İzmir, ...) silently failed.
         $map = [
-            'ı' => 'i', 'İ' => 'i', 'I' => 'i',
-            'ğ' => 'g', 'Ğ' => 'g',
-            'ü' => 'u', 'Ü' => 'u',
-            'ş' => 's', 'Ş' => 's',
-            'ö' => 'o', 'Ö' => 'o',
-            'ç' => 'c', 'Ç' => 'c',
+            'İ' => 'i', 'I' => 'i', 'ı' => 'i',
+            'Ğ' => 'g', 'ğ' => 'g',
+            'Ü' => 'u', 'ü' => 'u',
+            'Ş' => 's', 'ş' => 's',
+            'Ö' => 'o', 'ö' => 'o',
+            'Ç' => 'c', 'ç' => 'c',
         ];
 
-        return strtr($str, $map);
+        return mb_strtolower(strtr($str, $map), 'UTF-8');
     }
 
     /** @param array<int, string|null> $haystacks */

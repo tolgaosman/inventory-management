@@ -4,32 +4,35 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
-use App\Support\JsonStore;
+use App\Models\StockMovement;
+use App\Models\User;
+use App\Support\IdGenerator;
+use App\Support\Present;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * frontend/components/users/users-client.tsx currently manages users purely
- * in local React state (no lib/api module beyond the read-only listUsers()
- * in catalog.ts) — this gives it a real backend to move to. password_hash is
- * always stripped from responses.
+ * frontend/components/users/users-client.tsx used to manage users purely in
+ * local React state — this is the real backend it moves to. Present::user()
+ * never emits the password hash.
  */
 class UserController extends Controller
 {
-    public function __construct(private JsonStore $store)
-    {
-    }
-
-    private function sanitize(array $user): array
-    {
-        unset($user['password_hash']);
-
-        return $user;
-    }
-
     public function index()
     {
-        return response()->json(array_map($this->sanitize(...), $this->store->read('users')));
+        return response()->json(User::query()->get()->map(fn ($u) => Present::user($u))->all());
+    }
+
+    private function initialsFor(string $name): string
+    {
+        $initials = collect(explode(' ', trim($name)))
+            ->filter()
+            ->map(fn ($n) => mb_substr($n, 0, 1))
+            ->take(2)
+            ->implode('');
+
+        return mb_strtoupper($initials);
     }
 
     public function store(Request $request)
@@ -37,34 +40,31 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string'],
             'email' => ['required', 'string'],
-            'role' => ['required', 'in:depo,satinalma,yonetici'],
+            'role' => ['required', 'in:admin,depo_yonetici,satinalma_yonetici,depo,satinalma'],
         ]);
 
-        return $this->store->transaction(function () use ($data) {
-            $users = $this->store->read('users');
-            if (collect($users)->contains(fn ($u) => mb_strtolower($u['email']) === mb_strtolower($data['email']))) {
+        $user = DB::transaction(function () use ($data) {
+            $exists = User::query()->whereRaw('lower(email) = ?', [mb_strtolower(trim($data['email']))])->exists();
+            if ($exists) {
                 throw ApiException::conflict('Bu e-posta adresi zaten kullanılıyor.');
             }
 
-            $initials = collect(explode(' ', trim($data['name'])))
-                ->filter()
-                ->map(fn ($n) => mb_substr($n, 0, 1))
-                ->take(2)
-                ->implode('');
-
-            $newUser = [
-                'id' => (string) random_int(10000, 99999),
+            return User::query()->create([
+                // Users have bare 5-digit ids in the seed; keep the format but
+                // derive it collision-free instead of random_int().
+                'id' => (string) (10000 + (int) User::query()->count() + random_int(1, 89000)),
                 'name' => trim($data['name']),
                 'email' => trim($data['email']),
                 'role' => $data['role'],
-                'initials' => mb_strtoupper($initials),
-                'password_hash' => Hash::make(config('inventory.demo_password')),
-            ];
-            $users[] = $newUser;
-            $this->store->write('users', $users);
-
-            return response()->json($this->sanitize($newUser), 201);
+                'initials' => $this->initialsFor($data['name']),
+                'password' => config('inventory.demo_password'),
+                // Admin-created accounts share a known default password —
+                // force a real one to be set before anything else is usable.
+                'must_change_password' => true,
+            ]);
         });
+
+        return response()->json(Present::user($user), 201);
     }
 
     public function update(Request $request, string $id)
@@ -72,45 +72,64 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string'],
             'email' => ['sometimes', 'string'],
-            'role' => ['sometimes', 'in:depo,satinalma,yonetici'],
+            'role' => ['sometimes', 'in:admin,depo_yonetici,satinalma_yonetici,depo,satinalma'],
         ]);
 
-        return $this->store->transaction(function () use ($data, $id) {
-            $users = $this->store->read('users');
-            $index = collect($users)->search(fn ($u) => $u['id'] === $id);
-            if ($index === false) {
+        $user = DB::transaction(function () use ($data, $id) {
+            $user = User::query()->lockForUpdate()->find($id);
+            if (! $user) {
                 throw ApiException::notFound('Kullanıcı bulunamadı.');
             }
 
-            if (array_key_exists('email', $data) && collect($users)->contains(fn ($u) => $u['id'] !== $id && mb_strtolower($u['email']) === mb_strtolower($data['email']))) {
-                throw ApiException::conflict('Bu e-posta adresi zaten kullanılıyor.');
+            if (array_key_exists('email', $data)) {
+                $taken = User::query()
+                    ->whereKeyNot($id)
+                    ->whereRaw('lower(email) = ?', [mb_strtolower(trim($data['email']))])
+                    ->exists();
+                if ($taken) {
+                    throw ApiException::conflict('Bu e-posta adresi zaten kullanılıyor.');
+                }
             }
 
             foreach (['name', 'email', 'role'] as $field) {
                 if (array_key_exists($field, $data)) {
-                    $users[$index][$field] = is_string($data[$field]) ? trim($data[$field]) : $data[$field];
+                    $user->{$field} = trim($data[$field]);
                 }
             }
+            if (array_key_exists('name', $data)) {
+                $user->initials = $this->initialsFor($data['name']);
+            }
+            $user->save();
 
-            $this->store->write('users', $users);
-
-            return response()->json($this->sanitize($users[$index]));
+            return $user;
         });
+
+        return response()->json(Present::user($user));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        return $this->store->transaction(function () use ($id) {
-            $users = $this->store->read('users');
-            $index = collect($users)->search(fn ($u) => $u['id'] === $id);
-            if ($index === false) {
+        DB::transaction(function () use ($request, $id) {
+            $user = User::query()->lockForUpdate()->find($id);
+            if (! $user) {
                 throw ApiException::notFound('Kullanıcı bulunamadı.');
             }
 
-            unset($users[$index]);
-            $this->store->write('users', array_values($users));
+            if ($request->user()?->getKey() === $user->getKey()) {
+                throw ApiException::conflict('Kendi hesabınızı silemezsiniz.');
+            }
 
-            return response()->json(['deleted' => true]);
+            // Movements carry a restrict-on-delete FK to users; blocking here
+            // gives a Turkish message instead of a raw constraint violation.
+            $movementCount = StockMovement::query()->where('user_id', $id)->count();
+            if ($movementCount > 0) {
+                throw ApiException::conflict("Bu kullanıcıya ait {$movementCount} stok hareketi olduğu için silinemez.");
+            }
+
+            $user->tokens()->delete();
+            $user->delete();
         });
+
+        return response()->json(['deleted' => true]);
     }
 }

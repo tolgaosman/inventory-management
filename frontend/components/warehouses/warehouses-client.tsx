@@ -60,6 +60,8 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   X,
 } from "lucide-react";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
@@ -277,7 +279,7 @@ export function WarehousesClient() {
 
   // Export Excel / PDF
   const handleExport = async (type: "excel" | "pdf") => {
-    const report = buildReportData("bu-yil", `${name} (${role})`, currency, rates?.[currency]);
+    const report = await buildReportData("bu-yil", `${name} (${role})`, currency, rates?.[currency]);
     const date = new Date();
     if (type === "excel") {
       downloadBlob(buildReportExcel(report, ["all"]), reportFilename("xlsx", date, "depo-envanter-raporu"));
@@ -705,21 +707,43 @@ export function WarehousesClient() {
             <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="size-8"
                 disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
+                onClick={() => setPage(1)}
+                title="İlk Sayfa"
               >
-                <ChevronLeft className="size-4" />
-                Önceki
+                <ChevronsLeft className="size-4" />
               </Button>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
+                className="size-8"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+                title="Önceki Sayfa"
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
                 disabled={page >= totalPages}
                 onClick={() => setPage(page + 1)}
+                title="Sonraki Sayfa"
               >
-                Sonraki Sayfa
                 <ChevronRight className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                title="Son Sayfa"
+              >
+                <ChevronsRight className="size-4" />
               </Button>
             </div>
           </div>

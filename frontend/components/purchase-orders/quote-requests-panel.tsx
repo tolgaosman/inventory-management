@@ -11,9 +11,8 @@ import { useAsync } from "@/lib/hooks/use-async";
 import { useSettings } from "@/lib/settings-context";
 import { useCurrency } from "@/lib/currency-context";
 import { formatDate, formatDateShort, formatCurrency } from "@/lib/format";
-import { listQuotesAndInvoices, type QuoteOrInvoiceRow } from "@/lib/api/quotes";
+import { listQuoteRequests, type QuoteRequestRow } from "@/lib/api/quotes";
 import { downloadQuoteRequestPdf } from "@/lib/export/quote-download";
-import { downloadInvoicePdf } from "@/lib/export/invoice-download";
 
 import {
   DropdownMenu,
@@ -33,22 +32,17 @@ export function QuotesAndOrdersPanel({ refreshKey }: { refreshKey?: number }) {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { status, data, staleData, error, refetch } = useAsync(
-    () => listQuotesAndInvoices({ page, pageSize: COMPACT_PAGE_SIZE }),
+    () => listQuoteRequests({ page, pageSize: COMPACT_PAGE_SIZE }),
     [page, refreshKey],
   );
   const view = data ?? staleData;
 
-  const handleDownload = useCallback(async (row: QuoteOrInvoiceRow, lang: "tr" | "en") => {
+  const handleDownload = useCallback(async (row: QuoteRequestRow, lang: "tr" | "en") => {
     setDownloadingId(row.id);
     try {
       const approverName = `${userProfile.firstName} ${userProfile.lastName}`.trim();
-      if (row.type === "quote") {
-        await downloadQuoteRequestPdf(row.id, company, approverName, lang);
-        toast.success(lang === "tr" ? "Teklif PDF'i indirildi" : "Quote PDF downloaded");
-      } else {
-        await downloadInvoicePdf(row.id, company, approverName, lang);
-        toast.success(lang === "tr" ? "Fatura PDF'i indirildi" : "Invoice PDF downloaded");
-      }
+      await downloadQuoteRequestPdf(row.id, company, approverName, lang);
+      toast.success(lang === "tr" ? "Teklif PDF'i indirildi" : "Quote PDF downloaded");
     } catch {
       toast.error("PDF oluşturulamadı");
     } finally {
@@ -56,26 +50,19 @@ export function QuotesAndOrdersPanel({ refreshKey }: { refreshKey?: number }) {
     }
   }, [company]);
 
-  const columns = useMemo<ColumnDef<QuoteOrInvoiceRow, unknown>[]>(
+  const columns = useMemo<ColumnDef<QuoteRequestRow, unknown>[]>(
     () => [
       {
         id: "type",
         accessorKey: "type",
         header: "Tür",
         meta: { className: "w-[8%] text-center py-1.5" },
-        cell: ({ row }) => (
+        cell: () => (
           <div className="flex justify-center">
-            {row.original.type === "quote" ? (
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 gap-1 px-1.5 py-0">
-                <FileSignature className="size-3" />
-                Teklif
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1 px-1.5 py-0">
-                <FileText className="size-3" />
-                Sipariş
-              </Badge>
-            )}
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 gap-1 px-1.5 py-0">
+              <FileSignature className="size-3" />
+              Teklif
+            </Badge>
           </div>
         ),
       },
@@ -136,7 +123,6 @@ export function QuotesAndOrdersPanel({ refreshKey }: { refreshKey?: number }) {
         enableSorting: false,
         meta: { className: "w-[15%] text-center py-1.5" },
         cell: ({ row }) => {
-          const type = row.original.type;
           return (
             <div className="flex justify-center">
               <DropdownMenu>
@@ -153,7 +139,7 @@ export function QuotesAndOrdersPanel({ refreshKey }: { refreshKey?: number }) {
                       ) : (
                         <Download className="size-3.5" />
                       )}
-                      {type === "quote" ? "PDF İndir" : "PDF Fatura"}
+                      PDF İndir
                     </Button>
                   }
                 />
@@ -187,7 +173,7 @@ export function QuotesAndOrdersPanel({ refreshKey }: { refreshKey?: number }) {
       onRetry={refetch}
       isFiltered={false}
       emptyTitle="Kayıt bulunamadı"
-      emptyDescription="Teklif istekleri ve teslim alınan siparişler burada listelenecek."
+      emptyDescription="Teklif istekleri burada listelenecek."
     />
   );
 }

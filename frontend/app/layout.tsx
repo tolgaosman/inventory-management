@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/components/theme-provider";
 import { CurrencyProvider } from "@/lib/currency-context";
-import { GoogleTranslate } from "@/components/google-translate";
 
 import { SettingsProvider } from "@/lib/settings-context";
 
@@ -51,7 +50,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
                 <TooltipProvider delay={150}>{children}</TooltipProvider>
               </AuthProvider>
               <Toaster position="top-center" />
-              <GoogleTranslate />
             </SettingsProvider>
           </CurrencyProvider>
         </ThemeProvider>

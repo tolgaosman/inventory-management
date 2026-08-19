@@ -3,56 +3,69 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\StockMovement;
 use App\Services\StockService;
-use App\Support\JsonStore;
+use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
 
-/** Direct PHP port of frontend/lib/api/movements.ts. */
+/** Direct port of frontend/lib/api/movements.ts. */
 class MovementController extends Controller
 {
-    public function __construct(private JsonStore $store, private StockService $stock)
+    public function __construct(private StockService $stock)
     {
     }
 
     public function index(Request $request)
     {
-        $rows = $this->store->read('stock_movements');
-        $products = collect($this->store->read('products'))->keyBy('id');
+        $query = StockMovement::query()->orderByDesc('created_at')->orderByDesc('id');
 
         if ($type = $request->query('type')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['type'] === $type));
+            $query->where('type', $type);
         }
         if ($reason = $request->query('reason')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['reason'] === $reason));
+            $query->where('reason', $reason);
         }
         if ($productId = $request->query('productId')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['productId'] === $productId));
+            $query->where('product_id', $productId);
         }
+        // A warehouse's history includes transfers arriving from elsewhere.
         if ($warehouseId = $request->query('warehouseId')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['warehouseId'] === $warehouseId || $m['targetWarehouseId'] === $warehouseId));
+            $query->where(fn ($q) => $q->where('warehouse_id', $warehouseId)->orWhere('target_warehouse_id', $warehouseId));
         }
         if ($userId = $request->query('userId')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['userId'] === $userId));
+            $query->where('user_id', $userId);
         }
         if ($dateFrom = $request->query('dateFrom')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['createdAt'] >= $dateFrom));
+            $query->where('created_at', '>=', $dateFrom);
         }
         if ($dateTo = $request->query('dateTo')) {
-            $rows = array_values(array_filter($rows, fn ($m) => $m['createdAt'] <= $dateTo));
+            $query->where('created_at', '<=', $dateTo);
         }
+
+        // Product name/SKU search needs Turkish diacritic folding, which SQLite
+        // can't do in LIKE — resolve matching product ids first, then filter.
         if ($search = $request->query('search')) {
-            $rows = array_values(array_filter($rows, function ($m) use ($products, $search) {
-                $p = $products->get($m['productId']);
-
-                return TextTools::matches([$p['name'] ?? null, $p['sku'] ?? null], $search);
-            }));
+            $productIds = \App\Models\Product::query()
+                ->get(['id', 'name', 'sku'])
+                ->filter(fn ($p) => TextTools::matches([$p->name, $p->sku], $search))
+                ->pluck('id')
+                ->all();
+            $query->whereIn('product_id', $productIds);
         }
 
-        $page = (int) $request->query('page', 1);
-        $pageSize = (int) $request->query('pageSize', 10);
+        $total = (clone $query)->count();
+        $page = max((int) $request->query('page', 1), 1);
+        $pageSize = max((int) $request->query('pageSize', 10), 1);
 
-        return response()->json(TextTools::paginate($rows, $page, $pageSize));
+        $rows = $query->forPage($page, $pageSize)->get()->map(fn ($m) => Present::movement($m))->all();
+
+        return response()->json([
+            'rows' => $rows,
+            'total' => $total,
+            'page' => $page,
+            'pageSize' => $pageSize,
+        ]);
     }
 
     public function stockIn(Request $request)
@@ -66,7 +79,8 @@ class MovementController extends Controller
             'note' => ['nullable', 'string'],
             'idempotencyKey' => ['nullable', 'string'],
         ]);
-        $data['userId'] = $request->user('api-token')->id();
+        // Never trust a client-sent userId — it comes from the token.
+        $data['userId'] = $request->user()->getKey();
 
         return response()->json($this->stock->stockIn($data), 201);
     }
@@ -81,7 +95,7 @@ class MovementController extends Controller
             'note' => ['nullable', 'string'],
             'idempotencyKey' => ['nullable', 'string'],
         ]);
-        $data['userId'] = $request->user('api-token')->id();
+        $data['userId'] = $request->user()->getKey();
 
         return response()->json($this->stock->stockOut($data), 201);
     }
@@ -96,14 +110,17 @@ class MovementController extends Controller
             'note' => ['nullable', 'string'],
             'idempotencyKey' => ['nullable', 'string'],
         ]);
-        $data['userId'] = $request->user('api-token')->id();
+        $data['userId'] = $request->user()->getKey();
 
         return response()->json($this->stock->transfer($data), 201);
     }
 
     public function quantity(Request $request)
     {
-        $data = $request->validate(['productId' => ['required', 'string'], 'warehouseId' => ['required', 'string']]);
+        $data = $request->validate([
+            'productId' => ['required', 'string'],
+            'warehouseId' => ['required', 'string'],
+        ]);
 
         return response()->json(['quantity' => $this->stock->quantity($data['productId'], $data['warehouseId'])]);
     }

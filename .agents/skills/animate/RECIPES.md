@@ -6,7 +6,7 @@ Curves are the `--ease-out`, `--ease-in-out`, and `--ease-drawer` tokens defined
 
 ---
 
-## Button pressss
+## Button press
 
 Any pressable element. Instant feedback that the interface heard the user.
 

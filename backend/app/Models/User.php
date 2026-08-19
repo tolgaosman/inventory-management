@@ -2,48 +2,47 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     protected $fillable = [
-        'name',
-        'email',
-        'password',
+        'id', 'name', 'email', 'role', 'initials', 'password', 'must_change_password',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
         ];
+    }
+
+    /** @return string[] */
+    public function permissions(): array
+    {
+        return config("permissions.role_permissions.{$this->role}", []);
+    }
+
+    public function can($abilities, $arguments = []): bool
+    {
+        // Overrides Laravel's Gate-based can() with our permission-string model
+        // (frontend/lib/auth.tsx's can(permission) — see config/permissions.php).
+        return in_array($abilities, $this->permissions(), true);
     }
 }

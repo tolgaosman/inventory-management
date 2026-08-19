@@ -1,105 +1,62 @@
-// Read-mostly reference data: categories, warehouses, suppliers, users.
-import type { PagedQuery, PagedResult, Supplier } from "@/lib/types";
-import { categories, suppliers, users, warehouses, products, stockLevels } from "@/lib/mock/data";
-import { getWarehouseStockTotals } from "@/lib/mock/dashboard";
-import { ApiError, delay, matchesSearch, paginate } from "./client";
+import type { AppUser, Category, PagedQuery, PagedResult, Product, StockLevel, Supplier, Warehouse } from "@/lib/types";
+import { apiFetch } from "./client";
 
-export async function listWarehouses() {
-  const totals = getWarehouseStockTotals();
-  const rows = warehouses.map((w) => ({
-    ...w,
-    units: totals.find((t) => t.warehouseId === w.id)?.units ?? 0,
-    productCount: new Set(stockLevels.filter((s) => s.warehouseId === w.id).map((s) => s.productId)).size,
-  }));
-  return delay(rows);
+export async function listWarehouses(): Promise<(Warehouse & { units: number; productCount: number })[]> {
+  return apiFetch<(Warehouse & { units: number; productCount: number })[]>("/warehouses");
 }
 
-export async function getWarehouse(id: string) {
-  const wh = warehouses.find((w) => w.id === id);
-  if (!wh) throw new ApiError("Depo bulunamadı.", "NOT_FOUND");
-  const levels = stockLevels
-    .filter((s) => s.warehouseId === id)
-    .map((s) => ({
-      ...s,
-      product: products.find((p) => p.id === s.productId)!,
-    }))
-    .filter((s) => s.product);
-  return delay({ warehouse: wh, levels });
+export async function getWarehouse(id: string): Promise<{
+  warehouse: Warehouse;
+  levels: (StockLevel & { product: Product })[];
+}> {
+  return apiFetch(`/warehouses/${id}`);
 }
 
-export async function listCategories() {
-  return delay(
-    categories.map((c) => ({
-      ...c,
-      productCount: products.filter((p) => p.categoryId === c.id).length,
+export async function listCategories(): Promise<(Category & { productCount: number })[]> {
+  const result = await apiFetch<{
+    tree: (Category & { productCount: number; children: (Category & { productCount: number })[] })[];
+  }>("/categories/tree");
+
+  // The catalog picker wants a flat list with per-category counts; the tree
+  // endpoint already carries both, so flatten rather than add an endpoint.
+  return result.tree.flatMap((root) => [
+    { id: root.id, name: root.name, parentId: root.parentId, productCount: root.productCount },
+    ...root.children.map((child) => ({
+      id: child.id,
+      name: child.name,
+      parentId: child.parentId,
+      productCount: child.productCount,
     })),
-  );
+  ]);
 }
 
 export type SupplierQuery = PagedQuery;
 
-export async function listSuppliers(query: SupplierQuery = {}) {
-  let rows = suppliers.map((s) => ({
-    ...s,
-    productCount: products.filter((p) => p.supplierId === s.id).length,
-  }));
-  rows = rows.filter((s) => matchesSearch([s.name, s.contactName, s.email, s.city], query.search));
-  return delay(paginate(rows, query) as PagedResult<(typeof rows)[number]>);
+export async function listSuppliers(
+  query: SupplierQuery = {},
+): Promise<PagedResult<Supplier & { productCount: number }>> {
+  return apiFetch<PagedResult<Supplier & { productCount: number }>>("/suppliers", {
+    query: { search: query.search, page: query.page, pageSize: query.pageSize },
+  });
 }
 
-export async function getSupplier(id: string) {
-  const supplier = suppliers.find((s) => s.id === id);
-  if (!supplier) throw new ApiError("Tedarikçi bulunamadı.", "NOT_FOUND");
-  const supplierProducts = products.filter((p) => p.supplierId === id);
-  return delay({ supplier, products: supplierProducts });
+export async function getSupplier(id: string): Promise<{ supplier: Supplier; products: Product[] }> {
+  return apiFetch(`/suppliers/${id}`);
 }
 
 export async function createSupplier(input: Omit<Supplier, "id">): Promise<Supplier> {
-  if (!input.name.trim()) throw new ApiError("Tedarikçi adı gereklidir.", "VALIDATION");
-  if (!input.contactName.trim()) throw new ApiError("Yetkili adı gereklidir.", "VALIDATION");
-  if (!input.email.trim().includes("@")) throw new ApiError("Geçerli bir e-posta gereklidir.", "VALIDATION");
-  if (!input.phone.trim()) throw new ApiError("Telefon gereklidir.", "VALIDATION");
-  if (!input.city.trim()) throw new ApiError("Şehir gereklidir.", "VALIDATION");
-
-  const newSupplier: Supplier = {
-    id: `sup-${suppliers.length + 1}`,
-    name: input.name.trim(),
-    contactName: input.contactName.trim(),
-    email: input.email.trim(),
-    phone: input.phone.trim(),
-    city: input.city.trim(),
-  };
-
-  suppliers.push(newSupplier);
-  return delay(newSupplier, 400);
+  return apiFetch<Supplier>("/suppliers", { method: "POST", body: input });
 }
 
 export async function updateSupplier(id: string, input: Partial<Omit<Supplier, "id">>): Promise<Supplier> {
-  const supplier = suppliers.find((s) => s.id === id);
-  if (!supplier) throw new ApiError("Tedarikçi bulunamadı.", "NOT_FOUND");
-
-  if (input.name !== undefined) supplier.name = input.name.trim();
-  if (input.contactName !== undefined) supplier.contactName = input.contactName.trim();
-  if (input.email !== undefined) supplier.email = input.email.trim();
-  if (input.phone !== undefined) supplier.phone = input.phone.trim();
-  if (input.city !== undefined) supplier.city = input.city.trim();
-
-  return delay(supplier, 400);
+  return apiFetch<Supplier>(`/suppliers/${id}`, { method: "PUT", body: input });
 }
 
 export async function deleteSupplier(id: string): Promise<boolean> {
-  const index = suppliers.findIndex((s) => s.id === id);
-  if (index === -1) throw new ApiError("Tedarikçi bulunamadı.", "NOT_FOUND");
-
-  const hasProducts = products.some((p) => p.supplierId === id);
-  if (hasProducts) {
-    throw new ApiError("Bu tedarikçiye bağlı ürünler olduğu için silinemez. Önce ürünlerin tedarikçisini değiştiriniz.", "VALIDATION");
-  }
-
-  suppliers.splice(index, 1);
-  return delay(true, 400);
+  await apiFetch<{ deleted: boolean }>(`/suppliers/${id}`, { method: "DELETE" });
+  return true;
 }
 
-export async function listUsers() {
-  return delay(users);
+export async function listUsers(): Promise<AppUser[]> {
+  return apiFetch<AppUser[]>("/users");
 }

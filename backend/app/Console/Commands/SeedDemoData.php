@@ -2,37 +2,46 @@
 
 namespace App\Console\Commands;
 
-use App\Support\JsonStore;
-use Database\Seeders\DemoDataSeeder;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\StockLevel;
+use App\Models\StockMovement;
+use App\Models\Supplier;
+use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Artisan;
 
 class SeedDemoData extends Command
 {
-    protected $signature = 'data:seed {--fresh : Delete existing JSON data files before reseeding}';
+    protected $signature = 'data:seed {--fresh : Drop and recreate all tables before reseeding}';
 
-    protected $description = 'Regenerate the JSON-file demo dataset (warehouses, products, movements, purchase orders, ...)';
+    protected $description = 'Regenerate the demo dataset (warehouses, products, movements, purchase orders, ...)';
 
-    public function handle(JsonStore $store): int
+    public function handle(): int
     {
         if ($this->option('fresh')) {
-            $dir = $store->dataDir();
-            foreach (glob($dir.'/*.json') ?: [] as $file) {
-                unlink($file);
-            }
-            $this->info('Existing data files removed.');
+            Artisan::call('migrate:fresh', [], $this->output);
         }
 
-        app(DemoDataSeeder::class)->run();
+        Artisan::call('db:seed', ['--class' => \Database\Seeders\DemoDataSeeder::class, '--force' => true], $this->output);
 
         $counts = [
-            'warehouses', 'categories', 'suppliers', 'users', 'products',
-            'stock_levels', 'stock_movements', 'purchase_orders',
+            'warehouses' => Warehouse::count(),
+            'categories' => Category::count(),
+            'suppliers' => Supplier::count(),
+            'users' => User::count(),
+            'products' => Product::count(),
+            'stock_levels' => StockLevel::count(),
+            'stock_movements' => StockMovement::count(),
+            'purchase_orders' => PurchaseOrder::count(),
         ];
-        foreach ($counts as $collection) {
-            $this->line(sprintf('%-18s %d', $collection, count($store->read($collection))));
+        foreach ($counts as $name => $count) {
+            $this->line(sprintf('%-18s %d', $name, $count));
         }
 
-        $this->info('Demo data seeded into '.$store->dataDir());
+        $this->info('Demo data seeded.');
 
         return self::SUCCESS;
     }

@@ -1,78 +1,103 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
-import type { Role } from "@/lib/types";
-import { users } from "@/lib/mock/data";
-import { useSettings } from "@/lib/settings-context";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { AppUser, Role } from "@/lib/types";
+import type { Permission } from "@/lib/api/auth";
+import { logout as apiLogout, me } from "@/lib/api/auth";
+import { getToken } from "@/lib/api/client";
 
-export type Permission =
-  | "products.view"
-  | "products.manage"
-  | "warehouses.manage"
-  | "stock.in"
-  | "stock.out"
-  | "stock.transfer"
-  | "purchase.view"
-  | "purchase.manage"
-  | "suppliers.view"
-  | "suppliers.manage"
-  | "reports.view"
-  | "users.manage";
+export type { Permission };
 
-const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  depo: ["products.view", "stock.in", "stock.out", "stock.transfer"],
-  satinalma: ["products.view", "purchase.view", "purchase.manage", "suppliers.view", "suppliers.manage"],
-  yonetici: [
-    "products.view",
-    "products.manage",
-    "warehouses.manage",
-    "stock.in",
-    "stock.out",
-    "stock.transfer",
-    "purchase.view",
-    "purchase.manage",
-    "suppliers.view",
-    "suppliers.manage",
-    "reports.view",
-    "users.manage",
-  ],
-};
+type AuthStatus = "loading" | "authenticated" | "anonymous";
 
 interface AuthContextValue {
+  status: AuthStatus;
+  user: AppUser | null;
   userId: string;
   role: Role;
   name: string;
   initials: string;
+  permissions: Permission[];
+  mustChangePassword: boolean;
   can: (permission: Permission) => boolean;
-  setRole: (role: Role) => void;
+  /** Re-reads the session from the server — call after login or a profile change. */
+  refresh: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function initialsFor(name: string, fallback: string) {
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || fallback
+  );
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { role, setRole, userProfile } = useSettings();
+  const router = useRouter();
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+
+  const load = useCallback(async () => {
+    if (!getToken()) {
+      setUser(null);
+      setPermissions([]);
+      setStatus("anonymous");
+      return;
+    }
+    try {
+      const session = await me();
+      setUser(session.user);
+      setPermissions(session.permissions);
+      setStatus("authenticated");
+    } catch {
+      // apiFetch already cleared an invalid token and redirected.
+      setUser(null);
+      setPermissions([]);
+      setStatus("anonymous");
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void load();
+  }, [load]);
+
+  const signOut = useCallback(async () => {
+    await apiLogout();
+    setUser(null);
+    setPermissions([]);
+    setStatus("anonymous");
+    router.push("/giris");
+  }, [router]);
 
   const value = useMemo<AuthContextValue>(() => {
-    const asUser = users.find((u) => u.role === role) ?? users[0];
-    const fullName = `${userProfile.firstName} ${userProfile.lastName}`.trim() || asUser.name;
-    const initials =
-      fullName
-        .split(" ")
-        .filter(Boolean)
-        .map((n) => n[0])
-        .join("")
-        .substring(0, 2)
-        .toUpperCase() || asUser.initials;
+    const name = user?.name ?? "";
 
     return {
-      userId: asUser.id,
-      role,
-      name: fullName,
-      initials,
-      can: (permission) => ROLE_PERMISSIONS[role].includes(permission),
-      setRole,
+      status,
+      user,
+      userId: user?.id ?? "",
+      role: (user?.role ?? "depo") as Role,
+      name,
+      initials: user ? initialsFor(name, user.initials) : "",
+      permissions,
+      mustChangePassword: user?.mustChangePassword ?? false,
+      // Permissions come from the server; this copy only hides UI the user
+      // couldn't use anyway — every route is enforced server-side too.
+      can: (permission) => permissions.includes(permission),
+      refresh: load,
+      signOut,
     };
-  }, [role, userProfile, setRole]);
+  }, [status, user, permissions, load, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

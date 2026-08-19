@@ -20,6 +20,7 @@ import {
   Hourglass,
   BadgeCheck,
   Undo2,
+  Receipt,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { ErrorState } from "@/components/common/error-state";
@@ -62,7 +63,7 @@ import {
   rejectPurchaseOrderApproval,
   cancelPurchaseOrder,
 } from "@/lib/api/purchase-orders";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, BASE_URL } from "@/lib/api/client";
 import { formatNumber, formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { useRouter } from "next/navigation";
 
@@ -221,6 +222,10 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
       : []),
   ];
 
+  const invoiceUrl = view.invoiceFilePath
+    ? `${BASE_URL.replace("/api", "")}/storage/${view.invoiceFilePath.replace(/^public\//, "")}`
+    : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -265,6 +270,12 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                   <Button size="sm" onClick={() => setReceiveOpen(true)}>
                     <PackageCheck className="size-4" />
                     Teslim Al
+                  </Button>
+                )}
+                {invoiceUrl && (
+                  <Button size="sm" variant="outline" onClick={() => window.open(invoiceUrl, '_blank', 'noopener,noreferrer')}>
+                    <Receipt className="size-4" />
+                    Faturayı Gör
                   </Button>
                 )}
                 {canEdit && (
@@ -371,6 +382,17 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                     <dd className="min-w-0 truncate text-right font-medium text-foreground">{f.value}</dd>
                   </div>
                 ))}
+                {invoiceUrl && (
+                  <div className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <dt className="shrink-0 text-muted-foreground">Fatura Belgesi</dt>
+                    <dd className="min-w-0 truncate text-right font-medium text-foreground">
+                      <a href={invoiceUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 justify-end">
+                        <Receipt className="size-3.5" />
+                        Görüntüle
+                      </a>
+                    </dd>
+                  </div>
+                )}
                 {view.notes && (
                   <div className="py-2 text-sm">
                     <dt className="mb-1 text-muted-foreground">Notlar</dt>

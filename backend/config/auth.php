@@ -42,13 +42,6 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
-
-        // Custom bearer-token guard backed by tokens.json — see
-        // App\Providers\AppServiceProvider::boot() for the resolver.
-        'api-token' => [
-            'driver' => 'api-token',
-            'provider' => null,
-        ],
     ],
 
     /*

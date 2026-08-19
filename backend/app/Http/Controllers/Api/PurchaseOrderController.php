@@ -4,75 +4,67 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
 use App\Services\PurchaseOrderService;
-use App\Support\JsonStore;
+use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
-/** Direct PHP port of frontend/lib/api/purchase-orders.ts (CRUD + workflow + stats). */
+/** Direct port of frontend/lib/api/purchase-orders.ts (CRUD + workflow + stats). */
 class PurchaseOrderController extends Controller
 {
-    public function __construct(private JsonStore $store, private PurchaseOrderService $service)
+    public function __construct(private PurchaseOrderService $service)
     {
-    }
-
-    private function sorters(): array
-    {
-        $suppliersById = collect($this->store->read('suppliers'))->keyBy('id');
-
-        return [
-            'code' => fn ($a, $b) => strcmp($a['code'], $b['code']),
-            'supplier' => fn ($a, $b) => strcmp(
-                $suppliersById->get($a['supplierId'])['name'] ?? '',
-                $suppliersById->get($b['supplierId'])['name'] ?? ''
-            ),
-            'total' => fn ($a, $b) => PurchaseOrderService::total($a) <=> PurchaseOrderService::total($b),
-            'expectedAt' => fn ($a, $b) => strcmp($a['expectedAt'], $b['expectedAt']),
-            'createdAt' => fn ($a, $b) => strcmp($a['createdAt'], $b['createdAt']),
-        ];
     }
 
     public function index(Request $request)
     {
-        $orders = $this->store->read('purchase_orders');
-        $suppliersById = collect($this->store->read('suppliers'))->keyBy('id')->all();
-        $warehousesById = collect($this->store->read('warehouses'))->keyBy('id')->all();
+        $query = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse']);
 
         if ($status = $request->query('status')) {
-            $orders = array_values(array_filter($orders, fn ($r) => $r['status'] === $status));
+            $query->where('status', $status);
         }
         if ($supplierId = $request->query('supplierId')) {
-            $orders = array_values(array_filter($orders, fn ($r) => $r['supplierId'] === $supplierId));
+            $query->where('supplier_id', $supplierId);
         }
         if ($warehouseId = $request->query('warehouseId')) {
-            $orders = array_values(array_filter($orders, fn ($r) => $r['warehouseId'] === $warehouseId));
+            $query->where('warehouse_id', $warehouseId);
+        }
+        // `overdue` was replaced by `priority` in the frontend query type.
+        if ($priority = $request->query('priority')) {
+            $query->where('priority', $priority);
         }
         if ($dateFrom = $request->query('dateFrom')) {
-            $orders = array_values(array_filter($orders, fn ($r) => $r['createdAt'] >= $dateFrom));
+            $query->where('created_at', '>=', $dateFrom);
         }
         if ($dateTo = $request->query('dateTo')) {
-            $orders = array_values(array_filter($orders, fn ($r) => $r['createdAt'] <= $dateTo));
+            $query->where('created_at', '<=', $dateTo);
         }
-        if ($request->boolean('overdue')) {
-            $now = Carbon::now()->toIso8601String();
-            $orders = array_values(array_filter($orders, fn ($r) => PurchaseOrderService::isOverdue($r, $now)));
-        }
+
+        $orders = $query->get();
+
         if ($search = $request->query('search')) {
-            $orders = array_values(array_filter($orders, fn ($r) => TextTools::matches([$r['code'], $suppliersById[$r['supplierId']]['name'] ?? null], $search)));
+            $orders = $orders->filter(fn ($po) => TextTools::matches([$po->code, $po->supplier->name ?? null], $search))->values();
         }
 
+        // Sort keys are an explicit whitelist; anything else falls back to newest-first.
         $sortBy = $request->query('sortBy');
-        $sorters = $this->sorters();
-        if ($sortBy && isset($sorters[$sortBy])) {
-            $sorter = $sorters[$sortBy];
-            $dir = $request->query('sortDir') === 'desc' ? -1 : 1;
-            usort($orders, fn ($a, $b) => $sorter($a, $b) * $dir);
-        } else {
-            usort($orders, fn ($a, $b) => strcmp($b['createdAt'], $a['createdAt']));
-        }
+        $dir = $request->query('sortDir') === 'desc' ? -1 : 1;
+        $sorters = [
+            'code' => fn ($a, $b) => strcmp($a->code, $b->code),
+            'supplier' => fn ($a, $b) => TextTools::compare($a->supplier->name ?? '', $b->supplier->name ?? ''),
+            'total' => fn ($a, $b) => PurchaseOrderService::total($a) <=> PurchaseOrderService::total($b),
+            'expectedAt' => fn ($a, $b) => $a->expected_at <=> $b->expected_at,
+            'createdAt' => fn ($a, $b) => $a->created_at <=> $b->created_at,
+        ];
 
-        $rows = array_map(fn ($po) => $this->service->toRow($po, $suppliersById, $warehousesById), $orders);
+        $orders = isset($sorters[$sortBy])
+            ? $orders->sort(fn ($a, $b) => $sorters[$sortBy]($a, $b) * $dir)->values()
+            : $orders->sortByDesc('created_at')->values();
+
+        $rows = $orders->map(fn ($po) => $this->service->toRow($po))->all();
 
         $page = (int) $request->query('page', 1);
         $pageSize = (int) $request->query('pageSize', 10);
@@ -82,69 +74,72 @@ class PurchaseOrderController extends Controller
 
     public function show(string $id)
     {
-        $po = collect($this->store->read('purchase_orders'))->firstWhere('id', $id);
+        $po = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse'])->find($id);
         if (! $po) {
             throw ApiException::notFound('Satın alma siparişi bulunamadı.');
         }
-        $suppliersById = collect($this->store->read('suppliers'))->keyBy('id')->all();
-        $warehousesById = collect($this->store->read('warehouses'))->keyBy('id')->all();
-        $productsById = collect($this->store->read('products'))->keyBy('id');
 
-        $row = $this->service->toRow($po, $suppliersById, $warehousesById);
-        $row['items'] = array_map(fn ($i) => $i + ['product' => $productsById->get($i['productId'])], $po['items']);
+        $productsById = Product::query()
+            ->whereIn('id', $po->items->pluck('product_id'))
+            ->get()
+            ->keyBy('id');
+
+        $row = $this->service->toRow($po);
+        $row['items'] = $po->items->map(fn ($i) => Present::poItem($i) + [
+            'product' => ($p = $productsById->get($i->product_id)) ? Present::product($p) : null,
+        ])->all();
 
         return response()->json($row);
     }
 
     public function stats()
     {
-        $orders = $this->store->read('purchase_orders');
-        $now = Carbon::now()->toIso8601String();
-        $weekFromNow = Carbon::now()->addDays(7)->toIso8601String();
+        $orders = PurchaseOrder::query()->with('items')->get();
+        $now = Carbon::now();
+        $weekFromNow = $now->copy()->addDays(7);
 
-        $openOrders = array_values(array_filter($orders, fn ($po) => in_array($po['status'], ['ordered', 'partially_received'], true)));
-        $nonCancelled = array_values(array_filter($orders, fn ($po) => $po['status'] !== 'cancelled'));
-        $totalValue = array_sum(array_map(fn ($po) => PurchaseOrderService::total($po), array_filter($nonCancelled, fn ($po) => $po['status'] !== 'draft')));
-        $openValue = array_sum(array_map(fn ($po) => PurchaseOrderService::total($po), $openOrders));
-        $pendingUnits = array_sum(array_map(fn ($po) => array_sum(array_map(fn ($i) => $i['quantity'] - $i['receivedQuantity'], $po['items'])), $openOrders));
+        $openOrders = $orders->filter(fn ($po) => in_array($po->status, ['ordered', 'partially_received'], true));
+        $nonCancelled = $orders->filter(fn ($po) => $po->status !== 'cancelled');
 
-        $orderedTotal = array_sum(array_map(fn ($po) => array_sum(array_column($po['items'], 'quantity')), $nonCancelled));
-        $receivedTotal = array_sum(array_map(fn ($po) => array_sum(array_column($po['items'], 'receivedQuantity')), $nonCancelled));
+        // Committed spend: excludes cancelled, and anything not yet actually
+        // ordered (draft or still awaiting approval).
+        $totalValue = $nonCancelled
+            ->filter(fn ($po) => ! in_array($po->status, ['draft', 'pending_approval'], true))
+            ->sum(fn ($po) => PurchaseOrderService::total($po));
+        $openValue = $openOrders->sum(fn ($po) => PurchaseOrderService::total($po));
+        $pendingUnits = $openOrders->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity - (int) $i->received_quantity));
+
+        $orderedTotal = $nonCancelled->sum(fn ($po) => $po->items->sum('quantity'));
+        $receivedTotal = $nonCancelled->sum(fn ($po) => $po->items->sum('received_quantity'));
         $fillRatePercent = $orderedTotal > 0 ? (int) round(($receivedTotal / $orderedTotal) * 100) : 0;
 
-        $overdue = array_values(array_filter($orders, fn ($po) => PurchaseOrderService::isOverdue($po, $now)));
-        $overdueValue = array_sum(array_map(fn ($po) => PurchaseOrderService::total($po), $overdue));
+        $overdue = $orders->filter(fn ($po) => PurchaseOrderService::isOverdue($po, $now));
+        $overdueValue = $overdue->sum(fn ($po) => PurchaseOrderService::total($po));
 
-        $arrivingThisWeek = count(array_filter($openOrders, fn ($po) => $po['expectedAt'] >= $now && $po['expectedAt'] <= $weekFromNow));
+        $arrivingThisWeek = $openOrders
+            ->filter(fn ($po) => $po->expected_at && $po->expected_at->gte($now) && $po->expected_at->lte($weekFromNow))
+            ->count();
 
-        $receivedOrders = array_values(array_filter($orders, fn ($po) => $po['status'] === 'received' && $po['receivedAt']));
-        $onTimeRatePercent = count($receivedOrders) > 0
-            ? (int) round(count(array_filter($receivedOrders, fn ($po) => $po['receivedAt'] <= $po['expectedAt'])) / count($receivedOrders) * 100)
+        $receivedOrders = $orders->filter(fn ($po) => $po->status === 'received' && $po->received_at);
+        // null (not 0) means "no deliveries yet" — the UI renders that neutrally.
+        $onTimeRatePercent = $receivedOrders->count() > 0
+            ? (int) round($receivedOrders->filter(fn ($po) => $po->received_at->lte($po->expected_at))->count() / $receivedOrders->count() * 100)
             : null;
 
         return response()->json([
-            'totalOrders' => count($orders),
-            'openOrders' => count($openOrders),
-            'pendingUnits' => $pendingUnits,
-            'totalValue' => $totalValue,
-            'openValue' => $openValue,
+            'totalOrders' => $orders->count(),
+            'openOrders' => $openOrders->count(),
+            'pendingUnits' => (int) $pendingUnits,
+            'totalValue' => (float) $totalValue,
+            'openValue' => (float) $openValue,
             'fillRatePercent' => $fillRatePercent,
-            'overdueCount' => count($overdue),
-            'overdueValue' => $overdueValue,
-            'draftCount' => count(array_filter($orders, fn ($po) => $po['status'] === 'draft')),
+            'overdueCount' => $overdue->count(),
+            'overdueValue' => (float) $overdueValue,
+            'draftCount' => $orders->where('status', 'draft')->count(),
+            'pendingApprovalCount' => $orders->where('status', 'pending_approval')->count(),
             'arrivingThisWeek' => $arrivingThisWeek,
             'onTimeRatePercent' => $onTimeRatePercent,
         ]);
-    }
-
-    private function itemsRule(): array
-    {
-        return [
-            'items' => ['required', 'array'],
-            'items.*.productId' => ['required', 'string'],
-            'items.*.quantity' => ['required', 'numeric'],
-            'items.*.unitPrice' => ['required', 'numeric'],
-        ];
     }
 
     public function store(Request $request)
@@ -153,8 +148,13 @@ class PurchaseOrderController extends Controller
             'supplierId' => ['required', 'string'],
             'warehouseId' => ['required', 'string'],
             'expectedAt' => ['required', 'string'],
+            'priority' => ['nullable', 'in:low,medium,high'],
             'notes' => ['nullable', 'string'],
-        ] + $this->itemsRule());
+            'items' => ['required', 'array'],
+            'items.*.productId' => ['required', 'string'],
+            'items.*.quantity' => ['required', 'numeric'],
+            'items.*.unitPrice' => ['required', 'numeric'],
+        ]);
 
         return response()->json($this->service->create($data), 201);
     }
@@ -165,6 +165,7 @@ class PurchaseOrderController extends Controller
             'supplierId' => ['sometimes', 'string'],
             'warehouseId' => ['sometimes', 'string'],
             'expectedAt' => ['sometimes', 'string'],
+            'priority' => ['sometimes', 'in:low,medium,high'],
             'notes' => ['sometimes', 'nullable', 'string'],
             'items' => ['sometimes', 'array'],
             'items.*.productId' => ['required_with:items', 'string'],
@@ -187,6 +188,21 @@ class PurchaseOrderController extends Controller
         return response()->json($this->service->markOrdered($id));
     }
 
+    public function requestApproval(string $id)
+    {
+        return response()->json($this->service->requestApproval($id));
+    }
+
+    public function approve(string $id)
+    {
+        return response()->json($this->service->approve($id));
+    }
+
+    public function reject(string $id)
+    {
+        return response()->json($this->service->reject($id));
+    }
+
     public function cancel(string $id)
     {
         return response()->json($this->service->cancel($id));
@@ -198,14 +214,28 @@ class PurchaseOrderController extends Controller
             'receivedQuantities' => ['required', 'array'],
             'idempotencyKey' => ['nullable', 'string'],
         ]);
-        $userId = $request->user('api-token')->id();
 
-        $po = $this->service->receive($id, $data['receivedQuantities'], $userId, $data['idempotencyKey'] ?? null);
+        return response()->json($this->service->receive(
+            $id,
+            $data['receivedQuantities'],
+            $request->user()->getKey(),
+            $data['idempotencyKey'] ?? null,
+        ));
+    }
 
-        $suppliersById = collect($this->store->read('suppliers'))->keyBy('id')->all();
-        $warehousesById = collect($this->store->read('warehouses'))->keyBy('id')->all();
+    public function uploadInvoice(Request $request, string $id)
+    {
+        $request->validate([
+            'invoice' => ['required', 'file', 'mimes:pdf,jpeg,png,jpg', 'max:5120'],
+        ]);
 
-        return response()->json($this->service->toRow($po, $suppliersById, $warehousesById));
+        $po = PurchaseOrder::findOrFail($id);
+        
+        $path = $request->file('invoice')->store('invoices', 'public');
+        $po->invoice_file_path = $path;
+        $po->save();
+
+        return response()->json(['invoiceFilePath' => $path]);
     }
 
     public function bulkOrder(Request $request)

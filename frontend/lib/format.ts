@@ -94,3 +94,14 @@ export function relativeTimeFromNow(iso: string): string {
   if (diffDay < 30) return `${diffDay} gün önce`;
   return formatDateShort(iso);
 }
+
+/** True when an ISO timestamp falls on the current local day. */
+export function isToday(iso: string): boolean {
+  const d = new Date(iso);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}

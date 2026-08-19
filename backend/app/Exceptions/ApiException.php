@@ -15,6 +15,7 @@ class ApiException extends Exception
     public const VALIDATION = 'VALIDATION';
     public const CONFLICT = 'CONFLICT';
     public const FORBIDDEN = 'FORBIDDEN';
+    public const PASSWORD_CHANGE_REQUIRED = 'PASSWORD_CHANGE_REQUIRED';
     public const UNKNOWN = 'UNKNOWN';
 
     /** Named errorCode, not $code — Exception already declares an untyped $code and PHP forbids re-typing it. */
@@ -34,7 +35,7 @@ class ApiException extends Exception
             self::NOT_FOUND => 404,
             self::VALIDATION => 422,
             self::CONFLICT => 409,
-            self::FORBIDDEN => 403,
+            self::FORBIDDEN, self::PASSWORD_CHANGE_REQUIRED => 403,
             default => 500,
         };
     }
@@ -57,5 +58,10 @@ class ApiException extends Exception
     public static function forbidden(string $message): self
     {
         return new self($message, self::FORBIDDEN);
+    }
+
+    public static function passwordChangeRequired(string $message): self
+    {
+        return new self($message, self::PASSWORD_CHANGE_REQUIRED);
     }
 }

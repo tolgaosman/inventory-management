@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Bell, ChevronDown, LogOut, Settings, UserCog, AlertTriangle, Warehouse, CalendarRange, Download } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Bell, ChevronDown, LogOut, Settings, AlertTriangle, Warehouse, CalendarRange, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/constants";
-import type { Role } from "@/lib/types";
+
 import { getCriticalStockNotifications, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { listWarehouses } from "@/lib/api/catalog";
 import { useAsync } from "@/lib/hooks/use-async";
@@ -16,8 +16,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -32,7 +30,6 @@ import {
 import { useSettings } from "@/lib/settings-context";
 import { HeaderBreadcrumb, MobileNav } from "./header-nav";
 
-const ROLE_ORDER: Role[] = ["yonetici", "satinalma", "depo"];
 
 function DashboardFilters() {
   const { range, setRange, warehouseId, setWarehouseId } = useDashboardFilter();
@@ -90,8 +87,7 @@ function DashboardFilters() {
 }
 
 export function AppHeader() {
-  const router = useRouter();
-  const { name, initials, role, setRole } = useAuth();
+  const { name, initials, role, signOut } = useAuth();
   const { notifications } = useSettings();
   const pathname = usePathname();
   const isPanel = pathname?.replace(/\/$/, "") === "/panel";
@@ -211,39 +207,15 @@ export function AppHeader() {
           <DropdownMenuLabel>Hesap</DropdownMenuLabel>
 
           <DropdownMenuSeparator />
-          <DropdownMenuLabel className="flex items-center gap-2">
-            <UserCog className="size-3.5" /> Rolü değiştir (demo)
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={role}
-            onValueChange={(v) => {
-              const newRole = v as Role;
-              setRole(newRole);
-              toast.info("Yetki rolü değiştirildi", {
-                description: `Aktif rol: ${ROLE_LABELS[newRole]}`,
-              });
-            }}
-          >
-            {ROLE_ORDER.map((r) => (
-              <DropdownMenuRadioItem key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-          <DropdownMenuSeparator />
           <DropdownMenuItem render={<Link href="/ayarlar" />}>
             <Settings className="size-4" />
             Ayarlar
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
-            onClick={() => {
-              toast.warning("Oturum Kapatıldı", {
-                description: "Giriş sayfasına yönlendiriliyorsunuz...",
-              });
-              setTimeout(() => {
-                router.push("/giris");
-              }, 500);
+            onClick={async () => {
+              await signOut();
+              toast.warning("Oturum kapatıldı");
             }}
           >
             <LogOut className="size-4" />

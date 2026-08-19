@@ -34,7 +34,7 @@ export interface NavSection {
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Genel",
-    items: [{ label: "Panel", href: "/panel", icon: LayoutGrid }],
+    items: [{ label: "Gösterge Paneli", href: "/panel", icon: LayoutGrid }],
   },
   {
     label: "Envanter",

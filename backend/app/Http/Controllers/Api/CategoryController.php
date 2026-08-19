@@ -4,63 +4,84 @@ namespace App\Http\Controllers\Api;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
-use App\Support\JsonStore;
+use App\Models\Category;
+use App\Models\Product;
+use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
-/** Direct PHP port of frontend/lib/api/categories.ts — see that file for the rules this mirrors. */
+/** Direct port of frontend/lib/api/categories.ts — see that file for the rules this mirrors. */
 class CategoryController extends Controller
 {
-    public function __construct(private JsonStore $store)
-    {
-    }
-
     private function normalize(string $value): string
     {
         return TextTools::normalize(trim($value));
     }
 
-    private function ownMetrics(string $categoryId, array $products, array $stockLevels): array
+    /**
+     * Per-category units/value/critical counts, aggregated in SQL rather than
+     * per-row in PHP (the JSON version scanned every stock level per category).
+     *
+     * @return array<string, array{productCount:int,totalUnits:int,totalValue:float,criticalCount:int}>
+     */
+    private function metricsByCategory(): array
     {
-        $own = array_values(array_filter($products, fn ($p) => $p['categoryId'] === $categoryId));
-        $totalUnits = 0;
-        $totalValue = 0;
-        $criticalCount = 0;
+        $rows = DB::table('products')
+            ->leftJoin('stock_levels', 'stock_levels.product_id', '=', 'products.id')
+            ->groupBy('products.id', 'products.category_id', 'products.purchase_price', 'products.min_stock')
+            ->select([
+                'products.category_id',
+                'products.purchase_price',
+                'products.min_stock',
+                DB::raw('COALESCE(SUM(stock_levels.quantity), 0) as units'),
+            ])
+            ->get();
 
-        foreach ($own as $p) {
-            $units = array_sum(array_map(fn ($s) => $s['quantity'], array_filter($stockLevels, fn ($s) => $s['productId'] === $p['id'])));
-            $totalUnits += $units;
-            $totalValue += $units * $p['purchasePrice'];
-            if ($units < $p['minStock']) {
-                $criticalCount++;
+        $metrics = [];
+        foreach ($rows as $row) {
+            $key = $row->category_id;
+            $metrics[$key] ??= ['productCount' => 0, 'totalUnits' => 0, 'totalValue' => 0.0, 'criticalCount' => 0];
+            $units = (int) $row->units;
+            $metrics[$key]['productCount']++;
+            $metrics[$key]['totalUnits'] += $units;
+            $metrics[$key]['totalValue'] += $units * (float) $row->purchase_price;
+            if ($units < (int) $row->min_stock) {
+                $metrics[$key]['criticalCount']++;
             }
         }
 
-        return ['productCount' => count($own), 'totalUnits' => $totalUnits, 'totalValue' => $totalValue, 'criticalCount' => $criticalCount];
+        return $metrics;
     }
 
-    private function toNode(array $category, array $products, array $stockLevels): array
+    private function toNode(Category $category, array $metrics): array
     {
-        return $category + $this->ownMetrics($category['id'], $products, $stockLevels) + ['children' => []];
+        $own = $metrics[$category->id] ?? ['productCount' => 0, 'totalUnits' => 0, 'totalValue' => 0.0, 'criticalCount' => 0];
+
+        return Present::category($category) + $own + ['children' => []];
     }
 
     public function tree(Request $request)
     {
-        $categories = $this->store->read('categories');
-        $products = $this->store->read('products');
-        $stockLevels = $this->store->read('stock_levels');
+        $categories = Category::query()->get();
+        $metrics = $this->metricsByCategory();
         $search = $request->query('search');
 
-        $roots = array_values(array_filter($categories, fn ($c) => $c['parentId'] === null));
-        $roots = array_map(fn ($c) => $this->toNode($c, $products, $stockLevels), $roots);
+        $roots = $categories->filter(fn ($c) => $c->parent_id === null)
+            ->map(fn ($c) => $this->toNode($c, $metrics))
+            ->values()
+            ->all();
         usort($roots, fn ($a, $b) => TextTools::compare($a['name'], $b['name']));
 
         foreach ($roots as &$root) {
-            $children = array_values(array_filter($categories, fn ($c) => $c['parentId'] === $root['id']));
-            $children = array_map(fn ($c) => $this->toNode($c, $products, $stockLevels), $children);
+            $children = $categories->filter(fn ($c) => $c->parent_id === $root['id'])
+                ->map(fn ($c) => $this->toNode($c, $metrics))
+                ->values()
+                ->all();
             usort($children, fn ($a, $b) => TextTools::compare($a['name'], $b['name']));
             $root['children'] = $children;
 
+            // Child metrics roll up into the parent, matching the frontend tree.
             foreach ($children as $child) {
                 $root['productCount'] += $child['productCount'];
                 $root['totalUnits'] += $child['totalUnits'];
@@ -71,7 +92,7 @@ class CategoryController extends Controller
         unset($root);
 
         $rootCount = count($roots);
-        $childCount = count($categories) - $rootCount;
+        $childCount = $categories->count() - $rootCount;
         $criticalCategoryCount = 0;
         foreach ($roots as $r) {
             if ($r['criticalCount'] > 0) {
@@ -80,6 +101,7 @@ class CategoryController extends Controller
             $criticalCategoryCount += count(array_filter($r['children'], fn ($c) => $c['criticalCount'] > 0));
         }
 
+        // Stats describe the whole catalog; only `tree` is narrowed by search.
         $tree = $roots;
         if ($search) {
             $tree = [];
@@ -98,9 +120,9 @@ class CategoryController extends Controller
 
         return response()->json([
             'tree' => $tree,
-            'all' => $categories,
+            'all' => $categories->map(fn ($c) => Present::category($c))->all(),
             'stats' => [
-                'total' => count($categories),
+                'total' => $categories->count(),
                 'rootCount' => $rootCount,
                 'childCount' => $childCount,
                 'criticalCategoryCount' => $criticalCategoryCount,
@@ -108,44 +130,47 @@ class CategoryController extends Controller
         ]);
     }
 
-    private function buildId(string $name, array $categories): string
+    private function buildId(string $name): string
     {
         $slug = TextTools::normalize(trim($name));
         $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
         $slug = trim($slug, '-');
         $base = 'cat-'.($slug !== '' ? $slug : 'kategori');
 
-        $ids = array_column($categories, 'id');
-        if (! in_array($base, $ids, true)) {
+        if (! Category::query()->whereKey($base)->exists()) {
             return $base;
         }
         $suffix = 2;
-        while (in_array("{$base}-{$suffix}", $ids, true)) {
+        while (Category::query()->whereKey("{$base}-{$suffix}")->exists()) {
             $suffix++;
         }
 
         return "{$base}-{$suffix}";
     }
 
-    private function assertValidPlacement(array $categories, string $name, ?string $parentId, ?string $ignoreId = null): void
+    private function assertValidPlacement(string $name, ?string $parentId, ?string $ignoreId = null): void
     {
         if (trim($name) === '') {
             throw ApiException::validation('Kategori adı gereklidir.');
         }
 
         if ($parentId !== null) {
-            $parent = collect($categories)->firstWhere('id', $parentId);
+            $parent = Category::query()->find($parentId);
             if (! $parent) {
                 throw ApiException::notFound('Üst kategori bulunamadı.');
             }
-            if ($parent['parentId'] !== null) {
+            if ($parent->parent_id !== null) {
                 throw ApiException::validation('Alt kategorinin altına kategori eklenemez (en fazla 2 seviye).');
             }
         }
 
-        $duplicate = collect($categories)->contains(
-            fn ($c) => $c['id'] !== $ignoreId && $c['parentId'] === $parentId && $this->normalize($c['name']) === $this->normalize($name)
-        );
+        // Sibling names must be unique, compared with Turkish-folded normalization.
+        $duplicate = Category::query()
+            ->when($parentId === null, fn ($q) => $q->whereNull('parent_id'), fn ($q) => $q->where('parent_id', $parentId))
+            ->when($ignoreId !== null, fn ($q) => $q->whereKeyNot($ignoreId))
+            ->get()
+            ->contains(fn ($c) => $this->normalize($c->name) === $this->normalize($name));
+
         if ($duplicate) {
             throw ApiException::conflict($parentId === null
                 ? 'Bu isimde bir üst kategori zaten var.'
@@ -161,16 +186,17 @@ class CategoryController extends Controller
         ]);
         $parentId = $data['parentId'] ?? null;
 
-        return $this->store->transaction(function () use ($data, $parentId) {
-            $categories = $this->store->read('categories');
-            $this->assertValidPlacement($categories, $data['name'], $parentId);
+        $created = DB::transaction(function () use ($data, $parentId) {
+            $this->assertValidPlacement($data['name'], $parentId);
 
-            $created = ['id' => $this->buildId($data['name'], $categories), 'name' => trim($data['name']), 'parentId' => $parentId];
-            $categories[] = $created;
-            $this->store->write('categories', $categories);
-
-            return response()->json($created, 201);
+            return Category::query()->create([
+                'id' => $this->buildId($data['name']),
+                'name' => trim($data['name']),
+                'parent_id' => $parentId,
+            ]);
         });
+
+        return response()->json(Present::category($created), 201);
     }
 
     public function update(Request $request, string $id)
@@ -181,10 +207,9 @@ class CategoryController extends Controller
         ]);
         $parentId = $data['parentId'] ?? null;
 
-        return $this->store->transaction(function () use ($data, $parentId, $id) {
-            $categories = $this->store->read('categories');
-            $index = collect($categories)->search(fn ($c) => $c['id'] === $id);
-            if ($index === false) {
+        $category = DB::transaction(function () use ($data, $parentId, $id) {
+            $category = Category::query()->lockForUpdate()->find($id);
+            if (! $category) {
                 throw ApiException::notFound('Kategori bulunamadı.');
             }
 
@@ -192,45 +217,42 @@ class CategoryController extends Controller
                 throw ApiException::validation('Bir kategori kendi alt kategorisi olamaz.');
             }
 
-            $hasChildren = collect($categories)->contains(fn ($c) => $c['parentId'] === $id);
+            $hasChildren = Category::query()->where('parent_id', $id)->exists();
             if ($hasChildren && $parentId !== null) {
                 throw ApiException::validation('Alt kategorileri olan bir kategori başka kategorinin altına taşınamaz.');
             }
 
-            $this->assertValidPlacement($categories, $data['name'], $parentId, $id);
+            $this->assertValidPlacement($data['name'], $parentId, $id);
 
-            $categories[$index]['name'] = trim($data['name']);
-            $categories[$index]['parentId'] = $parentId;
-            $this->store->write('categories', $categories);
+            $category->update(['name' => trim($data['name']), 'parent_id' => $parentId]);
 
-            return response()->json($categories[$index]);
+            return $category;
         });
+
+        return response()->json(Present::category($category));
     }
 
     public function destroy(string $id)
     {
-        return $this->store->transaction(function () use ($id) {
-            $categories = $this->store->read('categories');
-            $index = collect($categories)->search(fn ($c) => $c['id'] === $id);
-            if ($index === false) {
+        DB::transaction(function () use ($id) {
+            $category = Category::query()->lockForUpdate()->find($id);
+            if (! $category) {
                 throw ApiException::notFound('Kategori bulunamadı.');
             }
 
-            $childCount = collect($categories)->filter(fn ($c) => $c['parentId'] === $id)->count();
+            $childCount = Category::query()->where('parent_id', $id)->count();
             if ($childCount > 0) {
                 throw ApiException::conflict("Bu kategorinin {$childCount} alt kategorisi olduğu için silinemez. Önce alt kategorileri silin.");
             }
 
-            $products = $this->store->read('products');
-            $productCount = collect($products)->filter(fn ($p) => $p['categoryId'] === $id)->count();
+            $productCount = Product::query()->where('category_id', $id)->count();
             if ($productCount > 0) {
                 throw ApiException::conflict("Bu kategoriye bağlı {$productCount} ürün olduğu için silinemez. Önce ürünleri başka bir kategoriye taşıyın.");
             }
 
-            unset($categories[$index]);
-            $this->store->write('categories', array_values($categories));
-
-            return response()->json(['deleted' => true]);
+            $category->delete();
         });
+
+        return response()->json(['deleted' => true]);
     }
 }

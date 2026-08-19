@@ -5,7 +5,7 @@
 // but this is now the source of truth servers must not be bypassed by editing requests.
 
 return [
-    'roles' => ['depo', 'satinalma', 'yonetici'],
+    'roles' => ['admin', 'depo_yonetici', 'satinalma_yonetici', 'depo', 'satinalma'],
 
     'permissions' => [
         'products.view', 'products.manage',
@@ -20,7 +20,19 @@ return [
     'role_permissions' => [
         'depo' => ['products.view', 'stock.in', 'stock.out', 'stock.transfer'],
         'satinalma' => ['products.view', 'purchase.view', 'purchase.manage', 'suppliers.view', 'suppliers.manage'],
-        'yonetici' => [
+        'depo_yonetici' => [
+            'products.view', 'products.manage',
+            'warehouses.manage',
+            'stock.in', 'stock.out', 'stock.transfer',
+            'reports.view',
+        ],
+        'satinalma_yonetici' => [
+            'products.view',
+            'purchase.view', 'purchase.manage',
+            'suppliers.view', 'suppliers.manage',
+            'reports.view',
+        ],
+        'admin' => [
             'products.view', 'products.manage',
             'warehouses.manage',
             'stock.in', 'stock.out', 'stock.transfer',

@@ -2,62 +2,95 @@
 
 namespace Database\Seeders;
 
-use App\Support\JsonStore;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
+use App\Models\Setting;
+use App\Models\StockLevel;
+use App\Models\StockMovement;
+use App\Models\Supplier;
+use App\Models\User;
+use App\Models\Warehouse;
 use App\Support\Mulberry32;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
- * PHP port of frontend/lib/mock/{seed,data}.ts. Generates the same volume of
- * data (7 warehouses, 21 categories, 15 suppliers, 13 users, 272 products,
- * ~950 stock levels, ~3100 movements over 366 days, 80 purchase orders) with
- * the same id formats, using the same mulberry32(20260810) seed so results
- * are stable run-to-run. Values won't be byte-identical to the frontend mock
- * (JS's Array.sort-based shuffle isn't replicated call-for-call — see
- * Mulberry32::shuffle) but the shapes, volumes and business invariants match.
+ * Eloquent port of the original JSON-file DemoDataSeeder. Generates the same
+ * volume of data (7 warehouses, 21 categories, 15 suppliers, 13 users, 272
+ * products, ~950 stock levels, ~3100 movements over 366 days, 80 purchase
+ * orders) with the same id formats, using the same mulberry32(20260810) seed.
+ *
+ * Unlike the original, stock_movements and stock_levels are now generated
+ * together from one running per-(product,warehouse) ledger, so previousQuantity
+ * / newQuantity chains are internally consistent with the final on-hand
+ * quantity — the JSON-era seeder generated these independently at random.
  */
-class DemoDataSeeder
+class DemoDataSeeder extends Seeder
 {
-    public function __construct(private JsonStore $store)
-    {
-    }
+    use WithoutModelEvents;
 
     public function run(): void
     {
         $rand = new Mulberry32(20260810);
 
-        $warehouses = $this->warehouses();
-        $categories = $this->categories();
-        $suppliers = $this->suppliers();
-        $users = $this->users();
+        DB::transaction(function () use ($rand) {
+            $warehouses = $this->warehouses();
+            $categories = $this->categories();
+            $suppliers = $this->suppliers();
+            $users = $this->users();
 
-        $products = $this->buildProducts($rand, $categories, $suppliers);
-        $stockLevels = $this->buildStockLevels($rand, $products, $warehouses);
-        $movements = $this->buildMovements($rand, $products, $warehouses, $users);
-        $purchaseOrders = $this->buildPurchaseOrders($rand, $products, $suppliers, $warehouses);
+            $products = $this->buildProducts($rand, $categories, $suppliers);
 
-        $this->store->write('warehouses', $warehouses);
-        $this->store->write('categories', $categories);
-        $this->store->write('suppliers', $suppliers);
-        $this->store->write('users', $this->withPasswords($users));
-        $this->store->write('products', $products);
-        $this->store->write('stock_levels', $stockLevels);
-        $this->store->write('stock_movements', $movements);
-        $this->store->write('purchase_orders', $purchaseOrders);
-        $this->store->write('settings', $this->defaultSettings());
-        $this->store->write('idempotency_keys', []);
-        $this->store->write('tokens', []);
-    }
+            [$movements, $ledger] = $this->buildMovementsAndLedger($rand, $products, $warehouses, $users);
+            $stockLevels = $this->buildStockLevels($rand, $products, $warehouses, $ledger);
 
-    private function withPasswords(array $users): array
-    {
-        $hash = Hash::make(config('inventory.demo_password'));
+            $purchaseOrders = $this->buildPurchaseOrders($rand, $products, $suppliers, $warehouses);
 
-        return array_map(fn ($u) => $u + ['password_hash' => $hash], $users);
+            Warehouse::query()->insert($warehouses);
+            Category::query()->insert($categories);
+            Supplier::query()->insert($suppliers);
+
+            $hash = Hash::make(config('inventory.demo_password'));
+            foreach ($users as &$u) {
+                $u['password'] = $hash;
+            }
+            unset($u);
+            User::query()->insert($users);
+
+            foreach (array_chunk($products, 200) as $chunk) {
+                Product::query()->insert($chunk);
+            }
+            foreach (array_chunk($stockLevels, 500) as $chunk) {
+                StockLevel::query()->insert($chunk);
+            }
+            foreach (array_chunk($movements, 500) as $chunk) {
+                StockMovement::query()->insert($chunk);
+            }
+
+            foreach ($purchaseOrders as $po) {
+                $items = $po['items'];
+                unset($po['items']);
+                PurchaseOrder::query()->insert($po);
+                foreach ($items as &$item) {
+                    $item['purchase_order_id'] = $po['id'];
+                    $item['created_at'] = now();
+                    $item['updated_at'] = now();
+                }
+                unset($item);
+                PurchaseOrderItem::query()->insert($items);
+            }
+
+            Setting::singleton();
+        });
     }
 
     private function warehouses(): array
     {
-        return [
+        $rows = [
             ['id' => 'wh-1', 'name' => 'Lefkoşa Kampüs Ana Depo', 'city' => 'Lefkoşa', 'address' => 'Yakın Doğu Bulvarı No:1', 'capacity' => 15000],
             ['id' => 'wh-2', 'name' => 'Girne İnovasyon Deposu', 'city' => 'Girne', 'address' => 'Karakum Cd. No:45', 'capacity' => 8000],
             ['id' => 'wh-3', 'name' => 'Gazimağusa Veri Merkezi Deposu', 'city' => 'Gazimağusa', 'address' => 'Teknoloji Bölgesi A-Blok', 'capacity' => 10000],
@@ -66,63 +99,72 @@ class DemoDataSeeder
             ['id' => 'wh-6', 'name' => 'Ankara Bölge Deposu', 'city' => 'Ankara', 'address' => 'Ostim OSB 5. Cadde No:12', 'capacity' => 12000],
             ['id' => 'wh-7', 'name' => 'İzmir Ege Lojistik Deposu', 'city' => 'İzmir', 'address' => 'Çiğli Serbest Bölge B-Blok', 'capacity' => 9000],
         ];
+
+        return $this->withTimestamps($rows);
     }
 
     private function categories(): array
     {
-        return [
-            ['id' => 'cat-sunucu', 'name' => 'Sunucu & Veri Merkezi', 'parentId' => null],
-            ['id' => 'cat-rack-server', 'name' => 'Rack Sunucu', 'parentId' => 'cat-sunucu'],
-            ['id' => 'cat-blade-server', 'name' => 'Blade Sunucu', 'parentId' => 'cat-sunucu'],
-            ['id' => 'cat-storage', 'name' => 'Veri Depolama (NAS/SAN)', 'parentId' => 'cat-sunucu'],
-            ['id' => 'cat-ups', 'name' => 'UPS & Güç Sistemleri', 'parentId' => 'cat-sunucu'],
+        $rows = [
+            ['id' => 'cat-sunucu', 'name' => 'Sunucu & Veri Merkezi', 'parent_id' => null],
+            ['id' => 'cat-rack-server', 'name' => 'Rack Sunucu', 'parent_id' => 'cat-sunucu'],
+            ['id' => 'cat-blade-server', 'name' => 'Blade Sunucu', 'parent_id' => 'cat-sunucu'],
+            ['id' => 'cat-storage', 'name' => 'Veri Depolama (NAS/SAN)', 'parent_id' => 'cat-sunucu'],
+            ['id' => 'cat-ups', 'name' => 'UPS & Güç Sistemleri', 'parent_id' => 'cat-sunucu'],
 
-            ['id' => 'cat-ag-guvenlik', 'name' => 'Ağ & Siber Güvenlik', 'parentId' => null],
-            ['id' => 'cat-switch', 'name' => 'Ağ Anahtarı (Switch)', 'parentId' => 'cat-ag-guvenlik'],
-            ['id' => 'cat-router', 'name' => 'Yönlendirici (Router)', 'parentId' => 'cat-ag-guvenlik'],
-            ['id' => 'cat-firewall', 'name' => 'Güvenlik Duvarı (Firewall)', 'parentId' => 'cat-ag-guvenlik'],
-            ['id' => 'cat-ap', 'name' => 'Access Point (Wi-Fi 6E)', 'parentId' => 'cat-ag-guvenlik'],
+            ['id' => 'cat-ag-guvenlik', 'name' => 'Ağ & Siber Güvenlik', 'parent_id' => null],
+            ['id' => 'cat-switch', 'name' => 'Ağ Anahtarı (Switch)', 'parent_id' => 'cat-ag-guvenlik'],
+            ['id' => 'cat-router', 'name' => 'Yönlendirici (Router)', 'parent_id' => 'cat-ag-guvenlik'],
+            ['id' => 'cat-firewall', 'name' => 'Güvenlik Duvarı (Firewall)', 'parent_id' => 'cat-ag-guvenlik'],
+            ['id' => 'cat-ap', 'name' => 'Access Point (Wi-Fi 6E)', 'parent_id' => 'cat-ag-guvenlik'],
 
-            ['id' => 'cat-bilgisayar', 'name' => 'Bilgisayar & İş İstasyonu', 'parentId' => null],
-            ['id' => 'cat-workstation', 'name' => 'İş İstasyonu (Workstation)', 'parentId' => 'cat-bilgisayar'],
-            ['id' => 'cat-kurumsal-laptop', 'name' => 'Kurumsal Laptop', 'parentId' => 'cat-bilgisayar'],
-            ['id' => 'cat-desktop', 'name' => 'Masaüstü PC', 'parentId' => 'cat-bilgisayar'],
+            ['id' => 'cat-bilgisayar', 'name' => 'Bilgisayar & İş İstasyonu', 'parent_id' => null],
+            ['id' => 'cat-workstation', 'name' => 'İş İstasyonu (Workstation)', 'parent_id' => 'cat-bilgisayar'],
+            ['id' => 'cat-kurumsal-laptop', 'name' => 'Kurumsal Laptop', 'parent_id' => 'cat-bilgisayar'],
+            ['id' => 'cat-desktop', 'name' => 'Masaüstü PC', 'parent_id' => 'cat-bilgisayar'],
 
-            ['id' => 'cat-yazilim', 'name' => 'Yazılım & Lisanslama', 'parentId' => null],
-            ['id' => 'cat-os-license', 'name' => 'İşletim Sistemi Lisansı', 'parentId' => 'cat-yazilim'],
-            ['id' => 'cat-db-license', 'name' => 'Veritabanı Lisansı', 'parentId' => 'cat-yazilim'],
-            ['id' => 'cat-security-software', 'name' => 'Siber Güvenlik Lisansı', 'parentId' => 'cat-yazilim'],
+            ['id' => 'cat-yazilim', 'name' => 'Yazılım & Lisanslama', 'parent_id' => null],
+            ['id' => 'cat-os-license', 'name' => 'İşletim Sistemi Lisansı', 'parent_id' => 'cat-yazilim'],
+            ['id' => 'cat-db-license', 'name' => 'Veritabanı Lisansı', 'parent_id' => 'cat-yazilim'],
+            ['id' => 'cat-security-software', 'name' => 'Siber Güvenlik Lisansı', 'parent_id' => 'cat-yazilim'],
 
-            ['id' => 'cat-akilli-kampus', 'name' => 'Akıllı Kampüs & IoT', 'parentId' => null],
-            ['id' => 'cat-ip-kamera', 'name' => 'IP Kamera & Güvenlik', 'parentId' => 'cat-akilli-kampus'],
-            ['id' => 'cat-gecis-sistemi', 'name' => 'Kartlı Geçiş & Biyometrik', 'parentId' => 'cat-akilli-kampus'],
+            ['id' => 'cat-akilli-kampus', 'name' => 'Akıllı Kampüs & IoT', 'parent_id' => null],
+            ['id' => 'cat-ip-kamera', 'name' => 'IP Kamera & Güvenlik', 'parent_id' => 'cat-akilli-kampus'],
+            ['id' => 'cat-gecis-sistemi', 'name' => 'Kartlı Geçiş & Biyometrik', 'parent_id' => 'cat-akilli-kampus'],
         ];
+
+        // Roots must be inserted before their children because of the self-referencing FK.
+        usort($rows, fn ($a, $b) => ($a['parent_id'] === null ? 0 : 1) <=> ($b['parent_id'] === null ? 0 : 1));
+
+        return $this->withTimestamps($rows);
     }
 
     private function suppliers(): array
     {
-        return [
-            ['id' => 'sup-1', 'name' => 'Cisco Systems Türkiye', 'contactName' => 'Ahmet Yılmaz', 'email' => 'ahmet@cisco.com', 'phone' => '0533 111 22 33', 'city' => 'İstanbul'],
-            ['id' => 'sup-2', 'name' => 'Dell Technologies Enterprise', 'contactName' => 'Deniz Kaya', 'email' => 'deniz@dell.com', 'phone' => '0542 222 33 44', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-3', 'name' => 'HPE & Aruba Networks', 'contactName' => 'Selin Aydın', 'email' => 'selin@hpe.com', 'phone' => '0555 333 44 55', 'city' => 'Ankara'],
-            ['id' => 'sup-4', 'name' => 'Lenovo Enterprise Solutions', 'contactName' => 'Murat Demir', 'email' => 'murat@lenovo.com', 'phone' => '0532 444 55 66', 'city' => 'İstanbul'],
-            ['id' => 'sup-5', 'name' => 'Microsoft Türkiye Lisanslama', 'contactName' => 'Ece Şahin', 'email' => 'ece@microsoft.com', 'phone' => '0533 555 66 77', 'city' => 'İstanbul'],
-            ['id' => 'sup-6', 'name' => 'Fortinet Cyprus Distribution', 'contactName' => 'Kerem Öz', 'email' => 'kerem@fortinet.com', 'phone' => '0541 666 77 88', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-7', 'name' => 'Palo Alto Networks', 'contactName' => 'İrem Çelik', 'email' => 'irem@paloaltonetworks.com', 'phone' => '0552 777 88 99', 'city' => 'Girne'],
-            ['id' => 'sup-8', 'name' => 'NetApp Storage Solutions', 'contactName' => 'Baran Koç', 'email' => 'baran@netapp.com', 'phone' => '0534 888 99 00', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-9', 'name' => 'Schneider Electric (APC)', 'contactName' => 'Zeynep Arslan', 'email' => 'zeynep@se.com', 'phone' => '0536 999 00 11', 'city' => 'Bursa'],
-            ['id' => 'sup-10', 'name' => 'Yakın Doğu IT Dağıtım', 'contactName' => 'Onur Polat', 'email' => 'onur@sirket.com', 'phone' => '0538 000 11 22', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-11', 'name' => 'Juniper Networks Distribution', 'contactName' => 'Hakan Er', 'email' => 'hakan@juniper.com', 'phone' => '0532 101 22 33', 'city' => 'Ankara'],
-            ['id' => 'sup-12', 'name' => 'MikroTik Bölge Distribütörü', 'contactName' => 'Pınar Uçar', 'email' => 'pinar@mikrotik.com', 'phone' => '0543 202 33 44', 'city' => 'İzmir'],
-            ['id' => 'sup-13', 'name' => 'Synology Türkiye', 'contactName' => 'Burak Toprak', 'email' => 'burak@synology.com', 'phone' => '0535 303 44 55', 'city' => 'İstanbul'],
-            ['id' => 'sup-14', 'name' => 'Hikvision Cyprus', 'contactName' => 'Melis Kaan', 'email' => 'melis@hikvision.com', 'phone' => '0544 404 55 66', 'city' => 'Girne'],
-            ['id' => 'sup-15', 'name' => 'Apple Enterprise Reseller', 'contactName' => 'Tarkan Sezer', 'email' => 'tarkan@applereseller.com', 'phone' => '0533 505 66 77', 'city' => 'İstanbul'],
+        $rows = [
+            ['id' => 'sup-1', 'name' => 'Cisco Systems Türkiye', 'contact_name' => 'Ahmet Yılmaz', 'email' => 'ahmet@cisco.com', 'phone' => '0533 111 22 33', 'city' => 'İstanbul'],
+            ['id' => 'sup-2', 'name' => 'Dell Technologies Enterprise', 'contact_name' => 'Deniz Kaya', 'email' => 'deniz@dell.com', 'phone' => '0542 222 33 44', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-3', 'name' => 'HPE & Aruba Networks', 'contact_name' => 'Selin Aydın', 'email' => 'selin@hpe.com', 'phone' => '0555 333 44 55', 'city' => 'Ankara'],
+            ['id' => 'sup-4', 'name' => 'Lenovo Enterprise Solutions', 'contact_name' => 'Murat Demir', 'email' => 'murat@lenovo.com', 'phone' => '0532 444 55 66', 'city' => 'İstanbul'],
+            ['id' => 'sup-5', 'name' => 'Microsoft Türkiye Lisanslama', 'contact_name' => 'Ece Şahin', 'email' => 'ece@microsoft.com', 'phone' => '0533 555 66 77', 'city' => 'İstanbul'],
+            ['id' => 'sup-6', 'name' => 'Fortinet Cyprus Distribution', 'contact_name' => 'Kerem Öz', 'email' => 'kerem@fortinet.com', 'phone' => '0541 666 77 88', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-7', 'name' => 'Palo Alto Networks', 'contact_name' => 'İrem Çelik', 'email' => 'irem@paloaltonetworks.com', 'phone' => '0552 777 88 99', 'city' => 'Girne'],
+            ['id' => 'sup-8', 'name' => 'NetApp Storage Solutions', 'contact_name' => 'Baran Koç', 'email' => 'baran@netapp.com', 'phone' => '0534 888 99 00', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-9', 'name' => 'Schneider Electric (APC)', 'contact_name' => 'Zeynep Arslan', 'email' => 'zeynep@se.com', 'phone' => '0536 999 00 11', 'city' => 'Bursa'],
+            ['id' => 'sup-10', 'name' => 'Yakın Doğu IT Dağıtım', 'contact_name' => 'Onur Polat', 'email' => 'onur@sirket.com', 'phone' => '0538 000 11 22', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-11', 'name' => 'Juniper Networks Distribution', 'contact_name' => 'Hakan Er', 'email' => 'hakan@juniper.com', 'phone' => '0532 101 22 33', 'city' => 'Ankara'],
+            ['id' => 'sup-12', 'name' => 'MikroTik Bölge Distribütörü', 'contact_name' => 'Pınar Uçar', 'email' => 'pinar@mikrotik.com', 'phone' => '0543 202 33 44', 'city' => 'İzmir'],
+            ['id' => 'sup-13', 'name' => 'Synology Türkiye', 'contact_name' => 'Burak Toprak', 'email' => 'burak@synology.com', 'phone' => '0535 303 44 55', 'city' => 'İstanbul'],
+            ['id' => 'sup-14', 'name' => 'Hikvision Cyprus', 'contact_name' => 'Melis Kaan', 'email' => 'melis@hikvision.com', 'phone' => '0544 404 55 66', 'city' => 'Girne'],
+            ['id' => 'sup-15', 'name' => 'Apple Enterprise Reseller', 'contact_name' => 'Tarkan Sezer', 'email' => 'tarkan@applereseller.com', 'phone' => '0533 505 66 77', 'city' => 'İstanbul'],
         ];
+
+        return $this->withTimestamps($rows);
     }
 
     private function users(): array
     {
-        return [
+        $rows = [
             ['id' => '48271', 'name' => 'Tolga Osman Falay', 'email' => 'tolgaosman@sirket.com', 'role' => 'yonetici', 'initials' => 'TO'],
             ['id' => '63094', 'name' => 'Gizem Karabaşak', 'email' => 'gizem.karabasak@sirket.com', 'role' => 'yonetici', 'initials' => 'GK'],
             ['id' => '17856', 'name' => 'Mustafa Hacı', 'email' => 'mustafa.haci@sirket.com', 'role' => 'depo', 'initials' => 'MH'],
@@ -137,6 +179,8 @@ class DemoDataSeeder
             ['id' => '31849', 'name' => 'Berk Fenk', 'email' => 'berk.fenk@sirket.com', 'role' => 'depo', 'initials' => 'BF'],
             ['id' => '89234', 'name' => 'Çiğdem Dürüst', 'email' => 'cigdem.durust@sirket.com', 'role' => 'yonetici', 'initials' => 'ÇD'],
         ];
+
+        return $this->withTimestamps($rows);
     }
 
     private function productCatalog(): array
@@ -227,16 +271,18 @@ class DemoDataSeeder
                         'name' => $baseName.$suffix,
                         'sku' => "NET-{$catSlug}-".(1000 + $n),
                         'barcode' => '869900'.(100000 + $n),
-                        'categoryId' => $catId,
+                        'category_id' => $catId,
                         'brand' => $brand,
                         'unit' => $unit,
-                        'purchasePrice' => $purchasePrice,
-                        'salePrice' => $salePrice,
-                        'minStock' => $minStock,
-                        'maxStock' => $maxStock,
+                        'purchase_price' => $purchasePrice,
+                        'sale_price' => $salePrice,
+                        'min_stock' => $minStock,
+                        'max_stock' => $maxStock,
                         'status' => $rand->next() > 0.05 ? 'aktif' : 'pasif',
-                        'supplierId' => $supplierId,
-                        'imageUrl' => $fallbackImage,
+                        'supplier_id' => $supplierId,
+                        'image_url' => $fallbackImage,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ];
                     $n++;
                 }
@@ -246,36 +292,31 @@ class DemoDataSeeder
         return $list;
     }
 
-    private function buildStockLevels(Mulberry32 $rand, array $products, array $warehouses): array
-    {
-        $levels = [];
-
-        foreach ($products as $i => &$product) {
-            if ($i < 16) {
-                $product['minStock'] = 30;
-                $wh = $warehouses[0];
-                $levels[] = ['productId' => $product['id'], 'warehouseId' => $wh['id'], 'quantity' => $rand->int(1, 5)];
-                continue;
-            }
-
-            $warehouseCount = $rand->int(2, count($warehouses));
-            $shuffled = array_slice($rand->shuffle($warehouses), 0, $warehouseCount);
-            foreach ($shuffled as $wh) {
-                $quantity = $rand->int($product['minStock'] + 2, $product['maxStock']);
-                $levels[] = ['productId' => $product['id'], 'warehouseId' => $wh['id'], 'quantity' => $quantity];
-            }
-        }
-        unset($product);
-
-        return $levels;
-    }
-
-    private function buildMovements(Mulberry32 $rand, array $products, array $warehouses, array $users): array
+    /**
+     * Builds movements chronologically (oldest first) while tracking a running
+     * per-(product,warehouse) quantity ledger, so previous_quantity/new_quantity
+     * are always internally consistent and the ledger's final value can be
+     * reused as that pair's stock_levels row.
+     *
+     * @return array{0: array, 1: array<string, array<string, int>>} [movements (desc sorted), ledger]
+     */
+    private function buildMovementsAndLedger(Mulberry32 $rand, array $products, array $warehouses, array $users): array
     {
         $reasonsByType = [
             'giris' => ['satin_alma', 'iade', 'sayim_duzeltme'],
             'cikis' => ['satis', 'fire', 'sayim_duzeltme'],
         ];
+
+        $ledger = []; // productId => warehouseId => quantity
+        $seedBaseline = function (array $product, string $warehouseId) use (&$ledger, $rand, $products) {
+            if (isset($ledger[$product['id']][$warehouseId])) {
+                return;
+            }
+            $isCriticalDemo = array_search($product['id'], array_column(array_slice($products, 0, 16), 'id'), true) !== false;
+            $ledger[$product['id']][$warehouseId] = $isCriticalDemo
+                ? $rand->int(1, 5)
+                : $rand->int($product['min_stock'] + 2, $product['max_stock']);
+        };
 
         $list = [];
         $now = time();
@@ -289,74 +330,221 @@ class DemoDataSeeder
             for ($i = 0; $i < $movementsToday; $i++) {
                 $product = $rand->pick($products);
                 $warehouse = $rand->pick($warehouses);
+                $seedBaseline($product, $warehouse['id']);
+
                 $roll = $rand->next();
                 $type = $roll < 0.45 ? 'giris' : ($roll < 0.85 ? 'cikis' : 'transfer');
                 $quantity = $rand->int(1, 20);
-                $previousQuantity = $rand->int(5, 100);
-                $newQuantity = $previousQuantity;
                 $targetWarehouseId = null;
+
+                $previousQuantity = $ledger[$product['id']][$warehouse['id']];
 
                 if ($type === 'giris') {
                     $newQuantity = $previousQuantity + $quantity;
                 } elseif ($type === 'cikis') {
+                    $quantity = min($quantity, max($previousQuantity, 1));
                     $newQuantity = max($previousQuantity - $quantity, 0);
                 } else {
-                    $newQuantity = max($previousQuantity - $quantity, 0);
                     $others = array_values(array_filter($warehouses, fn ($w) => $w['id'] !== $warehouse['id']));
-                    $targetWarehouseId = $rand->pick($others)['id'];
+                    $target = $rand->pick($others);
+                    $targetWarehouseId = $target['id'];
+                    $seedBaseline($product, $targetWarehouseId);
+
+                    $quantity = min($quantity, max($previousQuantity, 1));
+                    $newQuantity = max($previousQuantity - $quantity, 0);
+                    $ledger[$product['id']][$targetWarehouseId] += $quantity;
                 }
+
+                $ledger[$product['id']][$warehouse['id']] = $newQuantity;
 
                 $reason = $type === 'transfer' ? 'transfer' : $rand->pick($reasonsByType[$type]);
 
                 $hour = $rand->int(8, 19);
                 $minute = $rand->int(0, 59);
-                $createdAt = gmdate('Y-m-d', $dayTs)."T".sprintf('%02d:%02d:00.000', $hour, $minute).'Z';
+                // Space-separated, matching every other timestamp column: SQLite compares
+                // these as strings, and a 'T' separator sorts after ' ' which broke
+                // every date-range filter (dashboard "bugün", reports, calendar).
+                $createdAt = gmdate('Y-m-d ', $dayTs).sprintf('%02d:%02d:00', $hour, $minute);
 
                 $list[] = [
                     'id' => Mulberry32::id('mv', $n),
                     'type' => $type,
-                    'productId' => $product['id'],
-                    'warehouseId' => $warehouse['id'],
-                    'targetWarehouseId' => $targetWarehouseId,
+                    'product_id' => $product['id'],
+                    'warehouse_id' => $warehouse['id'],
+                    'target_warehouse_id' => $targetWarehouseId,
                     'quantity' => $quantity,
-                    'previousQuantity' => $previousQuantity,
-                    'newQuantity' => $newQuantity,
+                    'previous_quantity' => $previousQuantity,
+                    'new_quantity' => $newQuantity,
                     'reason' => $reason,
-                    'supplierId' => ($type === 'giris' && $reason === 'satin_alma') ? $product['supplierId'] : null,
-                    'purchaseOrderId' => null,
-                    'userId' => $rand->pick($users)['id'],
+                    'supplier_id' => ($type === 'giris' && $reason === 'satin_alma') ? $product['supplier_id'] : null,
+                    'purchase_order_id' => null,
+                    'user_id' => $rand->pick($users)['id'],
                     'note' => null,
-                    'createdAt' => $createdAt,
+                    'created_at' => $createdAt,
                 ];
                 $n++;
             }
         }
 
-        usort($list, fn ($a, $b) => strcmp($b['createdAt'], $a['createdAt']));
+        $this->applyTargetDistribution($rand, $products, $warehouses, $users, $ledger, $list, $n);
 
-        return $list;
+        usort($list, fn ($a, $b) => strcmp($b['created_at'], $a['created_at']));
+
+        return [$list, $ledger];
+    }
+
+    /**
+     * A year of random movements drifts every product upward (45% of them are
+     * giriş), which left the demo with zero critical products and almost
+     * everything overstocked — the kritik-stok KPI, the critical list and the
+     * replenishment engine all rendered empty.
+     *
+     * This appends a final day of sayım düzeltme movements that steer each
+     * product into a deliberate band. They go through the same ledger as every
+     * other movement, so previous_quantity/new_quantity stay consistent and the
+     * resulting stock_levels still match the last movement for each pair.
+     */
+    private function applyTargetDistribution(
+        Mulberry32 $rand,
+        array $products,
+        array $warehouses,
+        array $users,
+        array &$ledger,
+        array &$list,
+        int &$n,
+    ): void {
+        $mult = config('inventory.low_stock_multiplier');
+        $todayTs = time();
+
+        foreach ($products as $product) {
+            $pid = $product['id'];
+            $min = (int) $product['min_stock'];
+            $max = (int) $product['max_stock'];
+            $lowCeiling = max((int) ceil($min * $mult), $min + 1);
+
+            $roll = $rand->next();
+            if ($roll < 0.10) {                 // kritik
+                $target = $rand->int(0, max($min - 1, 0));
+            } elseif ($roll < 0.25) {           // düşük
+                $target = $rand->int($min, $lowCeiling - 1);
+            } elseif ($roll < 0.88) {           // normal
+                $target = $rand->int($lowCeiling, max($max, $lowCeiling));
+            } else {                            // fazla
+                $target = $rand->int($max + 1, $max + max((int) round($max * 0.4), 5));
+            }
+
+            $ledger[$pid] ??= [];
+            if (count($ledger[$pid]) === 0) {
+                // Untouched product: give it a home warehouse to correct against.
+                $ledger[$pid][$rand->pick($warehouses)['id']] = 0;
+            }
+
+            $current = array_sum($ledger[$pid]);
+            $delta = $target - $current;
+            if ($delta === 0) {
+                continue;
+            }
+
+            $emit = function (string $warehouseId, string $type, int $quantity) use (&$ledger, &$list, &$n, $pid, $rand, $users, $todayTs) {
+                $previousQuantity = $ledger[$pid][$warehouseId];
+                $newQuantity = $type === 'giris' ? $previousQuantity + $quantity : $previousQuantity - $quantity;
+                $ledger[$pid][$warehouseId] = $newQuantity;
+
+                $list[] = [
+                    'id' => Mulberry32::id('mv', $n),
+                    'type' => $type,
+                    'product_id' => $pid,
+                    'warehouse_id' => $warehouseId,
+                    'target_warehouse_id' => null,
+                    'quantity' => $quantity,
+                    'previous_quantity' => $previousQuantity,
+                    'new_quantity' => $newQuantity,
+                    'reason' => 'sayim_duzeltme',
+                    'supplier_id' => null,
+                    'purchase_order_id' => null,
+                    'user_id' => $rand->pick($users)['id'],
+                    'note' => 'Yıl sonu sayım düzeltmesi',
+                    'created_at' => gmdate('Y-m-d ', $todayTs).sprintf('%02d:%02d:00', $rand->int(8, 17), $rand->int(0, 59)),
+                ];
+                $n++;
+            };
+
+            if ($delta > 0) {
+                $emit(array_key_first($ledger[$pid]), 'giris', $delta);
+
+                continue;
+            }
+
+            // Draw the shortfall down warehouse by warehouse, never below zero.
+            $remaining = -$delta;
+            foreach ($ledger[$pid] as $warehouseId => $quantity) {
+                if ($remaining <= 0) {
+                    break;
+                }
+                $take = min($remaining, $quantity);
+                if ($take <= 0) {
+                    continue;
+                }
+                $emit($warehouseId, 'cikis', $take);
+                $remaining -= $take;
+            }
+        }
+    }
+
+    private function buildStockLevels(Mulberry32 $rand, array $products, array $warehouses, array $ledger): array
+    {
+        $levels = [];
+
+        // Pairs touched by at least one movement: use the ledger's final quantity.
+        foreach ($ledger as $productId => $byWarehouse) {
+            foreach ($byWarehouse as $warehouseId => $quantity) {
+                $levels[] = [
+                    'product_id' => $productId, 'warehouse_id' => $warehouseId, 'quantity' => $quantity,
+                    'created_at' => now(), 'updated_at' => now(),
+                ];
+            }
+        }
+
+        // Untouched products still get a plausible spread across warehouses.
+        foreach ($products as $product) {
+            if (isset($ledger[$product['id']])) {
+                continue;
+            }
+            $warehouseCount = $rand->int(2, count($warehouses));
+            $shuffled = array_slice($rand->shuffle($warehouses), 0, $warehouseCount);
+            foreach ($shuffled as $wh) {
+                $quantity = $rand->int($product['min_stock'] + 2, $product['max_stock']);
+                $levels[] = [
+                    'product_id' => $product['id'], 'warehouse_id' => $wh['id'], 'quantity' => $quantity,
+                    'created_at' => now(), 'updated_at' => now(),
+                ];
+            }
+        }
+
+        return $levels;
     }
 
     private function buildPurchaseOrders(Mulberry32 $rand, array $products, array $suppliers, array $warehouses): array
     {
-        $poStatuses = ['draft', 'ordered', 'partially_received', 'received', 'received', 'cancelled'];
+        $poStatuses = ['draft', 'pending_approval', 'ordered', 'partially_received', 'received', 'received', 'cancelled'];
+        $priorities = ['low', 'medium', 'medium', 'high'];
         $list = [];
         $now = time();
 
         for ($n = 1; $n <= 80; $n++) {
             $supplier = $rand->pick($suppliers);
             $itemCount = $rand->int(1, 4);
-            $bySupplier = array_values(array_filter($products, fn ($p) => $p['supplierId'] === $supplier['id']));
+            $bySupplier = array_values(array_filter($products, fn ($p) => $p['supplier_id'] === $supplier['id']));
 
             $items = [];
             for ($k = 0; $k < $itemCount; $k++) {
                 $chosen = count($bySupplier) > 0 ? $rand->pick($bySupplier) : $rand->pick($products);
                 $quantity = $rand->int(2, 25);
                 $items[] = [
-                    'productId' => $chosen['id'],
+                    'product_id' => $chosen['id'],
                     'quantity' => $quantity,
-                    'unitPrice' => $chosen['purchasePrice'],
-                    'receivedQuantity' => 0,
+                    'unit_price' => $chosen['purchase_price'],
+                    'received_quantity' => 0,
                 ];
             }
 
@@ -367,9 +555,9 @@ class DemoDataSeeder
 
             foreach ($items as &$item) {
                 if ($status === 'received') {
-                    $item['receivedQuantity'] = $item['quantity'];
+                    $item['received_quantity'] = $item['quantity'];
                 } elseif ($status === 'partially_received') {
-                    $item['receivedQuantity'] = $rand->int(1, max($item['quantity'] - 1, 1));
+                    $item['received_quantity'] = $rand->int(1, max($item['quantity'] - 1, 1));
                 }
             }
             unset($item);
@@ -378,46 +566,31 @@ class DemoDataSeeder
 
             $deliveryJitterDays = $rand->int(-3, 6);
             $receivedAt = $status === 'received'
-                ? gmdate('Y-m-d\TH:i:s.000\Z', $expectedAtTs + $deliveryJitterDays * 86400)
+                ? gmdate('Y-m-d H:i:s', $expectedAtTs + $deliveryJitterDays * 86400)
                 : null;
 
             $list[] = [
                 'id' => Mulberry32::id('po', $n),
                 'code' => 'NET-PO-2026'.sprintf('%04d', $n),
-                'supplierId' => $supplier['id'],
-                'warehouseId' => $warehouse['id'],
+                'supplier_id' => $supplier['id'],
+                'warehouse_id' => $warehouse['id'],
                 'status' => $status,
+                'priority' => $rand->pick($priorities),
                 'items' => $items,
-                'createdAt' => gmdate('Y-m-d\TH:i:s.000\Z', $createdAtTs),
-                'expectedAt' => gmdate('Y-m-d\TH:i:s.000\Z', $expectedAtTs),
-                'receivedAt' => $receivedAt,
+                'created_at' => gmdate('Y-m-d H:i:s', $createdAtTs),
+                'expected_at' => gmdate('Y-m-d H:i:s', $expectedAtTs),
+                'received_at' => $receivedAt,
                 'currency' => 'TRY',
                 'notes' => null,
+                'updated_at' => now(),
             ];
         }
-
-        usort($list, fn ($a, $b) => strcmp($b['createdAt'], $a['createdAt']));
 
         return $list;
     }
 
-    private function defaultSettings(): array
+    private function withTimestamps(array $rows): array
     {
-        return [
-            'company' => [
-                'companyName' => 'Near East Technology',
-                'taxOffice' => 'Lefkoşa Vergi Dairesi',
-                'taxNumber' => '1234567890',
-                'address' => 'Yakın Doğu Bulvarı No:1, Lefkoşa, KKTC',
-            ],
-            'notifications' => [
-                'notifyStock' => true,
-                'notifyOrder' => true,
-                'notifySystem' => false,
-            ],
-            'timezone' => 'Europe/Istanbul',
-            'showKurus' => false,
-            'defaultRange' => 'bu-ay',
-        ];
+        return array_map(fn ($r) => $r + ['created_at' => now(), 'updated_at' => now()], $rows);
     }
 }

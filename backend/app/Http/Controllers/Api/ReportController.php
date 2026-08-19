@@ -3,25 +3,30 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Services\DashboardService;
 use App\Services\PurchaseOrderService;
-use App\Support\InventoryCalc;
-use App\Support\JsonStore;
 use App\Support\Labels;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
- * frontend/components/reports/reports-client.tsx currently reads the mock
- * arrays directly and computes everything client-side — there's no existing
- * lib/api/reports.ts contract to port. These endpoints expose the same
- * underlying aggregates (reusing DashboardService/PurchaseOrderService so the
- * numbers agree with the dashboard and satın alma pages) shaped per report tab.
+ * frontend/components/reports/reports-client.tsx reads the mock arrays directly
+ * and computes everything client-side — there is no existing lib/api/reports.ts
+ * contract to port. These endpoints expose the same underlying aggregates
+ * (reusing DashboardService/PurchaseOrderService so the numbers agree with the
+ * dashboard and satın alma pages) shaped per report tab.
  */
 class ReportController extends Controller
 {
-    public function __construct(private JsonStore $store, private DashboardService $dashboard)
-    {
+    public function __construct(
+        private DashboardService $dashboard,
+        private WarehouseController $warehouses,
+    ) {
     }
 
     private function rangeStart(?string $range): Carbon
@@ -34,32 +39,32 @@ class ReportController extends Controller
     public function products(Request $request)
     {
         $since = $this->rangeStart($request->query('range'));
-        $products = $this->store->read('products');
-        $movements = array_values(array_filter($this->store->read('stock_movements'), fn ($m) => Carbon::parse($m['createdAt'])->gte($since)));
-        $totals = InventoryCalc::totalsByProduct($this->store->read('stock_levels'));
 
-        $byProduct = [];
-        foreach ($movements as $m) {
-            $byProduct[$m['productId']] ??= 0;
-            $byProduct[$m['productId']] += $m['quantity'];
-        }
-        $productsById = collect($products)->keyBy('id');
-        $movers = [];
-        foreach ($byProduct as $productId => $qty) {
-            $p = $productsById->get($productId);
-            if ($p) {
-                $movers[] = ['productId' => $productId, 'name' => $p['name'], 'sku' => $p['sku'], 'totalQuantity' => $qty];
-            }
-        }
-        usort($movers, fn ($a, $b) => $b['totalQuantity'] <=> $a['totalQuantity']);
+        $aggregates = StockMovement::query()
+            ->where('created_at', '>=', $since)
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'))
+            ->orderByDesc('total_quantity')
+            ->get();
 
-        $critical = $this->dashboard->criticalProducts($products, $totals);
+        $productsById = Product::query()->whereIn('id', $aggregates->pluck('product_id'))->get()->keyBy('id');
+
+        $movers = $aggregates->map(function ($row) use ($productsById) {
+            $p = $productsById->get($row->product_id);
+
+            return $p ? [
+                'productId' => $row->product_id,
+                'name' => $p->name,
+                'sku' => $p->sku,
+                'totalQuantity' => (int) $row->total_quantity,
+            ] : null;
+        })->filter()->values();
 
         return response()->json([
-            'topMovers' => array_slice($movers, 0, 10),
-            'leastMovers' => array_slice(array_reverse($movers), 0, 10),
-            'criticalProducts' => array_slice($critical, 0, 20),
-            'totalActiveProducts' => count(array_filter($products, fn ($p) => $p['status'] === 'aktif')),
+            'topMovers' => $movers->take(10)->values()->all(),
+            'leastMovers' => $movers->reverse()->take(10)->values()->all(),
+            'criticalProducts' => array_slice($this->dashboard->criticalProducts(), 0, 20),
+            'totalActiveProducts' => Product::query()->where('status', 'aktif')->count(),
         ]);
     }
 
@@ -68,7 +73,7 @@ class ReportController extends Controller
         $warehouseId = $request->query('warehouseId') ?: null;
 
         return response()->json([
-            'warehouses' => (new WarehouseController($this->store))->detailed()->getData(true),
+            'warehouses' => $this->warehouses->detailed()->getData(true),
             'stockTotals' => $this->dashboard->warehouseStockTotals($warehouseId),
         ]);
     }
@@ -76,12 +81,24 @@ class ReportController extends Controller
     public function movements(Request $request)
     {
         $since = $this->rangeStart($request->query('range'));
-        $movements = array_values(array_filter($this->store->read('stock_movements'), fn ($m) => Carbon::parse($m['createdAt'])->gte($since)));
 
-        $total = count($movements);
+        $typeCounts = StockMovement::query()
+            ->where('created_at', '>=', $since)
+            ->groupBy('type')
+            ->select('type', DB::raw('COUNT(*) as c'))
+            ->pluck('c', 'type');
+
+        $reasonCounts = StockMovement::query()
+            ->where('created_at', '>=', $since)
+            ->groupBy('reason')
+            ->select('reason', DB::raw('COUNT(*) as c'))
+            ->pluck('c', 'reason');
+
+        $total = (int) $typeCounts->sum();
+
         $byType = [];
         foreach (['giris', 'cikis', 'transfer'] as $type) {
-            $count = count(array_filter($movements, fn ($m) => $m['type'] === $type));
+            $count = (int) ($typeCounts[$type] ?? 0);
             $byType[] = [
                 'type' => $type,
                 'label' => Labels::movementType($type),
@@ -92,7 +109,7 @@ class ReportController extends Controller
 
         $byReason = [];
         foreach (Labels::MOVEMENT_REASON as $reason => $label) {
-            $count = count(array_filter($movements, fn ($m) => $m['reason'] === $reason));
+            $count = (int) ($reasonCounts[$reason] ?? 0);
             if ($count === 0) {
                 continue;
             }
@@ -105,39 +122,42 @@ class ReportController extends Controller
     public function purchasing(Request $request)
     {
         $since = $this->rangeStart($request->query('range'));
-        $orders = array_values(array_filter($this->store->read('purchase_orders'), fn ($po) => Carbon::parse($po['createdAt'])->gte($since)));
-        $suppliersById = collect($this->store->read('suppliers'))->keyBy('id');
+        $orders = PurchaseOrder::query()->with('items')->where('created_at', '>=', $since)->get();
 
         $statusBreakdown = [];
         foreach (Labels::PURCHASE_ORDER_STATUS as $status => $label) {
-            $matching = array_filter($orders, fn ($po) => $po['status'] === $status);
+            $matching = $orders->where('status', $status);
             $statusBreakdown[] = [
                 'status' => $status,
                 'label' => $label,
-                'count' => count($matching),
-                'value' => array_sum(array_map(fn ($po) => PurchaseOrderService::total($po), $matching)),
+                'count' => $matching->count(),
+                'value' => (float) $matching->sum(fn ($po) => PurchaseOrderService::total($po)),
             ];
         }
 
+        $nonCancelled = $orders->filter(fn ($po) => $po->status !== 'cancelled');
+
         $bySupplier = [];
-        foreach ($orders as $po) {
-            if ($po['status'] === 'cancelled') {
-                continue;
-            }
-            $bySupplier[$po['supplierId']] ??= 0;
-            $bySupplier[$po['supplierId']] += PurchaseOrderService::total($po);
+        foreach ($nonCancelled as $po) {
+            $bySupplier[$po->supplier_id] = ($bySupplier[$po->supplier_id] ?? 0) + PurchaseOrderService::total($po);
         }
         arsort($bySupplier);
+
+        $supplierNames = Supplier::query()->pluck('name', 'id');
         $topSuppliers = [];
         foreach (array_slice($bySupplier, 0, 5, true) as $supplierId => $value) {
-            $topSuppliers[] = ['supplierId' => $supplierId, 'name' => $suppliersById->get($supplierId)['name'] ?? '-', 'value' => $value];
+            $topSuppliers[] = [
+                'supplierId' => $supplierId,
+                'name' => $supplierNames[$supplierId] ?? '-',
+                'value' => (float) $value,
+            ];
         }
 
         return response()->json([
             'statusBreakdown' => $statusBreakdown,
             'topSuppliers' => $topSuppliers,
-            'totalOrders' => count($orders),
-            'totalValue' => array_sum(array_map(fn ($po) => PurchaseOrderService::total($po), array_filter($orders, fn ($po) => $po['status'] !== 'cancelled'))),
+            'totalOrders' => $orders->count(),
+            'totalValue' => (float) $nonCancelled->sum(fn ($po) => PurchaseOrderService::total($po)),
         ]);
     }
 }

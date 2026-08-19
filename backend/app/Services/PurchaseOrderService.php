@@ -3,47 +3,78 @@
 namespace App\Services;
 
 use App\Exceptions\ApiException;
-use App\Support\JsonStore;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\Supplier;
+use App\Models\Warehouse;
+use App\Support\IdGenerator;
+use App\Support\Present;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
-/** Direct PHP port of frontend/lib/api/purchase-orders.ts's mutation functions. */
+/**
+ * Port of frontend/lib/api/purchase-orders.ts's mutation functions.
+ *
+ * The status transitions here are the authority; frontend/lib/purchase-order-actions.ts
+ * mirrors them only to decide which buttons to show, and a request that
+ * disagrees gets a CONFLICT.
+ */
 class PurchaseOrderService
 {
-    public function __construct(private JsonStore $store, private StockService $stock)
+    public function __construct(private StockService $stock)
     {
     }
 
-    public static function total(array $po): int
+    public static function total(PurchaseOrder $po): float
     {
-        return array_sum(array_map(fn ($i) => $i['quantity'] * $i['unitPrice'], $po['items']));
+        return (float) $po->items->sum(fn ($i) => (int) $i->quantity * (float) $i->unit_price);
     }
 
-    public static function isOverdue(array $po, string $nowIso): bool
+    public static function isOverdue(PurchaseOrder $po, ?Carbon $now = null): bool
     {
-        return $po['status'] !== 'received' && $po['status'] !== 'cancelled' && $po['expectedAt'] < $nowIso;
+        $now ??= Carbon::now();
+
+        return ! in_array($po->status, ['received', 'cancelled'], true)
+            && $po->expected_at !== null
+            && $po->expected_at->lt($now);
     }
 
-    public function toRow(array $po, array $suppliersById, array $warehousesById): array
+    public function toRow(PurchaseOrder $po): array
     {
-        return $po + [
-            'supplierName' => $suppliersById[$po['supplierId']]['name'] ?? '-',
-            'warehouseName' => $warehousesById[$po['warehouseId']]['name'] ?? '-',
+        return Present::purchaseOrder($po) + [
+            'supplierName' => $po->supplier->name ?? '-',
+            'warehouseName' => $po->warehouse->name ?? '-',
             'total' => self::total($po),
-            'itemCount' => count($po['items']),
-            'receivedTotal' => array_sum(array_map(fn ($i) => $i['receivedQuantity'], $po['items'])),
-            'orderedTotal' => array_sum(array_map(fn ($i) => $i['quantity'], $po['items'])),
+            'itemCount' => $po->items->count(),
+            'receivedTotal' => (int) $po->items->sum('received_quantity'),
+            'orderedTotal' => (int) $po->items->sum('quantity'),
+            'invoiceFilePath' => $po->invoice_file_path,
         ];
     }
 
-    private function validateItems(array $items, array $products): void
+    private function findOrFail(string $id, bool $lock = false): PurchaseOrder
+    {
+        $query = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse']);
+        if ($lock) {
+            $query->lockForUpdate();
+        }
+        $po = $query->find($id);
+        if (! $po) {
+            throw ApiException::notFound('Satın alma siparişi bulunamadı.');
+        }
+
+        return $po;
+    }
+
+    private function validateItems(array $items): void
     {
         if (count($items) === 0) {
             throw ApiException::validation('En az bir kalem eklemelisiniz.');
         }
-        $productIds = array_column($products, 'id');
+        $productIds = Product::query()->pluck('id')->flip();
         $seen = [];
         foreach ($items as $item) {
-            if (! in_array($item['productId'], $productIds, true)) {
+            if (! $productIds->has($item['productId'])) {
                 throw ApiException::validation('Seçilen ürünlerden biri bulunamadı.');
             }
             if ($item['quantity'] <= 0) {
@@ -59,275 +90,298 @@ class PurchaseOrderService
         }
     }
 
+    private function syncItems(PurchaseOrder $po, array $items): void
+    {
+        $po->items()->delete();
+        foreach ($items as $item) {
+            $po->items()->create([
+                'product_id' => $item['productId'],
+                'quantity' => (int) $item['quantity'],
+                'unit_price' => $item['unitPrice'],
+                'received_quantity' => 0,
+            ]);
+        }
+    }
+
     public function create(array $input): array
     {
-        $suppliers = $this->store->read('suppliers');
-        $warehouses = $this->store->read('warehouses');
-        $products = $this->store->read('products');
-
-        if (! collect($suppliers)->contains(fn ($s) => $s['id'] === $input['supplierId'])) {
+        if (! Supplier::query()->whereKey($input['supplierId'])->exists()) {
             throw ApiException::validation('Tedarikçi bulunamadı.');
         }
-        if (! collect($warehouses)->contains(fn ($w) => $w['id'] === $input['warehouseId'])) {
+        if (! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
             throw ApiException::validation('Depo bulunamadı.');
         }
         if (empty($input['expectedAt'])) {
             throw ApiException::validation('Beklenen teslim tarihi gereklidir.');
         }
-        $this->validateItems($input['items'], $products);
+        $this->validateItems($input['items']);
 
-        return $this->store->transaction(function () use ($input) {
-            $orders = $this->store->read('purchase_orders');
-            $n = count($orders) + 1;
-
-            $po = [
-                'id' => $this->store->nextId($orders, 'po'),
-                'code' => 'NET-PO-'.date('Y').sprintf('%04d', $n),
-                'supplierId' => $input['supplierId'],
-                'warehouseId' => $input['warehouseId'],
+        $po = DB::transaction(function () use ($input) {
+            $po = PurchaseOrder::query()->create([
+                'id' => IdGenerator::nextId('purchase_orders', 'id', 'po', 4),
+                'code' => IdGenerator::nextCode('purchase_orders', 'code', 'NET-PO-'),
+                'supplier_id' => $input['supplierId'],
+                'warehouse_id' => $input['warehouseId'],
                 'status' => 'draft',
-                'items' => array_map(fn ($i) => $i + ['receivedQuantity' => 0], $input['items']),
-                'createdAt' => Carbon::now()->toIso8601String(),
-                'expectedAt' => $input['expectedAt'],
-                'receivedAt' => null,
+                'priority' => $input['priority'] ?? 'medium',
+                'created_at' => Carbon::now(),
+                'expected_at' => $input['expectedAt'],
+                'received_at' => null,
                 'currency' => 'TRY',
                 'notes' => $input['notes'] ?? null,
-            ];
-            array_unshift($orders, $po);
-            $this->store->write('purchase_orders', $orders);
+            ]);
+            $this->syncItems($po, $input['items']);
 
             return $po;
         });
+
+        return Present::purchaseOrder($po->fresh(['items']));
     }
 
     public function update(string $id, array $input): array
     {
-        return $this->store->transaction(function () use ($id, $input) {
-            $orders = $this->store->read('purchase_orders');
-            $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-            if ($index === false) {
-                throw ApiException::notFound('Satın alma siparişi bulunamadı.');
-            }
-            $po = $orders[$index];
+        $po = DB::transaction(function () use ($id, $input) {
+            $po = $this->findOrFail($id, lock: true);
 
-            if ($po['status'] !== 'draft' && $po['status'] !== 'ordered') {
-                throw ApiException::conflict('Yalnızca taslak veya sipariş edilmiş siparişler düzenlenebilir.');
+            // Editing stays open while an order is still being negotiated:
+            // draft, awaiting approval, or sent but with nothing received yet.
+            if (! in_array($po->status, ['draft', 'pending_approval', 'ordered'], true)) {
+                throw ApiException::conflict('Yalnızca taslak, onay bekleyen veya sipariş edilmiş siparişler düzenlenebilir.');
             }
-            if (collect($po['items'])->contains(fn ($i) => $i['receivedQuantity'] > 0)) {
+            if ($po->items->contains(fn ($i) => (int) $i->received_quantity > 0)) {
                 throw ApiException::conflict('Kısmen de olsa teslim alınmış bir sipariş düzenlenemez.');
             }
 
             if (array_key_exists('supplierId', $input)) {
-                if (! collect($this->store->read('suppliers'))->contains(fn ($s) => $s['id'] === $input['supplierId'])) {
+                if (! Supplier::query()->whereKey($input['supplierId'])->exists()) {
                     throw ApiException::validation('Tedarikçi bulunamadı.');
                 }
-                $po['supplierId'] = $input['supplierId'];
+                $po->supplier_id = $input['supplierId'];
             }
             if (array_key_exists('warehouseId', $input)) {
-                if (! collect($this->store->read('warehouses'))->contains(fn ($w) => $w['id'] === $input['warehouseId'])) {
+                if (! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
                     throw ApiException::validation('Depo bulunamadı.');
                 }
-                $po['warehouseId'] = $input['warehouseId'];
+                $po->warehouse_id = $input['warehouseId'];
             }
             if (array_key_exists('expectedAt', $input)) {
-                $po['expectedAt'] = $input['expectedAt'];
+                $po->expected_at = $input['expectedAt'];
+            }
+            if (array_key_exists('priority', $input)) {
+                $po->priority = $input['priority'];
             }
             if (array_key_exists('notes', $input)) {
-                $po['notes'] = $input['notes'];
+                $po->notes = $input['notes'];
             }
             if (array_key_exists('items', $input)) {
-                $this->validateItems($input['items'], $this->store->read('products'));
-                $po['items'] = array_map(fn ($i) => $i + ['receivedQuantity' => 0], $input['items']);
+                $this->validateItems($input['items']);
+                $this->syncItems($po, $input['items']);
             }
-
-            $orders[$index] = $po;
-            $this->store->write('purchase_orders', $orders);
+            $po->save();
 
             return $po;
         });
+
+        return Present::purchaseOrder($po->fresh(['items']));
     }
 
     public function delete(string $id): void
     {
-        $this->store->transaction(function () use ($id) {
-            $orders = $this->store->read('purchase_orders');
-            $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-            if ($index === false) {
-                throw ApiException::notFound('Satın alma siparişi bulunamadı.');
-            }
-            if ($orders[$index]['status'] !== 'draft') {
+        DB::transaction(function () use ($id) {
+            $po = $this->findOrFail($id, lock: true);
+            if ($po->status !== 'draft') {
                 throw ApiException::conflict('Yalnızca taslak siparişler silinebilir; gönderilmiş siparişleri iptal edin.');
             }
-            unset($orders[$index]);
-            $this->store->write('purchase_orders', array_values($orders));
+            $po->items()->delete();
+            $po->delete();
         });
+    }
+
+    /** Applies a single status transition guarded by $allowedFrom. */
+    private function transition(string $id, array $allowedFrom, string $to, string $conflictMessage): array
+    {
+        $po = DB::transaction(function () use ($id, $allowedFrom, $to, $conflictMessage) {
+            $po = $this->findOrFail($id, lock: true);
+            if (! in_array($po->status, $allowedFrom, true)) {
+                throw ApiException::conflict($conflictMessage);
+            }
+            $po->status = $to;
+            $po->save();
+
+            return $po;
+        });
+
+        return $this->toRow($po->fresh(['items', 'supplier', 'warehouse']));
     }
 
     public function markOrdered(string $id): array
     {
-        return $this->store->transaction(function () use ($id) {
-            $orders = $this->store->read('purchase_orders');
-            $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-            if ($index === false) {
-                throw ApiException::notFound('Satın alma siparişi bulunamadı.');
-            }
-            if ($orders[$index]['status'] !== 'draft') {
-                throw ApiException::conflict('Yalnızca taslak siparişler gönderilebilir.');
-            }
-            $orders[$index]['status'] = 'ordered';
-            $this->store->write('purchase_orders', $orders);
+        return $this->transition($id, ['draft'], 'ordered', 'Yalnızca taslak siparişler gönderilebilir.');
+    }
 
-            return $orders[$index];
-        });
+    public function requestApproval(string $id): array
+    {
+        return $this->transition($id, ['draft'], 'pending_approval', 'Yalnızca taslak siparişler onaya gönderilebilir.');
+    }
+
+    public function approve(string $id): array
+    {
+        return $this->transition($id, ['pending_approval'], 'ordered', 'Yalnızca onay bekleyen siparişler onaylanabilir.');
+    }
+
+    public function reject(string $id): array
+    {
+        return $this->transition($id, ['pending_approval'], 'draft', 'Yalnızca onay bekleyen siparişler reddedilebilir.');
     }
 
     public function cancel(string $id): array
     {
-        return $this->store->transaction(function () use ($id) {
-            $orders = $this->store->read('purchase_orders');
-            $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-            if ($index === false) {
-                throw ApiException::notFound('Satın alma siparişi bulunamadı.');
-            }
-            if ($orders[$index]['status'] === 'received') {
+        $po = DB::transaction(function () use ($id) {
+            $po = $this->findOrFail($id, lock: true);
+            if ($po->status === 'received') {
                 throw ApiException::conflict('Teslim alınmış sipariş iptal edilemez.');
             }
-            $orders[$index]['status'] = 'cancelled';
-            $this->store->write('purchase_orders', $orders);
+            $po->status = 'cancelled';
+            $po->save();
 
-            return $orders[$index];
+            return $po;
         });
+
+        return $this->toRow($po->fresh(['items', 'supplier', 'warehouse']));
     }
 
-    /** @param array<string,int> $receivedQuantities productId => qty being received now */
+    /**
+     * @param  array<string,int>  $receivedQuantities  productId => qty being received now
+     */
     public function receive(string $id, array $receivedQuantities, string $userId, ?string $idempotencyKey): array
     {
-        return $this->store->transaction(function () use ($id, $receivedQuantities, $userId, $idempotencyKey) {
-            $orders = $this->store->read('purchase_orders');
-            $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-            if ($index === false) {
-                throw ApiException::notFound('Satın alma siparişi bulunamadı.');
-            }
-            $po = $orders[$index];
-            if ($po['status'] === 'cancelled') {
+        $po = DB::transaction(function () use ($id, $receivedQuantities, $userId, $idempotencyKey) {
+            $po = $this->findOrFail($id, lock: true);
+            if ($po->status === 'cancelled') {
                 throw ApiException::conflict('İptal edilmiş sipariş teslim alınamaz.');
             }
-            if ($po['status'] === 'received') {
+            if ($po->status === 'received') {
                 throw ApiException::conflict('Sipariş zaten tamamen teslim alınmış.');
             }
+            if (empty($po->invoice_file_path)) {
+                throw ApiException::validation('Teslim almak için fatura yüklenmesi zorunludur.');
+            }
 
-            // Stock effects happen first so a failed movement leaves the order untouched.
-            foreach ($po['items'] as &$item) {
-                $add = $receivedQuantities[$item['productId']] ?? 0;
+            foreach ($po->items as $item) {
+                $add = $receivedQuantities[$item->product_id] ?? 0;
                 if ($add <= 0) {
                     continue;
                 }
-                $capped = min($add, $item['quantity'] - $item['receivedQuantity']);
+                // Over-receipt is clipped to what's still outstanding.
+                $capped = min($add, (int) $item->quantity - (int) $item->received_quantity);
                 if ($capped <= 0) {
                     continue;
                 }
 
                 $this->stock->stockIn([
-                    'productId' => $item['productId'],
-                    'warehouseId' => $po['warehouseId'],
+                    'productId' => $item->product_id,
+                    'warehouseId' => $po->warehouse_id,
                     'quantity' => $capped,
-                    'supplierId' => $po['supplierId'],
-                    'purchaseOrderId' => $po['id'],
-                    'note' => "{$po['code']} teslim alındı",
+                    'supplierId' => $po->supplier_id,
+                    'purchaseOrderId' => $po->id,
+                    'note' => "{$po->code} teslim alındı",
                     'userId' => $userId,
-                    'idempotencyKey' => $idempotencyKey ? "{$idempotencyKey}-{$item['productId']}" : null,
+                    // Per-line key so a replayed receive is idempotent line by line.
+                    'idempotencyKey' => $idempotencyKey ? "{$idempotencyKey}-{$item->product_id}" : null,
                 ]);
-                $item['receivedQuantity'] += $capped;
-            }
-            unset($item);
 
-            $allReceived = collect($po['items'])->every(fn ($i) => $i['receivedQuantity'] >= $i['quantity']);
-            $anyReceived = collect($po['items'])->contains(fn ($i) => $i['receivedQuantity'] > 0);
-            $po['status'] = $allReceived ? 'received' : ($anyReceived ? 'partially_received' : $po['status']);
+                $item->received_quantity = (int) $item->received_quantity + $capped;
+                $item->save();
+            }
+
+            $items = $po->items()->get();
+            $allReceived = $items->every(fn ($i) => (int) $i->received_quantity >= (int) $i->quantity);
+            $anyReceived = $items->contains(fn ($i) => (int) $i->received_quantity > 0);
+
             if ($allReceived) {
-                $po['receivedAt'] = Carbon::now()->toIso8601String();
+                $po->status = 'received';
+                $po->received_at = Carbon::now();
+            } elseif ($anyReceived) {
+                $po->status = 'partially_received';
             }
-
-            $orders = $this->store->read('purchase_orders');
-            $orders[collect($orders)->search(fn ($p) => $p['id'] === $id)] = $po;
-            $this->store->write('purchase_orders', $orders);
+            $po->save();
 
             return $po;
         });
+
+        return $this->toRow($po->fresh(['items', 'supplier', 'warehouse']));
     }
 
-    /** @return array{successCount:int, failed: array<int, array{id:string, reason:string}>} */
-    public function bulkMarkOrdered(array $ids): array
+    /**
+     * Bulk helpers never abort on the first bad row — they report per-id
+     * reasons so the UI can show "3 gönderildi, 2 başarısız".
+     *
+     * @return array{successCount:int, failed: array<int, array{id:string, reason:string}>}
+     */
+    private function bulk(array $ids, callable $apply): array
     {
-        return $this->store->transaction(function () use ($ids) {
-            $orders = $this->store->read('purchase_orders');
+        return DB::transaction(function () use ($ids, $apply) {
             $failed = [];
             $successCount = 0;
 
             foreach ($ids as $id) {
-                $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-                if ($index === false) {
+                $po = PurchaseOrder::query()->lockForUpdate()->find($id);
+                if (! $po) {
                     $failed[] = ['id' => $id, 'reason' => 'Sipariş bulunamadı.'];
-                } elseif ($orders[$index]['status'] !== 'draft') {
-                    $failed[] = ['id' => $id, 'reason' => 'Yalnızca taslak siparişler gönderilebilir.'];
+
+                    continue;
+                }
+                $reason = $apply($po);
+                if ($reason !== null) {
+                    $failed[] = ['id' => $id, 'reason' => $reason];
                 } else {
-                    $orders[$index]['status'] = 'ordered';
                     $successCount++;
                 }
             }
-            $this->store->write('purchase_orders', $orders);
 
             return ['successCount' => $successCount, 'failed' => $failed];
+        });
+    }
+
+    public function bulkMarkOrdered(array $ids): array
+    {
+        return $this->bulk($ids, function (PurchaseOrder $po) {
+            if ($po->status !== 'draft') {
+                return 'Yalnızca taslak siparişler gönderilebilir.';
+            }
+            $po->status = 'ordered';
+            $po->save();
+
+            return null;
         });
     }
 
     public function bulkCancel(array $ids): array
     {
-        return $this->store->transaction(function () use ($ids) {
-            $orders = $this->store->read('purchase_orders');
-            $failed = [];
-            $successCount = 0;
-
-            foreach ($ids as $id) {
-                $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-                if ($index === false) {
-                    $failed[] = ['id' => $id, 'reason' => 'Sipariş bulunamadı.'];
-                } elseif ($orders[$index]['status'] === 'received') {
-                    $failed[] = ['id' => $id, 'reason' => 'Teslim alınmış sipariş iptal edilemez.'];
-                } elseif ($orders[$index]['status'] === 'cancelled') {
-                    $failed[] = ['id' => $id, 'reason' => 'Sipariş zaten iptal edilmiş.'];
-                } else {
-                    $orders[$index]['status'] = 'cancelled';
-                    $successCount++;
-                }
+        return $this->bulk($ids, function (PurchaseOrder $po) {
+            if ($po->status === 'received') {
+                return 'Teslim alınmış sipariş iptal edilemez.';
             }
-            $this->store->write('purchase_orders', $orders);
+            if ($po->status === 'cancelled') {
+                return 'Sipariş zaten iptal edilmiş.';
+            }
+            $po->status = 'cancelled';
+            $po->save();
 
-            return ['successCount' => $successCount, 'failed' => $failed];
+            return null;
         });
     }
 
     public function bulkDelete(array $ids): array
     {
-        return $this->store->transaction(function () use ($ids) {
-            $orders = $this->store->read('purchase_orders');
-            $failed = [];
-            $successCount = 0;
-
-            foreach ($ids as $id) {
-                $index = collect($orders)->search(fn ($p) => $p['id'] === $id);
-                if ($index === false) {
-                    $failed[] = ['id' => $id, 'reason' => 'Sipariş bulunamadı.'];
-                } elseif ($orders[$index]['status'] !== 'draft') {
-                    $failed[] = ['id' => $id, 'reason' => 'Yalnızca taslak siparişler silinebilir.'];
-                } else {
-                    unset($orders[$index]);
-                    $successCount++;
-                }
+        return $this->bulk($ids, function (PurchaseOrder $po) {
+            if ($po->status !== 'draft') {
+                return 'Yalnızca taslak siparişler silinebilir.';
             }
-            $this->store->write('purchase_orders', array_values($orders));
+            $po->items()->delete();
+            $po->delete();
 
-            return ['successCount' => $successCount, 'failed' => $failed];
+            return null;
         });
     }
 }

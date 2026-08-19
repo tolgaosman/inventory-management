@@ -68,11 +68,17 @@ interface FlowDatum extends MonthlyFlow {
 export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
   const isEmpty = !data || data.length === 0 || data.every((d) => d.inbound === 0 && d.outbound === 0);
 
-  const displayData = (data ?? []).map((d) => ({
-    ...d,
-    displayOutbound: Math.abs(d.outbound), // Chart all as positive curves to match aesthetic
-    net: d.inbound - d.outbound,
-  }));
+  const displayData = (data ?? []).map((d) => {
+    const inbound = Number(d.inbound) || 0;
+    const outbound = Number(d.outbound) || 0;
+    return {
+      ...d,
+      inbound,
+      outbound,
+      displayOutbound: Math.abs(outbound), // Chart all as positive curves to match aesthetic
+      net: inbound - outbound,
+    };
+  });
 
   // Calculate scales for background bars
   const maxVal = Math.max(
@@ -146,7 +152,7 @@ export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
             <YAxis
               {...CHART_Y_AXIS}
               domain={[yMin, yMax]}
-              width={64}
+              width={85}
               tickFormatter={(v) => (v === 0 ? "0" : formatNumber(v))}
             />
             <Tooltip content={<FlowTooltip />} cursor={false} />

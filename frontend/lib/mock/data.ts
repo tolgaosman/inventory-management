@@ -89,22 +89,22 @@ export const suppliers: Supplier[] = [
 // Near East Technology - Kullanıcılar
 // ---------------------------------------------------------------------------
 export const users: AppUser[] = [
-  { id: "48271", name: "Tolga Osman Falay", email: "tolgaosman@sirket.com", role: "yonetici", initials: "TO" },
-  { id: "63094", name: "Gizem Karabaşak", email: "gizem.karabasak@sirket.com", role: "yonetici", initials: "GK" },
+  { id: "48271", name: "Tolga Osman Falay", email: "tolgaosman@sirket.com", role: "admin", initials: "TO" },
+  { id: "63094", name: "Gizem Karabaşak", email: "gizem.karabasak@sirket.com", role: "admin", initials: "GK" },
   { id: "17856", name: "Mustafa Hacı", email: "mustafa.haci@sirket.com", role: "depo", initials: "MH" },
   { id: "39412", name: "Alara Soysan", email: "alara.soysan@sirket.com", role: "satinalma", initials: "AS" },
   { id: "82637", name: "Aliye Kavaz", email: "aliye.kavaz@sirket.com", role: "depo", initials: "AK" },
   { id: "54180", name: "Irmak Bozkurt", email: "irmak.bozkurt@sirket.com", role: "satinalma", initials: "IB" },
-  { id: "24680", name: "Kaan Muslu Çağa", email: "kaan.caga@sirket.com", role: "yonetici", initials: "KÇ" },
-  { id: "71503", name: "Arda İbrahim Şahin", email: "arda.sahin@sirket.com", role: "yonetici", initials: "AŞ" },
+  { id: "24680", name: "Kaan Muslu Çağa", email: "kaan.caga@sirket.com", role: "admin", initials: "KÇ" },
+  { id: "71503", name: "Arda İbrahim Şahin", email: "arda.sahin@sirket.com", role: "admin", initials: "AŞ" },
   { id: "20946", name: "Dehan Saycıoğlu", email: "dehan.saycioglu@sirket.com", role: "depo", initials: "DS" },
   { id: "95328", name: "Mertkan Kılıçbey Türemen", email: "mertkan.turemen@sirket.com", role: "satinalma", initials: "MT" },
-  { id: "46715", name: "Savaş Muhammed Muhtaroğlu", email: "savas.muhtaroglu@sirket.com", role: "yonetici", initials: "SM" },
+  { id: "46715", name: "Savaş Muhammed Muhtaroğlu", email: "savas.muhtaroglu@sirket.com", role: "admin", initials: "SM" },
   { id: "31849", name: "Berk Fenk", email: "berk.fenk@sirket.com", role: "depo", initials: "BF" },
-  { id: "89234", name: "Çiğdem Dürüst", email: "cigdem.durust@sirket.com", role: "yonetici", initials: "ÇD" },
+  { id: "89234", name: "Çiğdem Dürüst", email: "cigdem.durust@sirket.com", role: "admin", initials: "ÇD" },
 ];
 
-export const CURRENT_ROLES: Role[] = ["yonetici", "depo", "satinalma"];
+export const CURRENT_ROLES: Role[] = ["admin", "depo_yonetici", "satinalma_yonetici", "depo", "satinalma"];
 
 // ---------------------------------------------------------------------------
 // Near East Technology - Ürün Kataloğu

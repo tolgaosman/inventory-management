@@ -3,22 +3,30 @@
 import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Mail, ArrowLeft } from "lucide-react";
+import { Mail, ArrowLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { forgotPassword } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/client";
 import browserLogo from "@/assets/browserLogo.png";
 
 export default function ForgotPasswordPage() {
   const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const handleReset = (e: React.FormEvent) => {
+  const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    setError(null);
+    try {
+      await forgotPassword(email);
       setIsSent(true);
-    }, 800);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Bağlantı gönderilemedi, lütfen tekrar deneyin.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -51,7 +59,16 @@ export default function ForgotPasswordPage() {
         {/* Form */}
         {!isSent ? (
           <form onSubmit={handleReset} className="w-full space-y-4">
-            
+            {error ? (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-2xl bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300"
+              >
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            ) : null}
+
             {/* Email Input */}
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -61,6 +78,9 @@ export default function ForgotPasswordPage() {
                 type="email"
                 placeholder="E-posta adresi"
                 required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-2xl border-0 bg-slate-100/80 dark:bg-slate-900/80 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
               />
             </div>

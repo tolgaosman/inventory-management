@@ -62,7 +62,7 @@ export default function PanelPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
+        title="Gösterge Paneli"
         description="Şirket genelinde stok, satın alma ve depo özetini görün."
       />
 

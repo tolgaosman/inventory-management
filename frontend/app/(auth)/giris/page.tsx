@@ -4,22 +4,36 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { login } from "@/lib/api/auth";
+import { useAuth } from "@/lib/auth";
+import { ApiError } from "@/lib/api/client";
 import browserLogo from "@/assets/browserLogo.png";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { refresh } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    setError(null);
+    try {
+      await login(email, password);
+      // Pull the session into context before navigating, so the shell renders
+      // with the right permissions instead of flashing an empty sidebar.
+      await refresh();
       router.push("/panel");
-    }, 800);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Giriş yapılamadı, lütfen tekrar deneyin.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -48,6 +62,15 @@ export default function LoginPage() {
           Envanterinizi yönetin, stok hareketlerini takip edin ve tedarik zincirinizi tek bir noktadan kontrol edin.
         </p>
         <form onSubmit={handleLogin} className="w-full space-y-4">
+          {error ? (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-2xl bg-red-50 dark:bg-red-950/40 px-4 py-3 text-sm text-red-700 dark:text-red-300"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : null}
           
           {/* Email Input */}
           <div className="relative">
@@ -58,6 +81,9 @@ export default function LoginPage() {
               type="email"
               placeholder="E-posta"
               required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-2xl border-0 bg-slate-100/80 dark:bg-slate-900/80 py-3 pl-10 pr-4 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
             />
           </div>
@@ -71,6 +97,9 @@ export default function LoginPage() {
               type={showPassword ? "text" : "password"}
               placeholder="Şifre"
               required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-2xl border-0 bg-slate-100/80 dark:bg-slate-900/80 py-3 pl-10 pr-10 text-sm font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
             />
             <button

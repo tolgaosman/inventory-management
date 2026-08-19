@@ -14,7 +14,7 @@ import { useAsync } from "@/lib/hooks/use-async";
 import { listWarehouses, listSuppliers } from "@/lib/api/catalog";
 import { listProducts } from "@/lib/api/products";
 import { listMovements } from "@/lib/api/movements";
-import { isToday } from "@/lib/mock/dashboard";
+import { isToday } from "@/lib/format";
 import { formatNumber } from "@/lib/format";
 
 export function CombinedMovementPage() {

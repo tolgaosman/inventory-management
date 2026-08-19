@@ -3,36 +3,81 @@
 namespace App\Services;
 
 use App\Exceptions\ApiException;
-use App\Support\JsonStore;
+use App\Models\IdempotencyKey;
+use App\Models\Product;
+use App\Models\StockLevel;
+use App\Models\StockMovement;
+use App\Models\Warehouse;
+use App\Support\IdGenerator;
+use App\Support\Present;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Direct PHP port of frontend/lib/api/movements.ts's mutation functions.
- * Every write happens inside JsonStore::transaction so stock_levels and
- * stock_movements move together; idempotency keys are persisted (not an
- * in-memory Map like the frontend mock) so a retried request after a crash
- * still short-circuits to the original movement.
+ * Port of frontend/lib/api/movements.ts's mutation functions.
+ *
+ * Every write runs inside DB::transaction with the affected stock_levels rows
+ * held under lockForUpdate, and the sufficiency check now happens *inside* that
+ * lock. The JSON-backed version validated before taking the lock, so two
+ * concurrent çıkış requests could both pass the check and drive quantity
+ * negative; that race is gone.
  */
 class StockService
 {
-    public function __construct(private JsonStore $store)
+    /** Locks (creating if absent) the stock level for a product/warehouse pair. */
+    private function lockLevel(string $productId, string $warehouseId): StockLevel
     {
+        $level = StockLevel::query()
+            ->where('product_id', $productId)
+            ->where('warehouse_id', $warehouseId)
+            ->lockForUpdate()
+            ->first();
+
+        if ($level) {
+            return $level;
+        }
+
+        return StockLevel::query()->create([
+            'product_id' => $productId,
+            'warehouse_id' => $warehouseId,
+            'quantity' => 0,
+        ]);
     }
 
-    private function findLevelIndex(array $levels, string $productId, string $warehouseId): int|false
+    private function assertWarehouse(string $warehouseId): Warehouse
     {
-        return collect($levels)->search(fn ($s) => $s['productId'] === $productId && $s['warehouseId'] === $warehouseId);
+        $warehouse = Warehouse::query()->find($warehouseId);
+        if (! $warehouse) {
+            throw ApiException::notFound('Depo bulunamadı.');
+        }
+
+        return $warehouse;
     }
 
+    private function assertProduct(string $productId): Product
+    {
+        $product = Product::query()->find($productId);
+        if (! $product) {
+            throw ApiException::notFound('Ürün bulunamadı.');
+        }
+
+        return $product;
+    }
+
+    /**
+     * Returns the movement created by the original request when the same
+     * idempotency key is replayed, so a double-clicked submit never posts
+     * stock twice. Persisted in a table (not an in-memory map like the mock),
+     * so a retry after a restart still short-circuits.
+     */
     private function withIdempotency(?string $key, callable $create): array
     {
         if ($key) {
-            $keys = $this->store->read('idempotency_keys');
-            $existing = collect($keys)->firstWhere('key', $key);
+            $existing = IdempotencyKey::query()->where('key', $key)->first();
             if ($existing) {
-                $movement = collect($this->store->read('stock_movements'))->firstWhere('id', $existing['movementId']);
+                $movement = StockMovement::query()->find($existing->movement_id);
                 if ($movement) {
-                    return $movement;
+                    return Present::movement($movement);
                 }
             }
         }
@@ -40,12 +85,18 @@ class StockService
         $movement = $create();
 
         if ($key) {
-            $keys = $this->store->read('idempotency_keys');
-            $keys[] = ['key' => $key, 'movementId' => $movement['id']];
-            $this->store->write('idempotency_keys', $keys);
+            IdempotencyKey::query()->create(['key' => $key, 'movement_id' => $movement->id]);
         }
 
-        return $movement;
+        return Present::movement($movement);
+    }
+
+    private function recordMovement(array $attributes): StockMovement
+    {
+        return StockMovement::query()->create($attributes + [
+            'id' => IdGenerator::nextId('stock_movements', 'id', 'mv', 4),
+            'created_at' => Carbon::now(),
+        ]);
     }
 
     public function stockIn(array $input): array
@@ -53,48 +104,32 @@ class StockService
         if ($input['quantity'] <= 0) {
             throw ApiException::validation('Miktar sıfırdan büyük olmalı.');
         }
-        $product = collect($this->store->read('products'))->firstWhere('id', $input['productId']);
-        if (! $product) {
-            throw ApiException::notFound('Ürün bulunamadı.');
-        }
+        $this->assertProduct($input['productId']);
+        $this->assertWarehouse($input['warehouseId']);
 
-        return $this->store->transaction(function () use ($input) {
-            return $this->withIdempotency($input['idempotencyKey'] ?? null, function () use ($input) {
-                $levels = $this->store->read('stock_levels');
-                $index = $this->findLevelIndex($levels, $input['productId'], $input['warehouseId']);
-                $previousQuantity = $index !== false ? $levels[$index]['quantity'] : 0;
-                $newQuantity = $previousQuantity + $input['quantity'];
+        return DB::transaction(fn () => $this->withIdempotency($input['idempotencyKey'] ?? null, function () use ($input) {
+            $level = $this->lockLevel($input['productId'], $input['warehouseId']);
+            $previousQuantity = (int) $level->quantity;
+            $newQuantity = $previousQuantity + (int) $input['quantity'];
 
-                if ($index !== false) {
-                    $levels[$index]['quantity'] = $newQuantity;
-                } else {
-                    $levels[] = ['productId' => $input['productId'], 'warehouseId' => $input['warehouseId'], 'quantity' => $newQuantity];
-                }
-                $this->store->write('stock_levels', $levels);
+            $level->quantity = $newQuantity;
+            $level->save();
 
-                $movements = $this->store->read('stock_movements');
-                $movement = [
-                    'id' => $this->store->nextId($movements, 'mv'),
-                    'type' => 'giris',
-                    'productId' => $input['productId'],
-                    'warehouseId' => $input['warehouseId'],
-                    'targetWarehouseId' => null,
-                    'quantity' => $input['quantity'],
-                    'previousQuantity' => $previousQuantity,
-                    'newQuantity' => $newQuantity,
-                    'reason' => 'satin_alma',
-                    'supplierId' => $input['supplierId'] ?? null,
-                    'purchaseOrderId' => $input['purchaseOrderId'] ?? null,
-                    'userId' => $input['userId'],
-                    'note' => $input['note'] ?? null,
-                    'createdAt' => Carbon::now()->toIso8601String(),
-                ];
-                array_unshift($movements, $movement);
-                $this->store->write('stock_movements', $movements);
-
-                return $movement;
-            });
-        });
+            return $this->recordMovement([
+                'type' => 'giris',
+                'product_id' => $input['productId'],
+                'warehouse_id' => $input['warehouseId'],
+                'target_warehouse_id' => null,
+                'quantity' => (int) $input['quantity'],
+                'previous_quantity' => $previousQuantity,
+                'new_quantity' => $newQuantity,
+                'reason' => $input['reason'] ?? 'satin_alma',
+                'supplier_id' => $input['supplierId'] ?? null,
+                'purchase_order_id' => $input['purchaseOrderId'] ?? null,
+                'user_id' => $input['userId'],
+                'note' => $input['note'] ?? null,
+            ]);
+        }));
     }
 
     public function stockOut(array $input): array
@@ -102,50 +137,37 @@ class StockService
         if ($input['quantity'] <= 0) {
             throw ApiException::validation('Miktar sıfırdan büyük olmalı.');
         }
-        $product = collect($this->store->read('products'))->firstWhere('id', $input['productId']);
-        if (! $product) {
-            throw ApiException::notFound('Ürün bulunamadı.');
-        }
+        $this->assertProduct($input['productId']);
+        $this->assertWarehouse($input['warehouseId']);
 
-        $levels = $this->store->read('stock_levels');
-        $index = $this->findLevelIndex($levels, $input['productId'], $input['warehouseId']);
-        $currentQuantity = $index !== false ? $levels[$index]['quantity'] : 0;
-        if ($input['quantity'] > $currentQuantity) {
-            throw ApiException::validation("Yetersiz stok: bu depoda {$currentQuantity} adet var, {$input['quantity']} adet çıkış istendi.");
-        }
+        return DB::transaction(fn () => $this->withIdempotency($input['idempotencyKey'] ?? null, function () use ($input) {
+            $level = $this->lockLevel($input['productId'], $input['warehouseId']);
+            $previousQuantity = (int) $level->quantity;
 
-        return $this->store->transaction(function () use ($input) {
-            return $this->withIdempotency($input['idempotencyKey'] ?? null, function () use ($input) {
-                $levels = $this->store->read('stock_levels');
-                $index = $this->findLevelIndex($levels, $input['productId'], $input['warehouseId']);
-                $previousQuantity = $levels[$index]['quantity'];
-                $newQuantity = $previousQuantity - $input['quantity'];
-                $levels[$index]['quantity'] = $newQuantity;
-                $this->store->write('stock_levels', $levels);
+            // Checked under the row lock, so a concurrent çıkış cannot slip past.
+            if ((int) $input['quantity'] > $previousQuantity) {
+                throw ApiException::validation("Yetersiz stok: bu depoda {$previousQuantity} adet var, {$input['quantity']} adet çıkış istendi.");
+            }
 
-                $movements = $this->store->read('stock_movements');
-                $movement = [
-                    'id' => $this->store->nextId($movements, 'mv'),
-                    'type' => 'cikis',
-                    'productId' => $input['productId'],
-                    'warehouseId' => $input['warehouseId'],
-                    'targetWarehouseId' => null,
-                    'quantity' => $input['quantity'],
-                    'previousQuantity' => $previousQuantity,
-                    'newQuantity' => $newQuantity,
-                    'reason' => $input['reason'],
-                    'supplierId' => null,
-                    'purchaseOrderId' => null,
-                    'userId' => $input['userId'],
-                    'note' => $input['note'] ?? null,
-                    'createdAt' => Carbon::now()->toIso8601String(),
-                ];
-                array_unshift($movements, $movement);
-                $this->store->write('stock_movements', $movements);
+            $newQuantity = $previousQuantity - (int) $input['quantity'];
+            $level->quantity = $newQuantity;
+            $level->save();
 
-                return $movement;
-            });
-        });
+            return $this->recordMovement([
+                'type' => 'cikis',
+                'product_id' => $input['productId'],
+                'warehouse_id' => $input['warehouseId'],
+                'target_warehouse_id' => null,
+                'quantity' => (int) $input['quantity'],
+                'previous_quantity' => $previousQuantity,
+                'new_quantity' => $newQuantity,
+                'reason' => $input['reason'],
+                'supplier_id' => null,
+                'purchase_order_id' => null,
+                'user_id' => $input['userId'],
+                'note' => $input['note'] ?? null,
+            ]);
+        }));
     }
 
     public function transfer(array $input): array
@@ -157,65 +179,60 @@ class StockService
             throw ApiException::validation('Miktar sıfırdan büyük olmalı.');
         }
 
-        $product = collect($this->store->read('products'))->firstWhere('id', $input['productId']);
-        if ($product && $product['status'] === 'pasif') {
-            throw ApiException::validation("\"{$product['name']}\" pasif durumda olduğu için stok transferi yapılamaz.");
+        $product = $this->assertProduct($input['productId']);
+        if ($product->status === 'pasif') {
+            throw ApiException::validation("\"{$product->name}\" pasif durumda olduğu için stok transferi yapılamaz.");
         }
+        $source = $this->assertWarehouse($input['sourceWarehouseId']);
+        $this->assertWarehouse($input['targetWarehouseId']);
 
-        $levels = $this->store->read('stock_levels');
-        $sourceIndex = $this->findLevelIndex($levels, $input['productId'], $input['sourceWarehouseId']);
-        $currentQuantity = $sourceIndex !== false ? $levels[$sourceIndex]['quantity'] : 0;
-        if ($input['quantity'] > $currentQuantity) {
-            $sourceName = collect($this->store->read('warehouses'))->firstWhere('id', $input['sourceWarehouseId'])['name'] ?? '-';
-            throw ApiException::validation("Yetersiz stok: {$sourceName} deposunda {$currentQuantity} adet var, {$input['quantity']} adet transfer istendi.");
-        }
+        return DB::transaction(fn () => $this->withIdempotency($input['idempotencyKey'] ?? null, function () use ($input, $source) {
+            // Lock in a stable order so two opposing transfers can't deadlock.
+            [$firstId, $secondId] = $input['sourceWarehouseId'] < $input['targetWarehouseId']
+                ? [$input['sourceWarehouseId'], $input['targetWarehouseId']]
+                : [$input['targetWarehouseId'], $input['sourceWarehouseId']];
+            $this->lockLevel($input['productId'], $firstId);
+            $this->lockLevel($input['productId'], $secondId);
 
-        return $this->store->transaction(function () use ($input) {
-            return $this->withIdempotency($input['idempotencyKey'] ?? null, function () use ($input) {
-                $levels = $this->store->read('stock_levels');
-                $sourceIndex = $this->findLevelIndex($levels, $input['productId'], $input['sourceWarehouseId']);
-                $previousQuantity = $levels[$sourceIndex]['quantity'];
-                $newQuantity = $previousQuantity - $input['quantity'];
-                $levels[$sourceIndex]['quantity'] = $newQuantity;
+            $sourceLevel = $this->lockLevel($input['productId'], $input['sourceWarehouseId']);
+            $previousQuantity = (int) $sourceLevel->quantity;
 
-                $targetIndex = $this->findLevelIndex($levels, $input['productId'], $input['targetWarehouseId']);
-                if ($targetIndex !== false) {
-                    $levels[$targetIndex]['quantity'] += $input['quantity'];
-                } else {
-                    $levels[] = ['productId' => $input['productId'], 'warehouseId' => $input['targetWarehouseId'], 'quantity' => $input['quantity']];
-                }
-                $this->store->write('stock_levels', $levels);
+            if ((int) $input['quantity'] > $previousQuantity) {
+                throw ApiException::validation("Yetersiz stok: {$source->name} deposunda {$previousQuantity} adet var, {$input['quantity']} adet transfer istendi.");
+            }
 
-                $movements = $this->store->read('stock_movements');
-                $movement = [
-                    'id' => $this->store->nextId($movements, 'mv'),
-                    'type' => 'transfer',
-                    'productId' => $input['productId'],
-                    'warehouseId' => $input['sourceWarehouseId'],
-                    'targetWarehouseId' => $input['targetWarehouseId'],
-                    'quantity' => $input['quantity'],
-                    'previousQuantity' => $previousQuantity,
-                    'newQuantity' => $newQuantity,
-                    'reason' => 'transfer',
-                    'supplierId' => null,
-                    'purchaseOrderId' => null,
-                    'userId' => $input['userId'],
-                    'note' => $input['note'] ?? null,
-                    'createdAt' => Carbon::now()->toIso8601String(),
-                ];
-                array_unshift($movements, $movement);
-                $this->store->write('stock_movements', $movements);
+            $newQuantity = $previousQuantity - (int) $input['quantity'];
+            $sourceLevel->quantity = $newQuantity;
+            $sourceLevel->save();
 
-                return $movement;
-            });
-        });
+            $targetLevel = $this->lockLevel($input['productId'], $input['targetWarehouseId']);
+            $targetLevel->quantity = (int) $targetLevel->quantity + (int) $input['quantity'];
+            $targetLevel->save();
+
+            // One row records the whole transfer (source in warehouse_id,
+            // destination in target_warehouse_id) — matching the frontend.
+            return $this->recordMovement([
+                'type' => 'transfer',
+                'product_id' => $input['productId'],
+                'warehouse_id' => $input['sourceWarehouseId'],
+                'target_warehouse_id' => $input['targetWarehouseId'],
+                'quantity' => (int) $input['quantity'],
+                'previous_quantity' => $previousQuantity,
+                'new_quantity' => $newQuantity,
+                'reason' => 'transfer',
+                'supplier_id' => null,
+                'purchase_order_id' => null,
+                'user_id' => $input['userId'],
+                'note' => $input['note'] ?? null,
+            ]);
+        }));
     }
 
     public function quantity(string $productId, string $warehouseId): int
     {
-        $levels = $this->store->read('stock_levels');
-        $index = $this->findLevelIndex($levels, $productId, $warehouseId);
-
-        return $index !== false ? $levels[$index]['quantity'] : 0;
+        return (int) (StockLevel::query()
+            ->where('product_id', $productId)
+            ->where('warehouse_id', $warehouseId)
+            ->value('quantity') ?? 0);
     }
 }

@@ -145,7 +145,7 @@ export function SuppliersClient() {
   async function handleExport(type: "excel" | "pdf") {
     await exportGuard.guard(async () => {
       try {
-        const report = buildReportData("bu-yil", `${name} (${role})`, currency, rates?.[currency]);
+        const report = await buildReportData("bu-yil", `${name} (${role})`, currency, rates?.[currency]);
         const date = new Date();
         if (type === "excel") {
           downloadBlob(buildReportExcel(report, ["suppliers"]), reportFilename("xlsx", date, "tedarikci-raporu"));

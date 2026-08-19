@@ -42,6 +42,8 @@ import { TIMEZONE_OPTIONS } from "@/lib/constants";
 import { relativeTimeFromNow } from "@/lib/format";
 import { TINTS, type TintName } from "@/lib/tints";
 import { LANGUAGE_OPTIONS } from "@/lib/translate";
+import { changePassword } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/client";
 import type { Role } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -201,7 +203,13 @@ const CURRENCY_OPTIONS: { value: CurrencyCode; label: string; symbol: string; ti
   { value: "gbp", label: "İngiliz Sterlini", symbol: "£", tint: "pink" },
 ];
 
-const ROLE_TINTS: Record<Role, TintName> = { yonetici: "blue", satinalma: "violet", depo: "amber" };
+const ROLE_TINTS: Record<Role, TintName> = {
+  admin: "blue",
+  depo_yonetici: "teal",
+  satinalma_yonetici: "indigo",
+  satinalma: "violet",
+  depo: "amber",
+};
 
 const NOTIFICATION_ROWS: {
   id: "notifyStock" | "notifyOrder" | "notifySystem";
@@ -294,9 +302,15 @@ export default function SettingsPage() {
     }
 
     securityGuard.guard(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      toast.success("Parola güncellendi.", { description: "Yeni parolanız kaydedildi." });
-      setNewPassword("");
+      try {
+        await changePassword({ currentPassword: current, newPassword: next, newPasswordConfirmation: confirm });
+        toast.success("Parola güncellendi.", { description: "Yeni parolanız kaydedildi." });
+        setNewPassword("");
+      } catch (err) {
+        toast.error("Parola güncellenemedi", {
+          description: err instanceof ApiError ? err.message : "Beklenmeyen bir hata oluştu.",
+        });
+      }
     });
   }
 
@@ -356,20 +370,13 @@ export default function SettingsPage() {
             </div>
           </SectionCard>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              toast.success("Parolanız başarıyla güncellendi.");
-              e.currentTarget.reset();
-            }}
-            className="h-full"
-          >
+          <form action={handleSecuritySave} className="h-full">
             <SectionCard
               icon={Shield}
               tint="plum"
               title="Güvenlik & Parola"
               description="Hesap şifrenizi ve güvenlik tercihlerinizi güncelleyin."
-              footer={<SubmitButton pending={false} size="sm">Parolayı Güncelle</SubmitButton>}
+              footer={<SubmitButton pending={securityGuard.pending} size="sm">Parolayı Güncelle</SubmitButton>}
             >
               <div className="space-y-4">
                 <div className="space-y-1.5">

@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Auth\JsonUser;
 use App\Exceptions\ApiException;
 use Closure;
 use Illuminate\Http\Request;
@@ -16,8 +15,7 @@ class EnsurePermission
 {
     public function handle(Request $request, Closure $next, string $permission)
     {
-        /** @var JsonUser|null $user */
-        $user = $request->user('api-token');
+        $user = $request->user();
 
         if (! $user) {
             throw ApiException::forbidden('Oturum bulunamadı, lütfen giriş yapın.');

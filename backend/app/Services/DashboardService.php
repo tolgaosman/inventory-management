@@ -2,104 +2,108 @@
 
 namespace App\Services;
 
-use App\Support\InventoryCalc;
-use App\Support\JsonStore;
+use App\Models\Category;
+use App\Models\Product;
+use App\Models\PurchaseOrder;
+use App\Models\StockMovement;
+use App\Models\Supplier;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Support\Present;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
-/** Direct PHP port of frontend/lib/mock/dashboard.ts. */
+/** Direct port of frontend/lib/mock/dashboard.ts. */
 class DashboardService
 {
     private const MONTH_LABELS = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
     public const MONTHS_BY_RANGE = ['bu-ay' => 1, 'son-3-ay' => 3, 'son-6-ay' => 6, 'bu-yil' => 12];
 
-    public function __construct(private JsonStore $store)
-    {
-    }
-
-    private function isToday(string $iso): bool
-    {
-        return Carbon::parse($iso)->isToday();
-    }
-
     private function rangeStart(int $months): Carbon
     {
         return Carbon::now()->startOfMonth()->subMonths($months - 1);
     }
 
-    private function movementMatchesWarehouse(array $m, ?string $warehouseId): bool
+    /** Transfers count for both the source and the destination warehouse. */
+    private function scopeToWarehouse($query, ?string $warehouseId)
     {
-        return ! $warehouseId || $m['warehouseId'] === $warehouseId || $m['targetWarehouseId'] === $warehouseId;
+        return $query->when($warehouseId, fn ($q) => $q->where(
+            fn ($inner) => $inner->where('warehouse_id', $warehouseId)->orWhere('target_warehouse_id', $warehouseId)
+        ));
     }
 
-    public function criticalProducts(array $products, array $totals): array
+    /** @return array<string,int> */
+    public function totalsByProduct(): array
     {
-        $active = array_values(array_filter($products, fn ($p) => $p['status'] === 'aktif'));
+        return DB::table('stock_levels')
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as units'))
+            ->pluck('units', 'product_id')
+            ->map(fn ($v) => (int) $v)
+            ->all();
+    }
 
-        $withStock = array_map(fn ($p) => $p + ['totalStock' => $totals[$p['id']] ?? 0], $active);
+    /** Active products whose total stock has fallen below their minimum. */
+    public function criticalProducts(?array $totals = null): array
+    {
+        $totals ??= $this->totalsByProduct();
 
-        return array_values(array_filter($withStock, fn ($p) => InventoryCalc::isCritical($p, $p['totalStock'])));
+        return Product::query()->where('status', 'aktif')->get()
+            ->map(fn ($p) => Present::product($p) + ['totalStock' => $totals[$p->id] ?? 0])
+            ->filter(fn ($p) => $p['totalStock'] < $p['minStock'])
+            ->values()
+            ->all();
     }
 
     public function kpis(int $months, ?string $warehouseId): array
     {
-        $products = $this->store->read('products');
-        $warehouses = $this->store->read('warehouses');
-        $movements = $this->store->read('stock_movements');
-        $stockLevels = $this->store->read('stock_levels');
-        $orders = $this->store->read('purchase_orders');
-        $users = $this->store->read('users');
-        $suppliers = $this->store->read('suppliers');
-        $categories = $this->store->read('categories');
-        $totals = InventoryCalc::totalsByProduct($stockLevels);
+        $totals = $this->totalsByProduct();
 
-        $scopedMovements = array_values(array_filter($movements, fn ($m) => $this->movementMatchesWarehouse($m, $warehouseId)));
-        $scopedLevels = $warehouseId ? array_values(array_filter($stockLevels, fn ($s) => $s['warehouseId'] === $warehouseId)) : $stockLevels;
+        $todayFlow = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+            ->whereBetween('created_at', [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()])
+            ->groupBy('type')
+            ->select('type', DB::raw('COALESCE(SUM(quantity), 0) as qty'))
+            ->pluck('qty', 'type');
 
-        $todayMovements = array_values(array_filter($scopedMovements, fn ($m) => $this->isToday($m['createdAt'])));
-        $todayIn = array_sum(array_map(fn ($m) => $m['quantity'], array_filter($todayMovements, fn ($m) => $m['type'] === 'giris')));
-        $todayOut = array_sum(array_map(fn ($m) => $m['quantity'], array_filter($todayMovements, fn ($m) => $m['type'] === 'cikis')));
+        $onHandUnits = (int) DB::table('stock_levels')
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->sum('quantity');
 
         $since = $this->rangeStart($months);
-        $scopedOrders = array_values(array_filter($orders, fn ($po) => Carbon::parse($po['createdAt'])->gte($since)));
+        // Purchase orders have no warehouse dimension in the UI's filter model,
+        // so they're scoped by date only.
+        $scopedOrders = PurchaseOrder::query()->with('items')->where('created_at', '>=', $since)->get();
 
-        $openOrders = array_filter($scopedOrders, fn ($po) => in_array($po['status'], ['ordered', 'partially_received'], true));
-        $pendingDeliveries = count(array_filter($scopedOrders, fn ($po) => $po['status'] === 'partially_received'));
-        $purchaseTotalValue = array_sum(array_map(
-            fn ($po) => array_sum(array_map(fn ($i) => $i['quantity'] * $i['unitPrice'], $po['items'])),
-            array_filter($scopedOrders, fn ($po) => $po['status'] !== 'cancelled' && $po['status'] !== 'draft')
-        ));
-        $cancelledOrders = count(array_filter($scopedOrders, fn ($po) => $po['status'] === 'cancelled'));
+        $openOrders = $scopedOrders->filter(fn ($po) => in_array($po->status, ['ordered', 'partially_received'], true));
+        $purchaseTotalValue = $scopedOrders
+            ->filter(fn ($po) => ! in_array($po->status, ['cancelled', 'draft', 'pending_approval'], true))
+            ->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity * (float) $i->unit_price));
 
-        $onHandUnits = array_sum(array_column($scopedLevels, 'quantity'));
-        $incomingUnits = array_sum(array_map(
-            fn ($po) => array_sum(array_map(fn ($i) => $i['quantity'] - $i['receivedQuantity'], $po['items'])),
-            $openOrders
-        ));
+        $incomingUnits = $openOrders->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity - (int) $i->received_quantity));
 
         return [
-            'totalProducts' => count($products),
-            'totalWarehouses' => $warehouseId ? 1 : count($warehouses),
-            'criticalStockCount' => count($this->criticalProducts($products, $totals)),
-            'todayIn' => $todayIn,
-            'todayOut' => $todayOut,
-            'openPurchaseOrders' => count($openOrders),
-            'pendingDeliveries' => $pendingDeliveries,
-            'purchaseTotalValue' => $purchaseTotalValue,
-            'cancelledOrders' => $cancelledOrders,
-            'totalPurchaseOrders' => count($scopedOrders),
+            'totalProducts' => Product::query()->count(),
+            'totalWarehouses' => $warehouseId ? 1 : Warehouse::query()->count(),
+            'criticalStockCount' => count($this->criticalProducts($totals)),
+            'todayIn' => (int) ($todayFlow['giris'] ?? 0),
+            'todayOut' => (int) ($todayFlow['cikis'] ?? 0),
+            'openPurchaseOrders' => $openOrders->count(),
+            'pendingDeliveries' => $scopedOrders->where('status', 'partially_received')->count(),
+            'purchaseTotalValue' => (float) $purchaseTotalValue,
+            'cancelledOrders' => $scopedOrders->where('status', 'cancelled')->count(),
+            'totalPurchaseOrders' => $scopedOrders->count(),
             'onHandUnits' => $onHandUnits,
-            'incomingUnits' => $incomingUnits,
-            'totalUsers' => count($users),
-            'totalSuppliers' => count($suppliers),
-            'categoryCount' => count($categories),
-            'productVariantCount' => count($products),
+            'incomingUnits' => (int) $incomingUnits,
+            'totalUsers' => User::query()->count(),
+            'totalSuppliers' => Supplier::query()->count(),
+            'categoryCount' => Category::query()->count(),
+            'productVariantCount' => Product::query()->count(),
         ];
     }
 
     public function monthlyFlow(int $months, ?string $warehouseId): array
     {
-        $movements = $this->store->read('stock_movements');
         $now = Carbon::now();
         $buckets = [];
         $order = [];
@@ -111,20 +115,21 @@ class DashboardService
             $buckets[$key] = ['month' => self::MONTH_LABELS[$d->month - 1], 'inbound' => 0, 'outbound' => 0];
         }
 
+        $movements = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+            ->where('created_at', '>=', $now->copy()->startOfMonth()->subMonths($months - 1))
+            ->whereIn('type', ['giris', 'cikis'])
+            ->get(['type', 'quantity', 'created_at']);
+
+        // Transfers are excluded from both series — they move stock, not volume.
         foreach ($movements as $m) {
-            if (! $this->movementMatchesWarehouse($m, $warehouseId)) {
-                continue;
-            }
-            $d = Carbon::parse($m['createdAt']);
-            $key = $d->year.'-'.$d->month;
+            $key = $m->created_at->year.'-'.$m->created_at->month;
             if (! isset($buckets[$key])) {
                 continue;
             }
-            if ($m['type'] === 'giris') {
-                $buckets[$key]['inbound'] += $m['quantity'];
-            }
-            if ($m['type'] === 'cikis') {
-                $buckets[$key]['outbound'] += $m['quantity'];
+            if ($m->type === 'giris') {
+                $buckets[$key]['inbound'] += (int) $m->quantity;
+            } else {
+                $buckets[$key]['outbound'] += (int) $m->quantity;
             }
         }
 
@@ -133,112 +138,98 @@ class DashboardService
 
     public function categoryShares(?string $warehouseId): array
     {
-        $categories = $this->store->read('categories');
-        $products = $this->store->read('products');
-        $stockLevels = $this->store->read('stock_levels');
-        $totals = InventoryCalc::totalsByProduct($stockLevels);
+        $categories = Category::query()->get();
+        $productsByCategory = Product::query()->get(['id', 'category_id'])->groupBy('category_id');
 
-        $topLevel = array_values(array_filter($categories, fn ($c) => $c['parentId'] === null));
+        $unitsByProduct = DB::table('stock_levels')
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as units'))
+            ->pluck('units', 'product_id');
 
-        $shares = array_map(function ($top) use ($categories, $products, $stockLevels, $warehouseId, $totals) {
-            $descendantIds = array_merge([$top['id']], array_column(array_filter($categories, fn ($c) => $c['parentId'] === $top['id']), 'id'));
-            $categoryProducts = array_values(array_filter($products, fn ($p) => in_array($p['categoryId'], $descendantIds, true)));
-            $productIds = array_column($categoryProducts, 'id');
+        $shares = $categories->filter(fn ($c) => $c->parent_id === null)->map(function ($top) use ($categories, $productsByCategory, $unitsByProduct) {
+            // The tree is two levels deep, so a top-level category plus its
+            // direct children covers everything beneath it.
+            $ids = collect([$top->id])->merge(
+                $categories->filter(fn ($c) => $c->parent_id === $top->id)->pluck('id')
+            );
 
-            if ($warehouseId) {
-                $units = array_sum(array_map(
-                    fn ($s) => $s['quantity'],
-                    array_filter($stockLevels, fn ($s) => $s['warehouseId'] === $warehouseId && in_array($s['productId'], $productIds, true))
-                ));
-            } else {
-                $units = array_sum(array_map(fn ($p) => $totals[$p['id']] ?? 0, $categoryProducts));
-            }
+            $units = $ids->sum(fn ($id) => $productsByCategory->get($id, collect())
+                ->sum(fn ($p) => (int) ($unitsByProduct[$p->id] ?? 0)));
 
-            return ['categoryId' => $top['id'], 'name' => $top['name'], 'units' => $units];
-        }, $topLevel);
-
-        usort($shares, fn ($a, $b) => $b['units'] <=> $a['units']);
+            return ['categoryId' => $top->id, 'name' => $top->name, 'units' => $units];
+        })->sortByDesc('units')->values()->all();
 
         return $shares;
     }
 
     public function warehouseStockTotals(?string $warehouseId): array
     {
-        $warehouses = $this->store->read('warehouses');
-        $stockLevels = $this->store->read('stock_levels');
-        $scoped = $warehouseId ? array_values(array_filter($warehouses, fn ($w) => $w['id'] === $warehouseId)) : $warehouses;
+        $units = DB::table('stock_levels')
+            ->groupBy('warehouse_id')
+            ->select('warehouse_id', DB::raw('COALESCE(SUM(quantity), 0) as units'))
+            ->pluck('units', 'warehouse_id');
 
-        $rows = array_map(fn ($wh) => [
-            'warehouseId' => $wh['id'],
-            'name' => $wh['name'],
-            'units' => array_sum(array_column(array_filter($stockLevels, fn ($s) => $s['warehouseId'] === $wh['id']), 'quantity')),
-            'capacity' => $wh['capacity'],
-        ], $scoped);
-
-        usort($rows, fn ($a, $b) => $b['units'] <=> $a['units']);
-
-        return $rows;
+        return Warehouse::query()
+            ->when($warehouseId, fn ($q) => $q->whereKey($warehouseId))
+            ->get()
+            ->map(fn ($w) => [
+                'warehouseId' => $w->id,
+                'name' => $w->name,
+                'units' => (int) ($units[$w->id] ?? 0),
+                'capacity' => (int) $w->capacity,
+            ])
+            ->sortByDesc('units')
+            ->values()
+            ->all();
     }
 
     public function recentMovements(int $limit, ?string $warehouseId): array
     {
-        $movements = $this->store->read('stock_movements');
-        $products = collect($this->store->read('products'))->keyBy('id');
-        $warehouses = collect($this->store->read('warehouses'))->keyBy('id');
-        $users = collect($this->store->read('users'))->keyBy('id');
+        $movements = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+            ->with(['product', 'warehouse', 'targetWarehouse', 'user'])
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
 
-        $rows = array_values(array_filter($movements, fn ($m) => $this->movementMatchesWarehouse($m, $warehouseId)));
-        $rows = array_slice($rows, 0, $limit);
-
-        return array_map(function ($m) use ($products, $warehouses, $users) {
-            $p = $products->get($m['productId']);
-            $w = $warehouses->get($m['warehouseId']);
-            $tw = $m['targetWarehouseId'] ? $warehouses->get($m['targetWarehouseId']) : null;
-            $u = $users->get($m['userId']);
-
-            return $m + [
-                'productName' => $p['name'] ?? 'Bilinmeyen ürün',
-                'productImageUrl' => $p['imageUrl'] ?? null,
-                'warehouseName' => $w['name'] ?? 'Bilinmeyen depo',
-                'targetWarehouseName' => $tw['name'] ?? null,
-                'userName' => $u['name'] ?? 'Bilinmeyen kullanıcı',
-            ];
-        }, $rows);
+        return $movements->map(fn ($m) => Present::movement($m) + [
+            'productName' => $m->product->name ?? 'Bilinmeyen ürün',
+            'productImageUrl' => $m->product->image_url ?? null,
+            'warehouseName' => $m->warehouse->name ?? 'Bilinmeyen depo',
+            'targetWarehouseName' => $m->targetWarehouse->name ?? null,
+            'userName' => $m->user->name ?? 'Bilinmeyen kullanıcı',
+        ])->all();
     }
 
     public function topMovers(int $limit, ?string $warehouseId): array
     {
-        $movements = $this->store->read('stock_movements');
-        $products = collect($this->store->read('products'))->keyBy('id');
+        $aggregates = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+            ->groupBy('product_id')
+            ->select([
+                'product_id',
+                DB::raw('COUNT(*) as movement_count'),
+                DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'),
+            ])
+            ->orderByDesc('total_quantity')
+            ->limit($limit)
+            ->get();
 
-        $byProduct = [];
-        foreach ($movements as $m) {
-            if (! $this->movementMatchesWarehouse($m, $warehouseId)) {
-                continue;
-            }
-            $byProduct[$m['productId']] ??= ['count' => 0, 'qty' => 0];
-            $byProduct[$m['productId']]['count']++;
-            $byProduct[$m['productId']]['qty'] += $m['quantity'];
-        }
+        $products = Product::query()->whereIn('id', $aggregates->pluck('product_id'))->get()->keyBy('id');
 
-        $rows = [];
-        foreach ($byProduct as $productId => $v) {
-            $p = $products->get($productId);
+        return $aggregates->map(function ($row) use ($products) {
+            $p = $products->get($row->product_id);
             if (! $p) {
-                continue;
+                return null;
             }
-            $rows[] = [
-                'productId' => $productId,
-                'name' => $p['name'],
-                'sku' => $p['sku'],
-                'movementCount' => $v['count'],
-                'totalQuantity' => $v['qty'],
-                'imageUrl' => $p['imageUrl'] ?? null,
+
+            return [
+                'productId' => $row->product_id,
+                'name' => $p->name,
+                'sku' => $p->sku,
+                'movementCount' => (int) $row->movement_count,
+                'totalQuantity' => (int) $row->total_quantity,
+                'imageUrl' => $p->image_url,
             ];
-        }
-
-        usort($rows, fn ($a, $b) => $b['totalQuantity'] <=> $a['totalQuantity']);
-
-        return array_slice($rows, 0, $limit);
+        })->filter()->values()->all();
     }
 }

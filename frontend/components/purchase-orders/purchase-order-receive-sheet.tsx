@@ -19,7 +19,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useChangedSince } from "@/lib/hooks/use-reset-on-change";
 import { useAuth } from "@/lib/auth";
-import { receivePurchaseOrder } from "@/lib/api/purchase-orders";
+import { receivePurchaseOrder, uploadPurchaseOrderInvoice } from "@/lib/api/purchase-orders";
 import { ApiError } from "@/lib/api/client";
 import { formatNumber } from "@/lib/format";
 import type { getPurchaseOrder } from "@/lib/api/purchase-orders";
@@ -45,12 +45,14 @@ export function PurchaseOrderReceiveSheet({
   const { userId } = useAuth();
   const { pending, guard } = useSubmitGuard();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
 
   const pendingItems = (order?.items ?? []).filter((item) => item.receivedQuantity < item.quantity);
 
   // Reset the entered quantities whenever the sheet (re)opens for an order.
   if (useChangedSince(open ? (order?.id ?? "opening") : "closed")) {
     setQuantities({});
+    setInvoiceFile(null);
   }
 
   function setQuantity(productId: string, remaining: number, raw: string) {
@@ -72,6 +74,15 @@ export function PurchaseOrderReceiveSheet({
 
     await guard(async (idempotencyKey) => {
       try {
+        if (!order.invoiceFilePath && !invoiceFile) {
+          toast.error("Fatura eksik", { description: "Teslim alma işlemi için fatura (PDF veya resim) yüklemelisiniz." });
+          return;
+        }
+
+        if (invoiceFile) {
+          await uploadPurchaseOrderInvoice(order.id, invoiceFile);
+        }
+
         await receivePurchaseOrder(order.id, quantities, { userId, idempotencyKey });
         toast.success("Teslimat kaydedildi.", {
           description: `${formatNumber(total)} adet teslim alındı, stok güncellendi.`,
@@ -145,6 +156,32 @@ export function PurchaseOrderReceiveSheet({
               <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2.5">
                 <span className="text-sm font-medium text-muted-foreground">Şimdi teslim alınacak toplam</span>
                 <span className="text-sm font-semibold tabular-nums text-foreground">{formatNumber(total)}</span>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="invoice-file" className="font-semibold">Fatura Belgesi (Zorunlu) {order?.invoiceFilePath ? "- Yüklendi" : ""}</Label>
+                {!order?.invoiceFilePath && (
+                  <Input
+                    id="invoice-file"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+                    required
+                  />
+                )}
+                {order?.invoiceFilePath && (
+                  <div className="text-sm text-muted-foreground">
+                    Bu siparişe daha önce bir fatura yüklenmiş. Yeni bir fatura yüklemek isterseniz aşağıdan seçebilirsiniz (İsteğe bağlı).
+                  </div>
+                )}
+                {order?.invoiceFilePath && (
+                  <Input
+                    id="invoice-file-optional"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+                  />
+                )}
               </div>
             </>
           )}

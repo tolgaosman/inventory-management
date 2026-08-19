@@ -1,3 +1,9 @@
+// xlsx-js-style (not plain xlsx) is required here for cell-level styling
+// (colors/borders/fonts below) — the vanilla SheetJS Community Edition drops
+// styles on write. Safe to keep despite carrying an unpatched CVE-affected
+// parser: this file only ever writes data the app generated itself, it never
+// parses untrusted input. User-uploaded files are parsed in
+// product-import-modal.tsx, which uses the patched `xlsx` package instead.
 import * as XLSX from "xlsx-js-style";
 import type { ReportData } from "./report-data";
 import { CURRENCY_SYMBOLS, matchSectionId } from "./report-data";

@@ -1,9 +1,11 @@
 import type { MovementReason, MovementType, ProductStatus, PurchaseOrderStatus, Role } from "./types";
 
 export const ROLE_LABELS: Record<Role, string> = {
+  admin: "Admin",
+  depo_yonetici: "Depo Müdürü",
+  satinalma_yonetici: "Satın Alma Müdürü",
   depo: "Depo Personeli",
   satinalma: "Satın Alma Personeli",
-  yonetici: "Yönetici",
 };
 
 export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {

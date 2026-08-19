@@ -77,7 +77,7 @@ const DEFAULTS: PersistedSettings = {
   notifications: DEFAULT_NOTIFICATIONS,
   timezone: "europe-istanbul",
   language: SOURCE_LANGUAGE,
-  role: "yonetici",
+  role: "admin",
   showKurus: false,
   defaultRange: "son-6-ay",
 };

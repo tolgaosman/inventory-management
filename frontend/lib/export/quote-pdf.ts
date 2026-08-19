@@ -2,6 +2,7 @@
 // template: logo + big title, a two-column meta block, a single priced item
 // table (padded out with blank rows so it reads as a form, not a report), a
 // subtotal/VAT/grand-total box, notes & terms, and two signature lines.
+import type { RowInput } from "jspdf-autotable";
 import { formatCurrency, formatDate, formatDateShort } from "@/lib/format";
 import { CURRENCY_SYMBOLS } from "./report-data";
 import {
@@ -199,7 +200,7 @@ function drawItemsTable(
   const t = DICT[lang];
   const symbol = CURRENCY_SYMBOLS.try;
 
-  const body: (string | { content: string })[][] = items.map((item, i) => [
+  const body: RowInput[] = items.map((item, i) => [
     String(i + 1),
     item.sku,
     item.name,

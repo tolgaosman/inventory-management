@@ -3,18 +3,20 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PurchaseOrder;
+use App\Models\StockMovement;
 use App\Services\PurchaseOrderService;
-use App\Support\JsonStore;
+use App\Support\Present;
 use Illuminate\Http\Request;
 
 /**
- * frontend/components/calendar/calendar-client.tsx currently loads everything
- * client-side with pageSize: 2000. This gives it a proper date-range endpoint
- * instead — pass ?from=&to= (ISO dates) to scope both movements and orders.
+ * frontend/components/calendar/calendar-client.tsx used to load everything
+ * client-side with pageSize: 2000. This is the proper date-range endpoint —
+ * pass ?from=&to= (ISO dates) to scope both movements and orders.
  */
 class CalendarController extends Controller
 {
-    public function __construct(private JsonStore $store)
+    public function __construct(private PurchaseOrderService $service)
     {
     }
 
@@ -23,26 +25,22 @@ class CalendarController extends Controller
         $from = $request->query('from');
         $to = $request->query('to');
 
-        $movements = $this->store->read('stock_movements');
-        if ($from) {
-            $movements = array_values(array_filter($movements, fn ($m) => $m['createdAt'] >= $from));
-        }
-        if ($to) {
-            $movements = array_values(array_filter($movements, fn ($m) => $m['createdAt'] <= $to));
-        }
+        $movements = StockMovement::query()
+            ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('created_at', '<=', $to))
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($m) => Present::movement($m))
+            ->all();
 
-        $orders = $this->store->read('purchase_orders');
-        if ($from) {
-            $orders = array_values(array_filter($orders, fn ($po) => $po['createdAt'] >= $from));
-        }
-        if ($to) {
-            $orders = array_values(array_filter($orders, fn ($po) => $po['createdAt'] <= $to));
-        }
-
-        $suppliersById = collect($this->store->read('suppliers'))->keyBy('id')->all();
-        $warehousesById = collect($this->store->read('warehouses'))->keyBy('id')->all();
-        $poService = app(PurchaseOrderService::class);
-        $orderRows = array_map(fn ($po) => $poService->toRow($po, $suppliersById, $warehousesById), $orders);
+        $orderRows = PurchaseOrder::query()
+            ->with(['items', 'supplier', 'warehouse'])
+            ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('created_at', '<=', $to))
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($po) => $this->service->toRow($po))
+            ->all();
 
         return response()->json(['movements' => $movements, 'purchaseOrders' => $orderRows]);
     }

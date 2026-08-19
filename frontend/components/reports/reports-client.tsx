@@ -42,6 +42,7 @@ import {
   Boxes,
   type LucideIcon,
 } from "lucide-react";
+import { useAsync } from "@/lib/hooks/use-async";
 import { PageHeader } from "@/components/common/page-header";
 import { Section, SectionStack } from "@/components/common/section";
 import { PanelCard } from "@/components/common/panel-card";
@@ -67,15 +68,17 @@ import { buildReportExcel } from "@/lib/export/excel";
 import { buildReportPdf } from "@/lib/export/pdf";
 import { downloadBlob, reportFilename } from "@/lib/export/download";
 import {
-  getWarehouseDetails,
-  getCategoryShares,
-  getTopMovers,
-  getCriticalProducts,
-  getDashboardKpis,
-} from "@/lib/mock/dashboard";
-import { warehouses, products, stockMovements, purchaseOrders, purchaseOrderTotal, suppliers } from "@/lib/mock/data";
+  useReportDataset,
+  useWarehouseCategoryShares,
+  warehouseDetails as computeWarehouseDetails,
+  criticalProducts as computeCriticalProducts,
+  topMovers as computeTopMovers,
+  type ReportDataset,
+  type TopMover,
+} from "@/lib/reports/dataset";
+import type { StockMovement } from "@/lib/types";
+import { getDashboardData, MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { formatNumber, formatCurrency, formatDateTime, formatSigned } from "@/lib/format";
-import { MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { MOVEMENT_TYPE_LABELS, MOVEMENT_REASON_LABELS, PURCHASE_STATUS_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
@@ -98,6 +101,27 @@ const MOVEMENT_TYPE_COLOR: Record<string, string> = {
 
 const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
+const EMPTY_ARRAY: never[] = [];
+
+const EMPTY_KPIS = {
+  totalProducts: 0,
+  totalWarehouses: 0,
+  criticalStockCount: 0,
+  todayIn: 0,
+  todayOut: 0,
+  openPurchaseOrders: 0,
+  pendingDeliveries: 0,
+  purchaseTotalValue: 0,
+  cancelledOrders: 0,
+  totalPurchaseOrders: 0,
+  onHandUnits: 0,
+  incomingUnits: 0,
+  totalUsers: 0,
+  totalSuppliers: 0,
+  categoryCount: 0,
+  productVariantCount: 0,
+};
+
 export function ReportsClient() {
   const { name } = useAuth();
   const { company } = useSettings();
@@ -115,22 +139,27 @@ export function ReportsClient() {
   const months = MONTHS_BY_RANGE[range];
   const symbol = CURRENCY_SYMBOLS[currency];
 
-  const kpis = useMemo(() => getDashboardKpis({ months }), [months]);
-  const warehouseDetails = useMemo(() => getWarehouseDetails(), []);
-  const warehouseCategoryShares = useMemo(
-    () => warehouses.map((w) => ({ warehouseId: w.id, name: w.name, shares: getCategoryShares(w.id) })),
-    [],
-  );
+  const { data: rdData, staleData: rdStale, status: datasetStatus } = useReportDataset();
+  const dataset = rdData ?? rdStale;
+  const products = dataset?.products ?? EMPTY_ARRAY;
+  const suppliers = dataset?.suppliers ?? EMPTY_ARRAY;
+  const warehouses = dataset?.warehouses ?? EMPTY_ARRAY;
+
+  const { data: dashboardData } = useAsync(() => getDashboardData(range), [range]);
+  const kpis = dashboardData?.kpis ?? EMPTY_KPIS;
+
+  const warehouseDetails = useMemo(() => (dataset ? computeWarehouseDetails(dataset) : []), [dataset]);
+  const warehouseCategoryShares = useWarehouseCategoryShares(dataset);
   const warehouseMovers = useMemo(
-    () => getTopMovers(8, moversWarehouseId === "all" ? undefined : moversWarehouseId),
-    [moversWarehouseId],
+    () => (dataset ? computeTopMovers(dataset, 8, moversWarehouseId === "all" ? undefined : moversWarehouseId) : []),
+    [dataset, moversWarehouseId],
   );
-  const topMovers = useMemo(() => getTopMovers(10), []);
+  const topMovers = useMemo(() => (dataset ? computeTopMovers(dataset, 10) : []), [dataset]);
   const leastMovers = useMemo(
-    () => [...getTopMovers(999)].sort((a, b) => a.totalQuantity - b.totalQuantity).slice(0, 10),
-    [],
+    () => (dataset ? [...computeTopMovers(dataset, 999)].sort((a, b) => a.totalQuantity - b.totalQuantity).slice(0, 10) : []),
+    [dataset],
   );
-  const criticalProducts = useMemo(() => getCriticalProducts(), []);
+  const criticalProducts = useMemo(() => (dataset ? computeCriticalProducts(dataset) : []), [dataset]);
 
   const rangeStart = useMemo(() => {
     const d = new Date();
@@ -140,16 +169,22 @@ export function ReportsClient() {
   }, [months]);
 
   const filteredMovements = useMemo(
-    () => stockMovements.filter((m) => m.createdAt >= rangeStart).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [rangeStart],
+    () =>
+      (dataset?.movements ?? [])
+        .filter((m) => m.createdAt >= rangeStart)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [dataset, rangeStart],
   );
   const inMovements = filteredMovements.filter((m) => m.type === "giris");
   const outMovements = filteredMovements.filter((m) => m.type === "cikis");
   const transferMovements = filteredMovements.filter((m) => m.type === "transfer");
 
   const filteredOrders = useMemo(
-    () => purchaseOrders.filter((po) => po.createdAt >= rangeStart).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [rangeStart],
+    () =>
+      (dataset?.orders ?? [])
+        .filter((po) => po.createdAt >= rangeStart)
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [dataset, rangeStart],
   );
 
   const purchasePageSize = 20;
@@ -173,7 +208,7 @@ export function ReportsClient() {
   const topSuppliersData = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const po of filteredOrders) {
-      counts[po.supplierId] = (counts[po.supplierId] ?? 0) + purchaseOrderTotal(po);
+      counts[po.supplierId] = (counts[po.supplierId] ?? 0) + po.total;
     }
     return Object.entries(counts)
       .map(([supplierId, total]) => {
@@ -193,7 +228,7 @@ export function ReportsClient() {
       const d = new Date(po.createdAt);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       if (!monthData[key]) monthData[key] = { total: 0, count: 0, byStatus: {} };
-      const amt = purchaseOrderTotal(po);
+      const amt = po.total;
       monthData[key].total += amt;
       monthData[key].count += 1;
       const statusLabel = PURCHASE_STATUS_LABELS[po.status as keyof typeof PURCHASE_STATUS_LABELS] ?? po.status;
@@ -278,7 +313,7 @@ export function ReportsClient() {
   }, [warehouseCategoryShares]);
 
   return (
-    <div className="space-y-6">
+    <div className={cn("space-y-6", datasetStatus === "loading" && !dataset && "opacity-60 transition-opacity")}>
       <PageHeader
         title="Raporlar"
         description="Envanter ve stok operasyonlarınızı görsellerle analiz edin."
@@ -558,6 +593,7 @@ export function ReportsClient() {
             <Section index={1} className="grid gap-4">
               <MovementTable
                 movements={inMovements.slice(0, 30)}
+                products={products}
                 type="giris"
                 meta={`${inMovements.length} kayıt`}
                 actions={
@@ -568,6 +604,7 @@ export function ReportsClient() {
               />
               <MovementTable
                 movements={outMovements.slice(0, 30)}
+                products={products}
                 type="cikis"
                 meta={`${outMovements.length} kayıt`}
                 actions={
@@ -581,6 +618,7 @@ export function ReportsClient() {
             <Section index={2}>
               <MovementTable
                 movements={transferMovements.slice(0, 20)}
+                products={products}
                 type="transfer"
                 meta={`${transferMovements.length} kayıt`}
                 actions={
@@ -627,7 +665,7 @@ export function ReportsClient() {
                     ) : (
                       paginatedOrders.map((po) => {
                         const supplier = suppliers.find((s) => s.id === po.supplierId);
-                        const total = purchaseOrderTotal(po);
+                        const total = po.total;
                         return (
                           <TableRow key={po.id} className="border-b border-border/50 hover:bg-muted/40 transition-colors">
                             <TableCell className="px-3 font-mono text-xs font-semibold">{po.code}</TableCell>
@@ -986,7 +1024,7 @@ function MoversChart({
 }: {
   title: string;
   icon: LucideIcon;
-  data: ReturnType<typeof getTopMovers>;
+  data: TopMover[];
 }) {
   return (
     <PanelCard
@@ -1058,7 +1096,7 @@ function MoversChart({
  * look the same. No rank badge: coming in "1st" among the least-moved
  * products isn't an achievement, so a podium chip would misread as one.
  */
-function LeastMoversList({ items }: { items: ReturnType<typeof getTopMovers> }) {
+function LeastMoversList({ items }: { items: TopMover[] }) {
   return (
     <PanelCard
       title={
@@ -1122,11 +1160,13 @@ function LeastMoversList({ items }: { items: ReturnType<typeof getTopMovers> }) 
 
 function MovementTable({
   movements,
+  products,
   type,
   meta,
   actions,
 }: {
-  movements: typeof stockMovements;
+  movements: StockMovement[];
+  products: { id: string; name: string; imageUrl?: string }[];
   type: "giris" | "cikis" | "transfer";
   meta?: string;
   actions?: React.ReactNode;
