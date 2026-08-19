@@ -152,10 +152,13 @@ class Present
             'createdAt' => self::date($po->created_at),
             'expectedAt' => self::date($po->expected_at),
             'receivedAt' => self::date($po->received_at),
+            'rejectionReason' => $po->rejection_reason,
             'currency' => $po->currency,
             'notes' => $po->notes,
+            'createdById' => $po->created_by,
             'createdBy' => $po->relationLoaded('createdByUser') ? ($po->createdByUser->name ?? null) : null,
             'approvedBy' => $po->relationLoaded('approvedByUser') ? ($po->approvedByUser->name ?? null) : null,
+            'sharedWith' => $po->shared_with,
         ], fn ($v) => $v !== null);
     }
 

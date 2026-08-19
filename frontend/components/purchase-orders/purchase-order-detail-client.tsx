@@ -23,11 +23,15 @@ import {
   Receipt,
   User,
   UserCheck,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { ErrorState } from "@/components/common/error-state";
 import { Can } from "@/components/common/can";
 import { useAuth } from "@/lib/auth";
+import { useSettings } from "@/lib/settings-context";
+import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,6 +52,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { PurchaseStatusBadge } from "@/components/common/status-badge";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import { PurchaseOrderFormSheet } from "@/components/purchase-orders/purchase-order-form-sheet";
@@ -67,6 +81,8 @@ import {
   cancelPurchaseOrder,
 } from "@/lib/api/purchase-orders";
 import { ApiError, BASE_URL } from "@/lib/api/client";
+import { buildPurchaseOrderPdf } from "@/lib/export/purchase-order-pdf";
+import { downloadBlob, reportFilename, slugify } from "@/lib/export/download";
 import { formatNumber, formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { useRouter } from "next/navigation";
 
@@ -74,12 +90,20 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const { currency, rates } = useCurrency();
   const { can } = useAuth();
+  const { company } = useSettings();
   const rate = rates?.[currency] || 1;
+  const printGuard = useSubmitGuard();
 
   const [formOpen, setFormOpen] = useState(false);
-  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelDialog, setCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [rejectDialog, setRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
 
   const { status, data, staleData, error, refetch } = useAsync(() => getPurchaseOrder(id), [id]);
   const view = data ?? staleData;
@@ -145,30 +169,72 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
     }
   }
 
-  async function handleReject() {
+  function openRejectDialog() {
+    setRejectDialog(true);
+    setRejectReason("");
+  }
+
+  async function submitReject() {
+    if (!rejectReason.trim()) {
+      toast.error("Lütfen bir reddetme gerekçesi girin.");
+      return;
+    }
+    
+    setIsRejecting(true);
     try {
-      await rejectPurchaseOrderApproval(id);
+      await rejectPurchaseOrderApproval(id, rejectReason);
       toast.success("Onay reddedildi.");
+      setRejectDialog(false);
+      setRejectReason("");
       refetch();
     } catch (err) {
       toast.error("Onay reddedilemedi", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
       });
+    } finally {
+      setIsRejecting(false);
     }
   }
 
-  async function handleCancel() {
+  function openCancelDialog() {
+    setCancelDialog(true);
+    setCancelReason("");
+  }
+
+  async function submitCancel() {
+    if (!cancelReason.trim()) {
+      toast.error("Lütfen bir iptal gerekçesi girin.");
+      return;
+    }
+
+    setCancelling(true);
     try {
-      await cancelPurchaseOrder(id);
+      await cancelPurchaseOrder(id, cancelReason);
       toast.success("Sipariş iptal edildi.");
-      setCancelling(false);
+      setCancelDialog(false);
+      setCancelReason("");
       refetch();
     } catch (err) {
       toast.error("Sipariş iptal edilemedi", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
       });
+    } finally {
       setCancelling(false);
     }
+  }
+
+  async function handlePrint() {
+    if (!view) return;
+    await printGuard.guard(async () => {
+      try {
+        const supplier = suppliers.find((s) => s.id === view.supplierId);
+        const warehouse = warehouses.find((w) => w.id === view.warehouseId);
+        const blob = await buildPurchaseOrderPdf({ order: view, supplier, warehouse, company });
+        downloadBlob(blob, reportFilename("pdf", new Date(), `siparis-${slugify(view.code)}`));
+      } catch {
+        toast.error("PDF oluşturulamadı");
+      }
+    });
   }
 
   async function handleDelete() {
@@ -247,6 +313,10 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
           description={`${view.supplierName} · ${formatDate(view.createdAt)}`}
           actions={
             <>
+              <Button size="sm" variant="outline" onClick={handlePrint} disabled={printGuard.pending}>
+                {printGuard.pending ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+                PDF Olarak Yazdır
+              </Button>
               {canMarkOrdered && can("purchase.approve") && (
                 <Button size="sm" variant="outline" onClick={handleMarkOrdered}>
                   <Send className="size-4" />
@@ -270,7 +340,7 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                 </Button>
               )}
               {canReject && can("purchase.approve") && (
-                <Button size="sm" variant="outline" onClick={handleReject}>
+                <Button size="sm" variant="outline" onClick={openRejectDialog}>
                   <Undo2 className="size-4" />
                   Siparişi Reddet
                 </Button>
@@ -306,7 +376,7 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                       />
                       <DropdownMenuContent align="end">
                         {canCancel && (
-                          <DropdownMenuItem variant="destructive" onClick={() => setCancelling(true)}>
+                          <DropdownMenuItem variant="destructive" onClick={openCancelDialog}>
                             <Ban className="size-4" />
                             İptal Et
                           </DropdownMenuItem>
@@ -415,6 +485,12 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                     <dd className="text-foreground">{view.notes}</dd>
                   </div>
                 )}
+                {view.status === "cancelled" && view.rejectionReason && (
+                  <div className="py-2 text-sm">
+                    <dt className="mb-1 font-semibold text-status-critical">İptal / Ret Gerekçesi</dt>
+                    <dd className="text-foreground leading-relaxed">{view.rejectionReason}</dd>
+                  </div>
+                )}
               </dl>
             </CardContent>
           </Card>
@@ -488,22 +564,65 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
         onDone={refetch}
       />
 
-      <AlertDialog open={cancelling} onOpenChange={setCancelling}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Siparişi iptal et</AlertDialogTitle>
-            <AlertDialogDescription>
-              {`"${view.code}" iptal edilecek. Bu işlem geri alınamaz.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction variant="destructive-solid" onClick={handleCancel}>
+      <Dialog open={cancelDialog} onOpenChange={setCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Siparişi İptal Et</DialogTitle>
+            <DialogDescription>
+              Bu siparişi iptal etmek istediğinize emin misiniz? Teslim alınmış ürünler iptal edilemez. Bu işlem geri alınamaz.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="detail-cancel-reason">İptal Gerekçesi</Label>
+              <Textarea
+                id="detail-cancel-reason"
+                placeholder="İptal sebebini buraya yazın..."
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelDialog(false)}>Vazgeç</Button>
+            <Button variant="destructive-solid" onClick={submitCancel} disabled={cancelling}>
+              {cancelling ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
               İptal Et
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejectDialog} onOpenChange={setRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Siparişi Reddet</DialogTitle>
+            <DialogDescription>
+              Lütfen bu siparişi neden reddettiğinizi kısaca belirtin.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="detail-reason">Reddetme Gerekçesi</Label>
+              <Textarea
+                id="detail-reason"
+                placeholder="Reddetme sebebini buraya yazın..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                className="min-h-[100px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRejectDialog(false)}>Vazgeç</Button>
+            <Button variant="destructive-solid" onClick={submitReject} disabled={isRejecting}>
+              {isRejecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+              Reddet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleting} onOpenChange={setDeleting}>
         <AlertDialogContent>

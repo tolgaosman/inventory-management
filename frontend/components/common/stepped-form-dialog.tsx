@@ -21,6 +21,7 @@ export interface SteppedFormDialogProps {
   isSubmitting?: boolean;
   submitLabel?: string;
   onCancel?: () => void;
+  showCloseButton?: boolean;
 }
 
 export function SteppedFormDialog({
@@ -33,6 +34,7 @@ export function SteppedFormDialog({
   isSubmitting,
   submitLabel = "Kaydet",
   onCancel,
+  showCloseButton = false,
 }: SteppedFormDialogProps) {
   const [currentStepIndex, setCurrentStepIndex] = React.useState(0);
   const [validating, setValidating] = React.useState(false);
@@ -71,7 +73,7 @@ export function SteppedFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="max-w-2xl gap-0 p-0 overflow-hidden bg-background/95 backdrop-blur-sm sm:rounded-2xl shadow-2xl border-muted/40">
+      <DialogContent showCloseButton={showCloseButton} className="max-w-2xl gap-0 p-0 overflow-hidden bg-background/95 backdrop-blur-sm sm:rounded-2xl shadow-2xl border-muted/40">
         <div className="flex flex-col max-h-[85vh]">
           {/* Header Section */}
           <div className="px-6 pt-6 pb-4 bg-background z-10 border-b border-border/50">

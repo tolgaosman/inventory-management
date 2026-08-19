@@ -36,19 +36,34 @@ export async function loadBrandLogo(): Promise<{ dataUrl: string; width: number;
     const { default: browserLogo } = await import("@/assets/browserLogo.png");
     const res = await fetch(browserLogo.src);
     const blob = await res.blob();
-    const dataUrl = await new Promise<string>((resolve, reject) => {
+    const rawDataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
 
-    return await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve({ dataUrl, width: img.width, height: img.height });
-      img.onerror = reject;
-      img.src = dataUrl;
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = rawDataUrl;
     });
+
+    // Re-encode through a canvas at the image's own natural size: jsPDF's PNG
+    // decoder has trouble with some source files (notably ones exported with
+    // interlacing or unusual chunk ordering) and silently renders only part
+    // of the image. A canvas round-trip always produces a plain, single-pass
+    // PNG that jsPDF embeds intact.
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { dataUrl: rawDataUrl, width: img.naturalWidth, height: img.naturalHeight };
+    ctx.drawImage(img, 0, 0);
+    const dataUrl = canvas.toDataURL("image/png");
+
+    return { dataUrl, width: img.naturalWidth, height: img.naturalHeight };
   } catch {
     return null;
   }

@@ -15,7 +15,4 @@ return [
     // Supplier scorecard performance tone thresholds
     'performance_good_percent' => 85,
     'performance_warning_percent' => 60,
-
-    // Demo login password shared by every seeded user.
-    'demo_password' => env('DEMO_PASSWORD', 'demo1234'),
 ];

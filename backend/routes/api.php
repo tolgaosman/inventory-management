@@ -82,6 +82,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::delete('/purchase-orders/{id}', [PurchaseOrderController::class, 'destroy'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/order', [PurchaseOrderController::class, 'markOrdered'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/request-approval', [PurchaseOrderController::class, 'requestApproval'])->middleware(['perm:purchase.manage', 'throttle:writes']);
+    Route::post('/purchase-orders/{id}/share', [PurchaseOrderController::class, 'share'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/approve', [PurchaseOrderController::class, 'approve'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/reject', [PurchaseOrderController::class, 'reject'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/receive', [PurchaseOrderController::class, 'receive'])->middleware(['perm:purchase.manage|purchase.receive', 'throttle:bulk']);
@@ -114,7 +115,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::get('/calendar', [CalendarController::class, 'index'])->middleware('perm:products.view');
 
     // Users
-    Route::get('/users', [UserController::class, 'index'])->middleware('perm:users.manage');
+    Route::get('/users', [UserController::class, 'index']);
     Route::post('/users', [UserController::class, 'store'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::put('/users/{id}', [UserController::class, 'update'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::delete('/users/{id}', [UserController::class, 'destroy'])->middleware(['perm:users.manage', 'throttle:writes']);

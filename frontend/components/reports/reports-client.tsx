@@ -128,7 +128,10 @@ export function ReportsClient() {
   const { name, can } = useAuth();
   const { company } = useSettings();
   const { currency, rates } = useCurrency();
-  const visibleReportTabs = useMemo(() => REPORT_TABS.filter((t) => can(t.permission)), [can]);
+  const visibleReportTabs = useMemo(
+    () => REPORT_TABS.filter((t) => (Array.isArray(t.permission) ? t.permission.some(can) : can(t.permission))),
+    [can],
+  );
   const [range, setRange] = useState<DateRangePreset>("son-6-ay");
   const [tab, setTab] = useState<ReportTab>("urunler");
   const [moversWarehouseId, setMoversWarehouseId] = useState<string>("all");

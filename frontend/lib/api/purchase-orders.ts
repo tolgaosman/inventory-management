@@ -9,6 +9,7 @@ export interface PurchaseOrderQuery extends PagedQuery {
   priority?: "low" | "medium" | "high";
   dateFrom?: string;
   dateTo?: string;
+  isMyDrafts?: boolean;
 }
 
 /** A purchase order plus the denormalized fields the list/detail views render. */
@@ -19,6 +20,9 @@ export type PurchaseOrderRow = PurchaseOrder & {
   itemCount: number;
   receivedTotal: number;
   orderedTotal: number;
+  invoiceFilePath?: string;
+  sharedWith?: string[];
+  createdById?: string;
 };
 
 // Omit `items` before re-adding it: intersecting PurchaseOrderItem[] with the
@@ -39,6 +43,7 @@ export async function listPurchaseOrders(
       priority: query.priority,
       dateFrom: query.dateFrom,
       dateTo: query.dateTo,
+      is_my_drafts: query.isMyDrafts ? "1" : undefined,
       search: query.search,
       page: query.page,
       pageSize: query.pageSize,
@@ -90,6 +95,7 @@ export interface CreatePurchaseOrderInput {
   priority?: "low" | "medium" | "high";
   notes?: string;
   items: PurchaseOrderItemInput[];
+  isDraft?: boolean;
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Promise<PurchaseOrder> {
@@ -121,16 +127,23 @@ export async function markPurchaseOrderOrdered(id: string): Promise<PurchaseOrde
   return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/order`, { method: "POST" });
 }
 
-export async function requestPurchaseOrderApproval(id: string): Promise<PurchaseOrder> {
-  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/request-approval`, { method: "POST" });
+export async function requestPurchaseOrderApproval(id: string): Promise<PurchaseOrderRow> {
+  return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/request-approval`, { method: "POST" });
 }
 
-export async function approvePurchaseOrder(id: string): Promise<PurchaseOrder> {
-  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/approve`, { method: "POST" });
+export async function sharePurchaseOrder(id: string, userIds: string[]): Promise<PurchaseOrderRow> {
+  return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/share`, { method: "POST", body: { userIds } });
 }
 
-export async function rejectPurchaseOrderApproval(id: string): Promise<PurchaseOrder> {
-  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/reject`, { method: "POST" });
+export async function approvePurchaseOrder(id: string): Promise<PurchaseOrderRow> {
+  return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/approve`, { method: "POST" });
+}
+
+export async function rejectPurchaseOrderApproval(id: string, reason: string): Promise<PurchaseOrder> {
+  return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/reject`, {
+    method: "POST",
+    body: { reason },
+  });
 }
 
 export interface ReceivePurchaseOrderContext {
@@ -162,8 +175,11 @@ export async function uploadPurchaseOrderInvoice(id: string, file: File): Promis
   });
 }
 
-export async function cancelPurchaseOrder(id: string): Promise<PurchaseOrderRow> {
-  return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/cancel`, { method: "POST" });
+export async function cancelPurchaseOrder(id: string, reason: string): Promise<PurchaseOrderRow> {
+  return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
 }
 
 export interface BulkOperationResult {

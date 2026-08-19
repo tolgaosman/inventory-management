@@ -304,11 +304,12 @@ export function ProductsClient() {
       try {
         const all = await listProducts({ ...query, page: 1, pageSize: 10000 });
         let exportRows = all.rows;
-        if (onlySelected && selectedIds.size > 0) {
+        const hasSelection = selectedIds.size > 0;
+        if (hasSelection) {
           exportRows = exportRows.filter((p) => selectedIds.has(p.id));
         }
 
-        const reportTitle = onlySelected ? `Seçili Ürünler (${exportRows.length} Adet)` : "Ürün Yönetimi";
+        const reportTitle = hasSelection ? `Seçili Ürünler (${exportRows.length} Adet)` : "Ürün Yönetimi";
 
         const report: ReportData = {
           company: company.companyName,

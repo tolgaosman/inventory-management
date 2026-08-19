@@ -117,6 +117,7 @@ export interface PurchaseOrder {
   expectedAt: string;
   /** Stamped when `status` transitions to "received" — the only real delivery timestamp in the schema. */
   receivedAt?: string;
+  rejectionReason?: string;
   currency: "TRY";
   notes?: string;
   invoiceFilePath?: string | null;

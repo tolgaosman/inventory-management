@@ -29,7 +29,7 @@ export const PURCHASE_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   ordered: "Sipariş Edildi",
   partially_received: "Kısmen Teslim Alındı",
   received: "Teslim Alındı",
-  cancelled: "İptal Edildi",
+  cancelled: "İptal/Ret",
 };
 
 export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {

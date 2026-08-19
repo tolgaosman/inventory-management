@@ -117,9 +117,10 @@ class PurchaseOrderService
         }
         $this->validateItems($input['items']);
 
-        // Approvers open orders as drafts they can send straight through; everyone
+        // If specifically requested as a draft, save it as a draft. Otherwise, 
+        // approvers open orders as drafts they can send straight through; everyone
         // else's order lands in the approval queue immediately.
-        $initialStatus = $user->can('purchase.approve') ? 'draft' : 'pending_approval';
+        $initialStatus = !empty($input['isDraft']) ? 'draft' : ($user->can('purchase.approve') ? 'draft' : 'pending_approval');
 
         $po = DB::transaction(function () use ($input, $initialStatus, $user) {
             $po = PurchaseOrder::query()->create([
@@ -244,19 +245,31 @@ class PurchaseOrderService
         });
     }
 
-    public function reject(string $id): array
+    public function reject(string $id, string $reason): array
     {
-        return $this->transition($id, ['pending_approval'], 'cancelled', 'Yalnızca onay bekleyen siparişler reddedilebilir.');
+        $po = DB::transaction(function () use ($id, $reason) {
+            $po = $this->findOrFail($id, lock: true);
+            if ($po->status !== 'pending_approval') {
+                throw ApiException::conflict('Yalnızca onay bekleyen siparişler reddedilebilir.');
+            }
+            $po->status = 'cancelled';
+            $po->rejection_reason = $reason;
+            $po->save();
+            return $po;
+        });
+
+        return $this->toRow($po->fresh(['items', 'supplier', 'warehouse']));
     }
 
-    public function cancel(string $id): array
+    public function cancel(string $id, string $reason): array
     {
-        $po = DB::transaction(function () use ($id) {
+        $po = DB::transaction(function () use ($id, $reason) {
             $po = $this->findOrFail($id, lock: true);
             if ($po->status === 'received') {
                 throw ApiException::conflict('Teslim alınmış sipariş iptal edilemez.');
             }
             $po->status = 'cancelled';
+            $po->rejection_reason = $reason;
             $po->save();
 
             return $po;

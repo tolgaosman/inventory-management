@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, useFieldArray, useWatch, type Control, type UseFormSetValue } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +10,16 @@ import { SteppedFormDialog } from "@/components/common/stepped-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Form,
   FormControl,
@@ -85,7 +95,7 @@ interface PurchaseOrderFormSheetProps {
   initialItems?: { productId: string; quantity: number; unitPrice: number }[];
   suppliers: Supplier[];
   warehouses: WarehouseOption[];
-  onSaved: (values: FormValues) => Promise<void>;
+  onSaved: (values: FormValues & { isDraft?: boolean }) => Promise<void>;
 }
 
 export function PurchaseOrderFormSheet({
@@ -97,6 +107,7 @@ export function PurchaseOrderFormSheet({
   warehouses,
   onSaved,
 }: PurchaseOrderFormSheetProps) {
+  const [draftPromptOpen, setDraftPromptOpen] = useState(false);
   const { pending, guard } = useSubmitGuard();
   const { currency, rates } = useCurrency();
   const rate = rates?.[currency] || 1;
@@ -146,24 +157,54 @@ export function PurchaseOrderFormSheet({
     return sum + qty * price;
   }, 0);
 
-  async function onSubmit(values: FormValues) {
+  async function onSubmit(values: FormValues, isDraft = false) {
     await guard(async () => {
-      await onSaved({ ...values, expectedAt: new Date(values.expectedAt).toISOString() });
-      toast.success(order ? "Sipariş güncellendi." : "Yeni sipariş oluşturuldu.");
+      await onSaved({ ...values, expectedAt: new Date(values.expectedAt || new Date()).toISOString(), isDraft });
+      toast.success(order ? "Sipariş güncellendi." : (isDraft ? "Taslak olarak kaydedildi." : "Yeni sipariş oluşturuldu."));
       onOpenChange(false);
     });
   }
 
+  function handleOpenChange(newOpen: boolean) {
+    if (newOpen) {
+      onOpenChange(true);
+    } else {
+      // Only prompt for draft if it's a new order or already a draft
+      if (!order || order.status === "draft") {
+        setDraftPromptOpen(true);
+      } else {
+        onOpenChange(false);
+      }
+    }
+  }
+
+  async function handleSaveDraft() {
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast.error("Taslak kaydetmek için lütfen zorunlu alanları (Tedarikçi vb.) doldurun.");
+      return;
+    }
+    setDraftPromptOpen(false);
+    // Submit with current values. If some are empty, Zod might block it normally, 
+    // but form.getValues bypasses resolver here if we don't call handleSubmit.
+    // However, our backend requires required fields anyway. Let's just pass them.
+    const values = form.getValues();
+    onSubmit(values as unknown as FormValues, true);
+  }
+
   return (
-    <Form {...form}>
-      <SteppedFormDialog
-        open={open}
-        onOpenChange={onOpenChange}
-        title={order ? "Siparişi Düzenle" : "Yeni Satın Alma Siparişi"}
+    <>
+      <Form {...form}>
+        <SteppedFormDialog
+          open={open}
+          onOpenChange={handleOpenChange}
+          onCancel={() => handleOpenChange(false)}
+          showCloseButton={true}
+          title={order ? "Siparişi Düzenle" : "Yeni Satın Alma Siparişi"}
         description={order ? "Sipariş bilgilerini güncelleyin." : "Bir tedarikçiye birden çok kalem içeren bir sipariş oluşturun."}
         submitLabel={order ? "Değişiklikleri Kaydet" : "Siparişi Oluştur"}
         isSubmitting={pending}
-        onSubmit={form.handleSubmit(onSubmit)}
+        onSubmit={form.handleSubmit((v) => onSubmit(v, false))}
         steps={[
           {
             id: "basics",
@@ -349,7 +390,27 @@ export function PurchaseOrderFormSheet({
           },
         ]}
       />
-    </Form>
+      </Form>
+      <AlertDialog open={draftPromptOpen} onOpenChange={setDraftPromptOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kaydetmeden Çık</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu siparişi taslak olarak kaydetmek ister misiniz? 
+              İptal ederseniz değişiklikleriniz silinecektir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setDraftPromptOpen(false); onOpenChange(false); }}>
+              İptal Et (Kaydetme)
+            </AlertDialogCancel>
+            <Button onClick={handleSaveDraft}>
+              Taslak Olarak Kaydet
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

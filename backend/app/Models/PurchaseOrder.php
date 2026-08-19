@@ -13,13 +13,14 @@ class PurchaseOrder extends Model
     protected $fillable = [
         'id', 'code', 'supplier_id', 'warehouse_id', 'status', 'priority',
         'created_at', 'expected_at', 'received_at', 'currency', 'notes', 'invoice_file_path',
-        'created_by', 'approved_by',
+        'created_by', 'approved_by', 'rejection_reason', 'shared_with',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'expected_at' => 'datetime',
         'received_at' => 'datetime',
+        'shared_with' => 'array',
     ];
 
     public function supplier()

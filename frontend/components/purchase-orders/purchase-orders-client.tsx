@@ -28,7 +28,10 @@ import {
   Loader2,
   Hourglass,
   BadgeCheck,
+  BadgeX,
   Undo2,
+  XCircle,
+  Share2,
 } from "lucide-react";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import { PageHeader } from "@/components/common/page-header";
@@ -37,6 +40,7 @@ import { ForbiddenState } from "@/components/common/forbidden-state";
 import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { DataTableColumnFilter } from "@/components/data-table/data-table-filter";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +66,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/data-table/data-table";
 import { PurchaseStatusBadge } from "@/components/common/status-badge";
 import { PurchaseOrderFormSheet } from "@/components/purchase-orders/purchase-order-form-sheet";
@@ -72,6 +86,7 @@ import { SupplierScorecardPanel } from "@/components/purchase-orders/supplier-sc
 import { QuoteRequestDialog } from "@/components/purchase-orders/quote-request-dialog";
 import { QuoteRequestFormSheet } from "@/components/purchase-orders/quote-request-form-sheet";
 import { QuotesAndOrdersPanel } from "@/components/purchase-orders/quote-requests-panel";
+import { ShareDraftDialog } from "./share-draft-dialog";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useChangedSince } from "@/lib/hooks/use-reset-on-change";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
@@ -112,7 +127,7 @@ import type { PurchaseOrderStatus } from "@/lib/types";
 
 type PurchaseOrderRow = Awaited<ReturnType<typeof listPurchaseOrders>>["rows"][number];
 type PurchaseOrderDetail = Awaited<ReturnType<typeof getPurchaseOrder>>;
-type CommandTab = "orders" | "pending_approvals" | "scorecard" | "quotes";
+type CommandTab = "orders" | "pending_approvals" | "my_drafts" | "scorecard" | "quotes";
 
 const STATUS_OPTIONS: PurchaseOrderStatus[] = [
   "draft",
@@ -132,7 +147,7 @@ export function PurchaseOrdersClient() {
   const searchParams = useSearchParams();
   const { currency, rates } = useCurrency();
   const rate = rates?.[currency] || 1;
-  const { name, can } = useAuth();
+  const { name, can, user } = useAuth();
   const { company } = useSettings();
 
   const [tab, setTab] = useState<CommandTab>(() => {
@@ -157,15 +172,20 @@ export function PurchaseOrdersClient() {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkAction, setBulkAction] = useState<"cancel" | "delete" | null>(null);
 
+  const [rejectingPo, setRejectingPo] = useState<PurchaseOrderRow | undefined>(undefined);
+  const [rejectReason, setRejectReason] = useState("");
+  const [isRejecting, setIsRejecting] = useState(false);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrderDetail | undefined>(undefined);
   const [initialItems, setInitialItems] = useState<{ productId: string; quantity: number; unitPrice: number }[] | undefined>(undefined);
 
   const [receivingOrder, setReceivingOrder] = useState<PurchaseOrderDetail | undefined>(undefined);
   const [cancelling, setCancelling] = useState<PurchaseOrderRow | undefined>(undefined);
+  const [cancelReason, setCancelReason] = useState("");
+  const [isCancelling, setIsCancelling] = useState(false);
   const [deleting, setDeleting] = useState<PurchaseOrderRow | undefined>(undefined);
-
-
+  const [sharingOrder, setSharingOrder] = useState<PurchaseOrderRow | undefined>(undefined);
 
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteFormOpen, setQuoteFormOpen] = useState(false);
@@ -185,7 +205,8 @@ export function PurchaseOrdersClient() {
     () => ({
       search: search || undefined,
       status: tab === "pending_approvals" ? "pending_approval" : (status === "all" ? undefined : status),
-      excludeStatus: tab === "orders" && status === "all" ? "pending_approval" : undefined,
+      excludeStatus: tab === "orders" && status === "all" ? "pending_approval" : tab === "orders" ? "draft" : undefined,
+      isMyDrafts: tab === "my_drafts",
       supplierId: supplierId === "all" ? undefined : supplierId,
       warehouseId: warehouseFilter === "all" ? undefined : warehouseFilter,
       priority: priorityFilter === "all" ? undefined : priorityFilter,
@@ -228,8 +249,6 @@ export function PurchaseOrdersClient() {
 
   const { data: stats, refetch: refetchStats } = useAsync(() => getPurchaseOrderStats(), []);
 
-
-
   const { data: scorecardData, status: scorecardStatus, refetch: refetchScorecards } = useAsync(
     () => getSupplierScorecards(),
     [],
@@ -254,8 +273,6 @@ export function PurchaseOrdersClient() {
     setPriorityFilter("all");
   }
 
-  // Deep link from the panel's critical-stock list: ?productId=x or ?productIds=a,b —
-  // resolve the products and open the create form pre-filled with them.
   useEffect(() => {
     const single = searchParams.get("productId");
     const multi = searchParams.get("productIds");
@@ -281,11 +298,9 @@ export function PurchaseOrdersClient() {
     return () => {
       cancelled = true;
     };
-    // Only run once, from the URL this page mounted with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Hero chip shortcuts — each jumps into the tab/filter combination it names.
   function goToOverdue() {
     setTab("orders");
     setStatus("all");
@@ -383,29 +398,59 @@ export function PurchaseOrdersClient() {
     }
   }
 
-  async function handleReject(row: PurchaseOrderRow) {
+  function handleReject(row: PurchaseOrderRow) {
+    setRejectingPo(row);
+    setRejectReason("");
+  }
+
+  async function submitReject() {
+    if (!rejectingPo) return;
+    if (!rejectReason.trim()) {
+      toast.error("Lütfen bir reddetme gerekçesi girin.");
+      return;
+    }
+    
+    setIsRejecting(true);
     try {
-      await rejectPurchaseOrderApproval(row.id);
-      toast.success("Onay reddedildi.", { description: `${row.code} iptal edildi.` });
+      await rejectPurchaseOrderApproval(rejectingPo.id, rejectReason);
+      toast.success("Onay reddedildi.", { description: `${rejectingPo.code} iptal edildi.` });
+      setRejectingPo(undefined);
+      setRejectReason("");
       refetchAll();
     } catch (err) {
       toast.error("Onay reddedilemedi", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
       });
+    } finally {
+      setIsRejecting(false);
     }
+  }
+
+  function openCancelDialog(row: PurchaseOrderRow) {
+    setCancelling(row);
+    setCancelReason("");
   }
 
   async function handleCancel() {
     if (!cancelling) return;
+    if (!cancelReason.trim()) {
+      toast.error("Lütfen bir iptal gerekçesi girin.");
+      return;
+    }
+
+    setIsCancelling(true);
     try {
-      await cancelPurchaseOrder(cancelling.id);
+      await cancelPurchaseOrder(cancelling.id, cancelReason);
       toast.success("Sipariş iptal edildi.", { description: `${cancelling.code} iptal edildi.` });
       setCancelling(undefined);
+      setCancelReason("");
       refetchAll();
     } catch (err) {
       toast.error("Sipariş iptal edilemedi", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
       });
+    } finally {
+      setIsCancelling(false);
     }
   }
 
@@ -465,11 +510,12 @@ export function PurchaseOrdersClient() {
       try {
         const all = await listPurchaseOrders({ ...query, page: 1, pageSize: 10000 });
         let rows = all.rows;
-        if (onlySelected && selectedIds.size > 0) {
+        const hasSelection = selectedIds.size > 0;
+        if (hasSelection) {
           rows = rows.filter((r) => selectedIds.has(r.id));
         }
 
-        const reportTitle = onlySelected ? `Seçili Siparişler (${rows.length} Adet)` : "Satın Alma Siparişleri";
+        const reportTitle = hasSelection ? `Seçili Siparişler (${rows.length} Adet)` : "Satın Alma Siparişleri";
         const report: ReportData = {
           company: company.companyName,
           title: reportTitle,
@@ -514,7 +560,6 @@ export function PurchaseOrdersClient() {
       }
     });
   }
-
 
   const columns = useMemo<ColumnDef<PurchaseOrderRow, unknown>[]>(
     () => [
@@ -570,7 +615,6 @@ export function PurchaseOrdersClient() {
           </Link>
         ),
       },
-
       {
         id: "supplier",
         accessorKey: "supplierName",
@@ -629,7 +673,7 @@ export function PurchaseOrdersClient() {
         },
         cell: ({ row }) => (
           <div className="flex justify-center">
-            <PurchaseStatusBadge status={row.original.status} />
+            <PurchaseStatusBadge status={row.original.status} rejectionReason={row.original.rejectionReason} />
           </div>
         ),
       },
@@ -737,7 +781,7 @@ export function PurchaseOrdersClient() {
                     <BadgeCheck className="size-5" />
                   </Button>
                   <Button variant="ghost" size="icon" className="size-8 text-status-critical hover:text-status-critical/80 hover:bg-status-critical/10" onClick={() => handleReject(po)} title="Reddet">
-                    <X className="size-5" />
+                    <BadgeX className="size-5" />
                   </Button>
                 </>
               )}
@@ -799,6 +843,12 @@ export function PurchaseOrdersClient() {
                         Düzenle
                       </DropdownMenuItem>
                     )}
+                    {po.status === "draft" && po.createdById === user?.id && (
+                      <DropdownMenuItem onClick={() => setSharingOrder(po)}>
+                        <Share2 className="size-4" />
+                        Paylaşıma Aç
+                      </DropdownMenuItem>
+                    )}
                   </>
                 </Can>
                 {actions.canReceive && (can("purchase.manage") || can("purchase.receive")) && (
@@ -807,16 +857,12 @@ export function PurchaseOrdersClient() {
                     Teslim Al
                   </DropdownMenuItem>
                 )}
-                <Can permission="purchase.manage">
-                  <>
-                    {actions.canCancel && tab !== "pending_approvals" && (
-                      <DropdownMenuItem variant="destructive" onClick={() => setCancelling(po)}>
-                        <Ban className="size-4" />
-                        İptal Et
-                      </DropdownMenuItem>
-                    )}
-                  </>
-                </Can>
+                {actions.canCancel && can("purchase.manage") && (
+                  <DropdownMenuItem onClick={() => openCancelDialog(po)}>
+                    <XCircle className="size-4" />
+                    İptal Et
+                  </DropdownMenuItem>
+                )}
                 <Can permission="purchase.approve">
                   <>
                     {actions.canDelete && (
@@ -834,7 +880,7 @@ export function PurchaseOrdersClient() {
         },
       },
     ],
-    [selectedIds, view, currency, rates, handleMarkOrdered, handleRequestApproval, handleApprove, handleReject, can, tab],
+    [selectedIds, view, currency, rates, handleMarkOrdered, handleRequestApproval, handleApprove, handleReject, can, tab, user?.id],
   ).filter((col) => {
     if (col.id === "total" && !can("financial.view")) return false;
     if (col.id === "progress" && tab === "pending_approvals") return false;
@@ -906,6 +952,12 @@ export function PurchaseOrdersClient() {
               <ShoppingCart className="size-4" />
               Siparişler
             </TabsTrigger>
+            {user?.role === "satinalma" && (
+              <TabsTrigger value="my_drafts">
+                <FileSignature className="size-4" />
+                Taslaklarım
+              </TabsTrigger>
+            )}
             {can("purchase.manage") && (
               <TabsTrigger value="pending_approvals">
                 <BadgeCheck className="size-4" />
@@ -917,7 +969,6 @@ export function PurchaseOrdersClient() {
                 ) : null}
               </TabsTrigger>
             )}
-
             <TabsTrigger value="scorecard">
               <Truck className="size-4" />
               Tedarikçi Karnesi
@@ -1076,7 +1127,30 @@ export function PurchaseOrdersClient() {
             </TabsContent>
           )}
 
-
+          {user?.role === "satinalma" && (
+            <TabsContent value="my_drafts">
+              <SectionStack className={fetchStatus === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
+                <Section index={0}>
+                  <DataTable
+                    columns={columns}
+                    data={view?.rows ?? []}
+                    total={view?.total ?? 0}
+                    page={page}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setPage}
+                    loading={!view}
+                    error={fetchStatus === "error" && !view ? error : undefined}
+                    onRetry={refetch}
+                    sorting={sorting}
+                    onSortingChange={setSorting}
+                    isFiltered={false}
+                    emptyTitle="Taslağınız bulunmuyor"
+                    emptyDescription="Henüz oluşturduğunuz bir taslak sipariş yok."
+                  />
+                </Section>
+              </SectionStack>
+            </TabsContent>
+          )}
 
           <TabsContent value="scorecard">
             <SupplierScorecardPanel
@@ -1115,7 +1189,15 @@ export function PurchaseOrdersClient() {
           onDone={refetchAll}
         />
 
-
+        {sharingOrder && (
+          <ShareDraftDialog
+            open={!!sharingOrder}
+            onOpenChange={(open: boolean) => !open && setSharingOrder(undefined)}
+            orderId={sharingOrder.id}
+            initialSharedWith={sharingOrder.sharedWith ?? []}
+            onDone={refetchAll}
+          />
+        )}
 
         <QuoteRequestDialog
           open={quoteDialogOpen}
@@ -1139,22 +1221,35 @@ export function PurchaseOrdersClient() {
           }}
         />
 
-        <AlertDialog open={Boolean(cancelling)} onOpenChange={(open) => !open && setCancelling(undefined)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Siparişi iptal et</AlertDialogTitle>
-              <AlertDialogDescription>
-                {cancelling ? `"${cancelling.code}" iptal edilecek. Bu işlem geri alınamaz.` : ""}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-              <AlertDialogAction variant="destructive-solid" onClick={handleCancel}>
+        <Dialog open={!!cancelling} onOpenChange={(open) => !open && setCancelling(undefined)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Siparişi İptal Et</DialogTitle>
+              <DialogDescription>
+                Bu siparişi iptal etmek istediğinize emin misiniz? Teslim alınmış ürünler iptal edilemez. Bu işlem geri alınamaz.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="cancel-reason">İptal Gerekçesi</Label>
+                <Textarea
+                  id="cancel-reason"
+                  placeholder="İptal sebebini buraya yazın..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCancelling(undefined)}>Vazgeç</Button>
+              <Button variant="destructive-solid" onClick={handleCancel} disabled={isCancelling}>
+                {isCancelling ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
                 İptal Et
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={Boolean(deleting)} onOpenChange={(open) => !open && setDeleting(undefined)}>
           <AlertDialogContent>
@@ -1172,6 +1267,36 @@ export function PurchaseOrdersClient() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={!!rejectingPo} onOpenChange={(open) => !open && setRejectingPo(undefined)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Siparişi Reddet</DialogTitle>
+              <DialogDescription>
+                Lütfen bu siparişi neden reddettiğinizi kısaca belirtin.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="reason">Reddetme Gerekçesi</Label>
+                <Textarea
+                  id="reason"
+                  placeholder="Reddetme sebebini buraya yazın..."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  className="min-h-[100px]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRejectingPo(undefined)}>Vazgeç</Button>
+              <Button variant="destructive-solid" onClick={submitReject} disabled={isRejecting}>
+                {isRejecting ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                Reddet
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={bulkAction !== null} onOpenChange={(open) => !open && setBulkAction(null)}>
           <AlertDialogContent>

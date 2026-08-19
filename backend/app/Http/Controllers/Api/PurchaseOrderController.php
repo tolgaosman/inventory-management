@@ -46,6 +46,24 @@ class PurchaseOrderController extends Controller
             $query->where('created_at', '<=', $dateTo);
         }
 
+        $user = $request->user();
+        if ($request->boolean('is_my_drafts')) {
+            $query->where('status', 'draft')
+                  ->where('created_by', $user->getKey());
+        } else {
+            // Normal view:
+            $query->where(function ($q) use ($user) {
+                // Show non-drafts
+                $q->where('status', '!=', 'draft')
+                  // OR show drafts ONLY IF they are shared with me AND I didn't create them
+                  ->orWhere(function ($sub) use ($user) {
+                      $sub->where('status', 'draft')
+                          ->where('created_by', '!=', $user->getKey())
+                          ->whereJsonContains('shared_with', (string) $user->getKey());
+                  });
+            });
+        }
+
         $orders = $query->get();
 
         if ($search = $request->query('search')) {
@@ -157,6 +175,7 @@ class PurchaseOrderController extends Controller
             'items.*.productId' => ['required', 'string'],
             'items.*.quantity' => ['required', 'numeric'],
             'items.*.unitPrice' => ['required', 'numeric'],
+            'isDraft' => ['nullable', 'boolean'],
         ]);
 
         return response()->json($this->service->create($data, $request->user()), 201);
@@ -201,14 +220,22 @@ class PurchaseOrderController extends Controller
         return response()->json($this->service->approve($id, $request->user()));
     }
 
-    public function reject(string $id)
+    public function reject(Request $request, string $id)
     {
-        return response()->json($this->service->reject($id));
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        return response()->json($this->service->reject($id, $data['reason']));
     }
 
-    public function cancel(string $id)
+    public function cancel(Request $request, string $id)
     {
-        return response()->json($this->service->cancel($id));
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        return response()->json($this->service->cancel($id, $data['reason']));
     }
 
     public function receive(Request $request, string $id)
@@ -224,6 +251,26 @@ class PurchaseOrderController extends Controller
             $request->user()->getKey(),
             $data['idempotencyKey'] ?? null,
         ));
+    }
+
+    public function share(Request $request, string $id)
+    {
+        $data = $request->validate([
+            'userIds' => ['present', 'array'],
+            'userIds.*' => ['string'],
+        ]);
+
+        $po = PurchaseOrder::findOrFail($id);
+        
+        // Ensure only the creator can share it? Or anyone with manage?
+        if ($po->created_by !== $request->user()->getKey() && !$request->user()->can('purchase.approve')) {
+            throw ApiException::forbidden('Sadece siparişi oluşturan kişi veya yöneticiler paylaşabilir.');
+        }
+
+        $po->shared_with = $data['userIds'];
+        $po->save();
+
+        return response()->json($this->service->toRow($po));
     }
 
     public function uploadInvoice(Request $request, string $id)

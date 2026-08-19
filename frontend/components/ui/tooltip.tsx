@@ -6,11 +6,12 @@ import { cn } from "@/lib/utils"
 
 function TooltipProvider({
   children,
+  delay,
 }: {
   children?: React.ReactNode
   delay?: number
 }) {
-  return <>{children}</>
+  return <TooltipPrimitive.Provider delay={delay}>{children}</TooltipPrimitive.Provider>
 }
 
 function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {

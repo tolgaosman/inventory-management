@@ -54,9 +54,8 @@ class DemoDataSeeder extends Seeder
             Category::query()->insert($categories);
             Supplier::query()->insert($suppliers);
 
-            $hash = Hash::make(config('inventory.demo_password'));
             foreach ($users as &$u) {
-                $u['password'] = $hash;
+                $u['password'] = Hash::make($u['password']);
             }
             unset($u);
             User::query()->insert($users);
@@ -165,19 +164,20 @@ class DemoDataSeeder extends Seeder
     private function users(): array
     {
         $rows = [
-            ['id' => '48271', 'name' => 'Tolga Osman Falay', 'email' => 'tolgaosman@sirket.com', 'role' => 'yonetici', 'initials' => 'TO'],
-            ['id' => '63094', 'name' => 'Gizem Karabaşak', 'email' => 'gizem.karabasak@sirket.com', 'role' => 'yonetici', 'initials' => 'GK'],
-            ['id' => '17856', 'name' => 'Mustafa Hacı', 'email' => 'mustafa.haci@sirket.com', 'role' => 'depo', 'initials' => 'MH'],
-            ['id' => '39412', 'name' => 'Alara Soysan', 'email' => 'alara.soysan@sirket.com', 'role' => 'satinalma', 'initials' => 'AS'],
-            ['id' => '82637', 'name' => 'Aliye Kavaz', 'email' => 'aliye.kavaz@sirket.com', 'role' => 'depo', 'initials' => 'AK'],
-            ['id' => '54180', 'name' => 'Irmak Bozkurt', 'email' => 'irmak.bozkurt@sirket.com', 'role' => 'satinalma', 'initials' => 'IB'],
-            ['id' => '24680', 'name' => 'Kaan Muslu Çağa', 'email' => 'kaan.caga@sirket.com', 'role' => 'yonetici', 'initials' => 'KÇ'],
-            ['id' => '71503', 'name' => 'Arda İbrahim Şahin', 'email' => 'arda.sahin@sirket.com', 'role' => 'yonetici', 'initials' => 'AŞ'],
-            ['id' => '20946', 'name' => 'Dehan Saycıoğlu', 'email' => 'dehan.saycioglu@sirket.com', 'role' => 'depo', 'initials' => 'DS'],
-            ['id' => '95328', 'name' => 'Mertkan Kılıçbey Türemen', 'email' => 'mertkan.turemen@sirket.com', 'role' => 'satinalma', 'initials' => 'MT'],
-            ['id' => '46715', 'name' => 'Savaş Muhammed Muhtaroğlu', 'email' => 'savas.muhtaroglu@sirket.com', 'role' => 'yonetici', 'initials' => 'SM'],
-            ['id' => '31849', 'name' => 'Berk Fenk', 'email' => 'berk.fenk@sirket.com', 'role' => 'depo', 'initials' => 'BF'],
-            ['id' => '89234', 'name' => 'Çiğdem Dürüst', 'email' => 'cigdem.durust@sirket.com', 'role' => 'yonetici', 'initials' => 'ÇD'],
+            ['id' => '00000', 'name' => 'Admin', 'email' => 'admin@test.com', 'role' => 'admin', 'initials' => 'AD', 'password' => '12345678'],
+            ['id' => '48271', 'name' => 'Tolga Osman Falay', 'email' => 'tolgaosman@sirket.com', 'role' => 'satinalma_yonetici', 'initials' => 'TO', 'password' => '12345678'],
+            ['id' => '63094', 'name' => 'Gizem Karabaşak', 'email' => 'gizem.karabasak@sirket.com', 'role' => 'depo', 'initials' => 'GK', 'password' => '12345678'],
+            ['id' => '17856', 'name' => 'Mustafa Hacı', 'email' => 'mustafa.haci@sirket.com', 'role' => 'depo', 'initials' => 'MH', 'password' => '12345678'],
+            ['id' => '39412', 'name' => 'Alara Soysan', 'email' => 'alara.soysan@sirket.com', 'role' => 'satinalma', 'initials' => 'AS', 'password' => '12345678'],
+            ['id' => '82637', 'name' => 'Aliye Kavaz', 'email' => 'aliye.kavaz@sirket.com', 'role' => 'depo', 'initials' => 'AK', 'password' => '12345678'],
+            ['id' => '54180', 'name' => 'Irmak Bozkurt', 'email' => 'irmak.bozkurt@sirket.com', 'role' => 'satinalma', 'initials' => 'IB', 'password' => '12345678'],
+            ['id' => '24680', 'name' => 'Kaan Muslu Çağa', 'email' => 'kaan.caga@sirket.com', 'role' => 'depo', 'initials' => 'KÇ', 'password' => '12345678'],
+            ['id' => '71503', 'name' => 'Arda İbrahim Şahin', 'email' => 'arda.sahin@sirket.com', 'role' => 'satinalma', 'initials' => 'AŞ', 'password' => '12345678'],
+            ['id' => '20946', 'name' => 'Dehan Saycıoğlu', 'email' => 'dehan.saycioglu@sirket.com', 'role' => 'depo', 'initials' => 'DS', 'password' => '12345678'],
+            ['id' => '95328', 'name' => 'Mertkan Kılıçbey Türemen', 'email' => 'mertkan.turemen@sirket.com', 'role' => 'satinalma', 'initials' => 'MT', 'password' => '12345678'],
+            ['id' => '46715', 'name' => 'Savaş Muhammed Muhtaroğlu', 'email' => 'savas.muhtaroglu@sirket.com', 'role' => 'depo', 'initials' => 'SM', 'password' => '12345678'],
+            ['id' => '31849', 'name' => 'Berk Fenk', 'email' => 'berk.fenk@sirket.com', 'role' => 'depo_yonetici', 'initials' => 'BF', 'password' => '12345678'],
+            ['id' => '89234', 'name' => 'Çiğdem Dürüst', 'email' => 'cigdem.durust@sirket.com', 'role' => 'satinalma', 'initials' => 'ÇD', 'password' => '12345678'],
         ];
 
         return $this->withTimestamps($rows);
@@ -569,6 +569,18 @@ class DemoDataSeeder extends Seeder
                 ? gmdate('Y-m-d H:i:s', $expectedAtTs + $deliveryJitterDays * 86400)
                 : null;
 
+            $rejectionReason = null;
+            if ($status === 'cancelled') {
+                $rejectionReasons = [
+                    'Tedarikçi ürünü temin edemeyeceğini bildirdi.',
+                    'Fiyat artışı nedeniyle yönetim tarafından onaylanmadı.',
+                    'İhtiyaç kalmadığı için departman talebi iptal etti.',
+                    'Bütçe kısıtlaması sebebiyle iptal edildi.',
+                    'Alternatif bir ürün tercih edildiği için siparişten vazgeçildi.'
+                ];
+                $rejectionReason = $rand->pick($rejectionReasons);
+            }
+
             $list[] = [
                 'id' => Mulberry32::id('po', $n),
                 'code' => 'NET-PO-2026'.sprintf('%04d', $n),
@@ -580,6 +592,7 @@ class DemoDataSeeder extends Seeder
                 'created_at' => gmdate('Y-m-d H:i:s', $createdAtTs),
                 'expected_at' => gmdate('Y-m-d H:i:s', $expectedAtTs),
                 'received_at' => $receivedAt,
+                'rejection_reason' => $rejectionReason,
                 'currency' => 'TRY',
                 'notes' => null,
                 'updated_at' => now(),
