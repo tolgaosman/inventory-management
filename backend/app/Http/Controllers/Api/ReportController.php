@@ -39,11 +39,18 @@ class ReportController extends Controller
     public function products(Request $request)
     {
         $since = $this->rangeStart($request->query('range'));
+        $warehouseId = $request->query('warehouseId') ?: null;
+        $limit = max((int) $request->query('limit', 10), 1);
 
         $aggregates = StockMovement::query()
             ->where('created_at', '>=', $since)
+            ->when($warehouseId, fn ($q) => $q->where(fn ($q2) => $q2->where('warehouse_id', $warehouseId)->orWhere('target_warehouse_id', $warehouseId)))
             ->groupBy('product_id')
-            ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'))
+            ->select(
+                'product_id',
+                DB::raw('COALESCE(SUM(quantity), 0) as total_quantity'),
+                DB::raw('COUNT(*) as movement_count'),
+            )
             ->orderByDesc('total_quantity')
             ->get();
 
@@ -57,11 +64,13 @@ class ReportController extends Controller
                 'name' => $p->name,
                 'sku' => $p->sku,
                 'totalQuantity' => (int) $row->total_quantity,
+                'movementCount' => (int) $row->movement_count,
+                'imageUrl' => $p->image_url,
             ] : null;
         })->filter()->values();
 
         return response()->json([
-            'topMovers' => $movers->take(10)->values()->all(),
+            'topMovers' => $movers->take($limit)->values()->all(),
             'leastMovers' => $movers->reverse()->take(10)->values()->all(),
             'criticalProducts' => array_slice($this->dashboard->criticalProducts(), 0, 20),
             'totalActiveProducts' => Product::query()->where('status', 'aktif')->count(),
@@ -85,8 +94,9 @@ class ReportController extends Controller
         $typeCounts = StockMovement::query()
             ->where('created_at', '>=', $since)
             ->groupBy('type')
-            ->select('type', DB::raw('COUNT(*) as c'))
-            ->pluck('c', 'type');
+            ->select('type', DB::raw('COUNT(*) as c'), DB::raw('COALESCE(SUM(quantity), 0) as qty'))
+            ->get()
+            ->keyBy('type');
 
         $reasonCounts = StockMovement::query()
             ->where('created_at', '>=', $since)
@@ -94,15 +104,16 @@ class ReportController extends Controller
             ->select('reason', DB::raw('COUNT(*) as c'))
             ->pluck('c', 'reason');
 
-        $total = (int) $typeCounts->sum();
+        $total = (int) $typeCounts->sum('c');
 
         $byType = [];
         foreach (['giris', 'cikis', 'transfer'] as $type) {
-            $count = (int) ($typeCounts[$type] ?? 0);
+            $count = (int) ($typeCounts[$type]->c ?? 0);
             $byType[] = [
                 'type' => $type,
                 'label' => Labels::movementType($type),
                 'count' => $count,
+                'totalQuantity' => (int) ($typeCounts[$type]->qty ?? 0),
                 'percent' => $total > 0 ? round($count / $total * 100, 1) : 0,
             ];
         }

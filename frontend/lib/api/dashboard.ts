@@ -75,7 +75,14 @@ export async function getDashboardData(
   range: DateRangePreset = "son-6-ay",
   warehouseId?: string,
 ): Promise<DashboardData> {
-  return apiFetch<DashboardData>("/dashboard", { query: { range, warehouseId } });
+  // 45 s — a little past the backend's own 60 s Cache::remember on the
+  // expensive parts of this response, so the frontend cache doesn't outlive
+  // it by much. Also dedupes Panel and Raporlar calling this with the same args.
+  return cachedFetch(
+    `dashboard:${range}:${warehouseId ?? "all"}`,
+    () => apiFetch<DashboardData>("/dashboard", { query: { range, warehouseId } }),
+    45_000,
+  );
 }
 
 export async function getCriticalStockNotifications(

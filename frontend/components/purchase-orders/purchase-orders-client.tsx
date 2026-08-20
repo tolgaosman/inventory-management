@@ -724,6 +724,9 @@ export function PurchaseOrdersClient() {
         meta: { className: "w-[14%] text-center" },
         cell: ({ row }) => {
           const percent = receiveProgress(row.original);
+          if (percent === 0) {
+            return <div className="flex justify-center text-muted-foreground">-</div>;
+          }
           return (
             <div className="flex flex-col items-center gap-1">
               <Progress value={percent} className="h-1.5 w-full max-w-24">

@@ -190,6 +190,10 @@ class MovementController extends Controller
                 throw ApiException::notFound('Hareket bulunamadı.');
             }
 
+            if ($movement->purchase_order_id) {
+                throw ApiException::conflict('Satın alma siparişi ile oluşturulan stok hareketleri buradan silinemez.');
+            }
+
             $this->stock->reverseMovement($movement);
             $movement->deleteAs($request->user()->getKey());
         });
@@ -204,6 +208,10 @@ class MovementController extends Controller
             $movement = StockMovement::withTrashed()->lockForUpdate()->find($id);
             if (! $movement) {
                 throw ApiException::notFound('Kayıt bulunamadı.');
+            }
+
+            if ($movement->purchase_order_id) {
+                throw ApiException::conflict('Satın alma siparişi ile oluşturulan stok hareketleri buradan geri yüklenemez.');
             }
 
             $this->stock->reapplyMovement($movement);

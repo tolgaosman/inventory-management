@@ -115,49 +115,83 @@ class PurchaseOrderController extends Controller
 
     public function stats()
     {
-        $orders = PurchaseOrder::query()->with('items')->get();
         $now = Carbon::now();
         $weekFromNow = $now->copy()->addDays(7);
 
-        $openOrders = $orders->filter(fn ($po) => in_array($po->status, ['ordered', 'partially_received'], true));
-        $nonCancelled = $orders->filter(fn ($po) => $po->status !== 'cancelled');
+        $totalOrders = PurchaseOrder::query()->count();
+        $openOrdersCount = PurchaseOrder::query()->whereIn('status', ['ordered', 'partially_received'])->count();
+        $draftCount = PurchaseOrder::query()->where('status', 'draft')->count();
+        $pendingApprovalCount = PurchaseOrder::query()->where('status', 'pending_approval')->count();
 
-        // Committed spend: excludes cancelled, and anything not yet actually
-        // ordered (draft or still awaiting approval).
-        $totalValue = $nonCancelled
-            ->filter(fn ($po) => ! in_array($po->status, ['draft', 'pending_approval'], true))
-            ->sum(fn ($po) => PurchaseOrderService::total($po));
-        $openValue = $openOrders->sum(fn ($po) => PurchaseOrderService::total($po));
-        $pendingUnits = $openOrders->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity - (int) $i->received_quantity));
+        $totalValue = (float) \Illuminate\Support\Facades\DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->whereNotIn('purchase_orders.status', ['cancelled', 'draft', 'pending_approval'])
+            ->sum(\Illuminate\Support\Facades\DB::raw('purchase_order_items.quantity * purchase_order_items.unit_price'));
 
-        $orderedTotal = $nonCancelled->sum(fn ($po) => $po->items->sum('quantity'));
-        $receivedTotal = $nonCancelled->sum(fn ($po) => $po->items->sum('received_quantity'));
+        $openValue = (float) \Illuminate\Support\Facades\DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->whereIn('purchase_orders.status', ['ordered', 'partially_received'])
+            ->sum(\Illuminate\Support\Facades\DB::raw('purchase_order_items.quantity * purchase_order_items.unit_price'));
+
+        $pendingUnits = (int) \Illuminate\Support\Facades\DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->whereIn('purchase_orders.status', ['ordered', 'partially_received'])
+            ->sum(\Illuminate\Support\Facades\DB::raw('purchase_order_items.quantity - purchase_order_items.received_quantity'));
+
+        $orderedTotal = (int) \Illuminate\Support\Facades\DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->where('purchase_orders.status', '!=', 'cancelled')
+            ->sum('purchase_order_items.quantity');
+
+        $receivedTotal = (int) \Illuminate\Support\Facades\DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->where('purchase_orders.status', '!=', 'cancelled')
+            ->sum('purchase_order_items.received_quantity');
+
         $fillRatePercent = $orderedTotal > 0 ? (int) round(($receivedTotal / $orderedTotal) * 100) : 0;
 
-        $overdue = $orders->filter(fn ($po) => PurchaseOrderService::isOverdue($po, $now));
-        $overdueValue = $overdue->sum(fn ($po) => PurchaseOrderService::total($po));
-
-        $arrivingThisWeek = $openOrders
-            ->filter(fn ($po) => $po->expected_at && $po->expected_at->gte($now) && $po->expected_at->lte($weekFromNow))
+        $overdueCount = PurchaseOrder::query()
+            ->whereNotIn('status', ['received', 'cancelled'])
+            ->whereNotNull('expected_at')
+            ->where('expected_at', '<', $now)
             ->count();
 
-        $receivedOrders = $orders->filter(fn ($po) => $po->status === 'received' && $po->received_at);
-        // null (not 0) means "no deliveries yet" — the UI renders that neutrally.
-        $onTimeRatePercent = $receivedOrders->count() > 0
-            ? (int) round($receivedOrders->filter(fn ($po) => $po->received_at->lte($po->expected_at))->count() / $receivedOrders->count() * 100)
-            : null;
+        $overdueValue = (float) \Illuminate\Support\Facades\DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->whereNotIn('purchase_orders.status', ['received', 'cancelled'])
+            ->whereNotNull('purchase_orders.expected_at')
+            ->where('purchase_orders.expected_at', '<', $now)
+            ->sum(\Illuminate\Support\Facades\DB::raw('purchase_order_items.quantity * purchase_order_items.unit_price'));
+
+        $arrivingThisWeek = PurchaseOrder::query()
+            ->whereIn('status', ['ordered', 'partially_received'])
+            ->whereNotNull('expected_at')
+            ->where('expected_at', '>=', $now)
+            ->where('expected_at', '<=', $weekFromNow)
+            ->count();
+
+        $receivedOrdersCount = PurchaseOrder::query()->where('status', 'received')->whereNotNull('received_at')->count();
+        $onTimeRatePercent = null;
+        if ($receivedOrdersCount > 0) {
+            $onTimeCount = PurchaseOrder::query()
+                ->where('status', 'received')
+                ->whereNotNull('received_at')
+                ->whereColumn('received_at', '<=', 'expected_at')
+                ->count();
+            $onTimeRatePercent = (int) round(($onTimeCount / $receivedOrdersCount) * 100);
+        }
 
         return response()->json([
-            'totalOrders' => $orders->count(),
-            'openOrders' => $openOrders->count(),
-            'pendingUnits' => (int) $pendingUnits,
-            'totalValue' => (float) $totalValue,
-            'openValue' => (float) $openValue,
+            'totalOrders' => $totalOrders,
+            'openOrders' => $openOrdersCount,
+            'pendingUnits' => $pendingUnits,
+            'totalValue' => $totalValue,
+            'openValue' => $openValue,
             'fillRatePercent' => $fillRatePercent,
-            'overdueCount' => $overdue->count(),
-            'overdueValue' => (float) $overdueValue,
-            'draftCount' => $orders->where('status', 'draft')->count(),
-            'pendingApprovalCount' => $orders->where('status', 'pending_approval')->count(),
+            'overdueCount' => $overdueCount,
+            'overdueValue' => $overdueValue,
+            'draftCount' => $draftCount,
+            'pendingApprovalCount' => $pendingApprovalCount,
             'arrivingThisWeek' => $arrivingThisWeek,
             'onTimeRatePercent' => $onTimeRatePercent,
         ]);

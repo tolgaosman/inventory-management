@@ -11,7 +11,12 @@
 // wants tr-TR formatted strings).
 import { formatDateShort, formatDateTime } from "@/lib/format";
 import { getDashboardData, MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
-import { criticalProducts as computeCriticalProducts, fetchReportDataset, topMovers as computeTopMovers } from "@/lib/reports/dataset";
+import {
+  criticalProducts as computeCriticalProducts,
+  fetchReportDataset,
+  fetchReportMovements,
+  topMoversFromMovements,
+} from "@/lib/reports/dataset";
 import {
   MOVEMENT_REASON_LABELS,
   MOVEMENT_TYPE_LABELS,
@@ -112,9 +117,13 @@ export async function buildReportData(
   rate: number = 1,
   companyName: string = COMPANY_NAME,
 ): Promise<ReportData> {
-  const [dashboard, ds] = await Promise.all([getDashboardData(range), fetchReportDataset()]);
-
   const from = rangeStart(range).toISOString();
+  const [dashboard, ds, movements] = await Promise.all([
+    getDashboardData(range),
+    fetchReportDataset(),
+    fetchReportMovements(from),
+  ]);
+
   const symbol = CURRENCY_SYMBOLS[currency];
   const convert = (v: number) => v / (rate || 1);
 
@@ -136,10 +145,9 @@ export async function buildReportData(
     .map((p) => ({ product: p, current: p.totalStock, shortfall: Math.max(p.minStock - p.totalStock, 0) }))
     .sort((a, b) => b.shortfall - a.shortfall);
 
-  // All movements inside the selected period (dashboard shows only 8).
-  const movements = ds.movements
-    .filter((m) => m.createdAt >= from)
-    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  // All movements inside the selected period (dashboard shows only 8) — the
+  // server already filtered by `from` via fetchReportMovements(from); just order.
+  const sortedMovements = [...movements].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   const sections: ReportSection[] = [
     {
@@ -192,7 +200,7 @@ export async function buildReportData(
       columns: ["Ürün", "SKU", "Hareket Sayısı", "Toplam Miktar"],
       numericColumns: [2, 3],
       emptyMessage: "Hareket verisi yok.",
-      rows: computeTopMovers(ds, 15).map((t) => [t.name, t.sku, t.movementCount, t.totalQuantity]),
+      rows: topMoversFromMovements(movements, ds.products, 15).map((t) => [t.name, t.sku, t.movementCount, t.totalQuantity]),
     },
     {
       title: "Stok Hareketleri",
@@ -211,7 +219,7 @@ export async function buildReportData(
       ],
       numericColumns: [6, 7, 8],
       emptyMessage: "Seçilen dönemde stok hareketi yok.",
-      rows: movements.map((m) => {
+      rows: sortedMovements.map((m) => {
         const product = ds.products.find((p) => p.id === m.productId);
         return [
           formatDateTime(m.createdAt),

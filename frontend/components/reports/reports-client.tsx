@@ -74,10 +74,10 @@ import {
   useWarehouseCategoryShares,
   warehouseDetails as computeWarehouseDetails,
   criticalProducts as computeCriticalProducts,
-  topMovers as computeTopMovers,
   type ReportDataset,
-  type TopMover,
 } from "@/lib/reports/dataset";
+import { getProductsReport, getMovementsReport, type ReportMover } from "@/lib/api/reports";
+import { listMovements } from "@/lib/api/movements";
 import type { StockMovement } from "@/lib/types";
 import { getDashboardData, MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { formatNumber, formatCurrency, formatDateTime, formatSigned } from "@/lib/format";
@@ -164,15 +164,19 @@ export function ReportsClient() {
 
   const warehouseDetails = useMemo(() => (dataset ? computeWarehouseDetails(dataset) : []), [dataset]);
   const warehouseCategoryShares = useWarehouseCategoryShares(dataset);
-  const warehouseMovers = useMemo(
-    () => (dataset ? computeTopMovers(dataset, 8, moversWarehouseId === "all" ? undefined : moversWarehouseId) : []),
-    [dataset, moversWarehouseId],
+
+  // Top/least/per-warehouse movers come from the DB-aggregate /reports/products
+  // endpoint instead of scanning the full movements table in the browser.
+  const { data: globalMoversReport } = useAsync(() => getProductsReport(range, { limit: 10 }), [range]);
+  const topMovers: ReportMover[] = globalMoversReport?.topMovers ?? EMPTY_ARRAY;
+  const leastMovers: ReportMover[] = globalMoversReport?.leastMovers ?? EMPTY_ARRAY;
+
+  const { data: warehouseMoversReport } = useAsync(
+    () => getProductsReport(range, { limit: 8, warehouseId: moversWarehouseId === "all" ? undefined : moversWarehouseId }),
+    [range, moversWarehouseId],
   );
-  const topMovers = useMemo(() => (dataset ? computeTopMovers(dataset, 10) : []), [dataset]);
-  const leastMovers = useMemo(
-    () => (dataset ? [...computeTopMovers(dataset, 999)].sort((a, b) => a.totalQuantity - b.totalQuantity).slice(0, 10) : []),
-    [dataset],
-  );
+  const warehouseMovers: ReportMover[] = warehouseMoversReport?.topMovers ?? EMPTY_ARRAY;
+
   const criticalProducts = useMemo(() => (dataset ? computeCriticalProducts(dataset) : []), [dataset]);
 
   const rangeStart = useMemo(() => {
@@ -182,16 +186,26 @@ export function ReportsClient() {
     return d.toISOString();
   }, [months]);
 
-  const filteredMovements = useMemo(
-    () =>
-      (dataset?.movements ?? [])
-        .filter((m) => m.createdAt >= rangeStart)
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [dataset, rangeStart],
-  );
-  const inMovements = filteredMovements.filter((m) => m.type === "giris");
-  const outMovements = filteredMovements.filter((m) => m.type === "cikis");
-  const transferMovements = filteredMovements.filter((m) => m.type === "transfer");
+  // Type counts/sums come from the DB-aggregate /reports/movements endpoint;
+  // only the ~30 rows actually rendered per MovementTable are fetched raw
+  // (server already orders newest-first), instead of downloading and slicing
+  // the entire stock_movements table.
+  const { data: movementsReport } = useAsync(() => getMovementsReport(range), [range]);
+  const inTypeStats = movementsReport?.byType.find((t) => t.type === "giris");
+  const outTypeStats = movementsReport?.byType.find((t) => t.type === "cikis");
+  const transferTypeStats = movementsReport?.byType.find((t) => t.type === "transfer");
+
+  const { data: movementRows } = useAsync(async () => {
+    const [giris, cikis, transfer] = await Promise.all([
+      listMovements({ type: "giris", dateFrom: rangeStart, page: 1, pageSize: 30 }),
+      listMovements({ type: "cikis", dateFrom: rangeStart, page: 1, pageSize: 30 }),
+      listMovements({ type: "transfer", dateFrom: rangeStart, page: 1, pageSize: 20 }),
+    ]);
+    return { giris: giris.rows, cikis: cikis.rows, transfer: transfer.rows };
+  }, [rangeStart]);
+  const inMovements = movementRows?.giris ?? EMPTY_ARRAY;
+  const outMovements = movementRows?.cikis ?? EMPTY_ARRAY;
+  const transferMovements = movementRows?.transfer ?? EMPTY_ARRAY;
 
   const filteredOrders = useMemo(
     () =>
@@ -292,10 +306,9 @@ export function ReportsClient() {
     </Select>
   );
 
-  const totalMovements = filteredMovements.length;
-  const inPercent = totalMovements > 0 ? Math.round((inMovements.length / totalMovements) * 100) : 0;
-  const outPercent = totalMovements > 0 ? Math.round((outMovements.length / totalMovements) * 100) : 0;
-  const transferPercent = totalMovements > 0 ? Math.round((transferMovements.length / totalMovements) * 100) : 0;
+  const inPercent = Math.round(inTypeStats?.percent ?? 0);
+  const outPercent = Math.round(outTypeStats?.percent ?? 0);
+  const transferPercent = Math.round(transferTypeStats?.percent ?? 0);
 
   const warehouseKpis = useMemo(
     () => ({
@@ -573,16 +586,16 @@ export function ReportsClient() {
               <PanelCard title="Hareket Dağılımı" meta={RANGE_LABELS[range]}>
                 <div className="grid gap-5 lg:grid-cols-3 lg:gap-0">
                   <div className="grid grid-cols-3 gap-2 lg:pr-8">
-                    <MovementStat icon={ArrowDownToLine} label="Giriş" count={inMovements.length} color="text-status-good" bg="bg-status-good/10" />
-                    <MovementStat icon={ArrowUpFromLine} label="Çıkış" count={outMovements.length} color="text-status-critical" bg="bg-status-critical/10" />
-                    <MovementStat icon={ArrowLeftRight} label="Transfer" count={transferMovements.length} color="text-primary" bg="bg-primary/10" />
+                    <MovementStat icon={ArrowDownToLine} label="Giriş" count={inTypeStats?.count ?? 0} color="text-status-good" bg="bg-status-good/10" />
+                    <MovementStat icon={ArrowUpFromLine} label="Çıkış" count={outTypeStats?.count ?? 0} color="text-status-critical" bg="bg-status-critical/10" />
+                    <MovementStat icon={ArrowLeftRight} label="Transfer" count={transferTypeStats?.count ?? 0} color="text-primary" bg="bg-primary/10" />
                   </div>
                   <div className="border-t border-border pt-5 lg:border-t-0 lg:border-l lg:px-8 lg:pt-0">
                     <MovementDistributionChart
                       data={[
-                        { key: "giris", label: "Giriş", percent: inPercent, count: inMovements.length },
-                        { key: "cikis", label: "Çıkış", percent: outPercent, count: outMovements.length },
-                        { key: "transfer", label: "Transfer", percent: transferPercent, count: transferMovements.length },
+                        { key: "giris", label: "Giriş", percent: inPercent, count: inTypeStats?.count ?? 0 },
+                        { key: "cikis", label: "Çıkış", percent: outPercent, count: outTypeStats?.count ?? 0 },
+                        { key: "transfer", label: "Transfer", percent: transferPercent, count: transferTypeStats?.count ?? 0 },
                       ]}
                     />
                   </div>
@@ -591,13 +604,13 @@ export function ReportsClient() {
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Toplam Giriş</span>
                       <span className="font-semibold tabular-nums text-status-good">
-                        +{formatNumber(inMovements.reduce((s, m) => s + m.quantity, 0))} adet
+                        +{formatNumber(inTypeStats?.totalQuantity ?? 0)} adet
                       </span>
                     </div>
                     <div className="flex justify-between text-xs">
                       <span className="text-muted-foreground">Toplam Çıkış</span>
                       <span className="font-semibold tabular-nums text-status-critical">
-                        -{formatNumber(outMovements.reduce((s, m) => s + m.quantity, 0))} adet
+                        -{formatNumber(outTypeStats?.totalQuantity ?? 0)} adet
                       </span>
                     </div>
                   </div>
@@ -607,10 +620,10 @@ export function ReportsClient() {
 
             <Section index={1} className="grid gap-4">
               <MovementTable
-                movements={inMovements.slice(0, 30)}
+                movements={inMovements}
                 products={products}
                 type="giris"
-                meta={`${inMovements.length} kayıt`}
+                meta={`${inTypeStats?.count ?? 0} kayıt`}
                 actions={
                   <Link href="/stok/islem" className="flex items-center gap-1 text-xs text-primary hover:underline">
                     Giriş yap <ChevronRight className="size-3.5" />
@@ -618,10 +631,10 @@ export function ReportsClient() {
                 }
               />
               <MovementTable
-                movements={outMovements.slice(0, 30)}
+                movements={outMovements}
                 products={products}
                 type="cikis"
-                meta={`${outMovements.length} kayıt`}
+                meta={`${outTypeStats?.count ?? 0} kayıt`}
                 actions={
                   <Link href="/stok/islem" className="flex items-center gap-1 text-xs text-primary hover:underline">
                     Çıkış yap <ChevronRight className="size-3.5" />
@@ -632,10 +645,10 @@ export function ReportsClient() {
 
             <Section index={2}>
               <MovementTable
-                movements={transferMovements.slice(0, 20)}
+                movements={transferMovements}
                 products={products}
                 type="transfer"
-                meta={`${transferMovements.length} kayıt`}
+                meta={`${transferTypeStats?.count ?? 0} kayıt`}
                 actions={
                   <Link href="/stok/hareketler" className="flex items-center gap-1 text-xs text-primary hover:underline">
                     Tüm hareketler <ChevronRight className="size-3.5" />
@@ -1040,7 +1053,7 @@ function MoversChart({
 }: {
   title: string;
   icon: LucideIcon;
-  data: TopMover[];
+  data: ReportMover[];
 }) {
   return (
     <PanelCard
@@ -1112,7 +1125,7 @@ function MoversChart({
  * look the same. No rank badge: coming in "1st" among the least-moved
  * products isn't an achievement, so a podium chip would misread as one.
  */
-function LeastMoversList({ items }: { items: TopMover[] }) {
+function LeastMoversList({ items }: { items: ReportMover[] }) {
   return (
     <PanelCard
       title={

@@ -80,15 +80,36 @@ class DashboardService
 
             $since = $this->rangeStart($months);
             // Purchase orders have no warehouse dimension in the UI's filter model,
-            // so they're scoped by date only.
-            $scopedOrders = PurchaseOrder::query()->with('items')->where('created_at', '>=', $since)->get();
+            // so they're scoped by date only. Real DB aggregates instead of pulling
+            // every order + line item into PHP (matches PurchaseOrderController::stats()).
+            $openOrdersCount = PurchaseOrder::query()
+                ->whereIn('status', ['ordered', 'partially_received'])
+                ->where('created_at', '>=', $since)
+                ->count();
 
-            $openOrders = $scopedOrders->filter(fn ($po) => in_array($po->status, ['ordered', 'partially_received'], true));
-            $purchaseTotalValue = $scopedOrders
-                ->filter(fn ($po) => ! in_array($po->status, ['cancelled', 'draft', 'pending_approval'], true))
-                ->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity * (float) $i->unit_price));
+            $purchaseTotalValue = (float) DB::table('purchase_order_items')
+                ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+                ->whereNotIn('purchase_orders.status', ['cancelled', 'draft', 'pending_approval'])
+                ->where('purchase_orders.created_at', '>=', $since)
+                ->sum(DB::raw('purchase_order_items.quantity * purchase_order_items.unit_price'));
 
-            $incomingUnits = $openOrders->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity - (int) $i->received_quantity));
+            $incomingUnits = (int) DB::table('purchase_order_items')
+                ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+                ->whereIn('purchase_orders.status', ['ordered', 'partially_received'])
+                ->where('purchase_orders.created_at', '>=', $since)
+                ->sum(DB::raw('purchase_order_items.quantity - purchase_order_items.received_quantity'));
+
+            $pendingDeliveries = PurchaseOrder::query()
+                ->where('status', 'partially_received')
+                ->where('created_at', '>=', $since)
+                ->count();
+
+            $cancelledOrders = PurchaseOrder::query()
+                ->where('status', 'cancelled')
+                ->where('created_at', '>=', $since)
+                ->count();
+
+            $totalPurchaseOrders = PurchaseOrder::query()->where('created_at', '>=', $since)->count();
 
             return [
                 'totalProducts' => Product::query()->count(),
@@ -96,13 +117,13 @@ class DashboardService
                 'criticalStockCount' => count($this->criticalProducts($totals)),
                 'todayIn' => (int) ($todayFlow['giris'] ?? 0),
                 'todayOut' => (int) ($todayFlow['cikis'] ?? 0),
-                'openPurchaseOrders' => $openOrders->count(),
-                'pendingDeliveries' => $scopedOrders->where('status', 'partially_received')->count(),
-                'purchaseTotalValue' => (float) $purchaseTotalValue,
-                'cancelledOrders' => $scopedOrders->where('status', 'cancelled')->count(),
-                'totalPurchaseOrders' => $scopedOrders->count(),
+                'openPurchaseOrders' => $openOrdersCount,
+                'pendingDeliveries' => $pendingDeliveries,
+                'purchaseTotalValue' => $purchaseTotalValue,
+                'cancelledOrders' => $cancelledOrders,
+                'totalPurchaseOrders' => $totalPurchaseOrders,
                 'onHandUnits' => $onHandUnits,
-                'incomingUnits' => (int) $incomingUnits,
+                'incomingUnits' => $incomingUnits,
                 'totalUsers' => User::query()->count(),
                 'totalSuppliers' => Supplier::query()->count(),
                 'categoryCount' => Category::query()->count(),

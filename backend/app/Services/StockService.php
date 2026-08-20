@@ -261,6 +261,13 @@ class StockService
                 break;
 
             case 'transfer':
+                // Lock in a stable order so two opposing transfer reversals can't deadlock.
+                [$firstId, $secondId] = $movement->warehouse_id < $movement->target_warehouse_id
+                    ? [$movement->warehouse_id, $movement->target_warehouse_id]
+                    : [$movement->target_warehouse_id, $movement->warehouse_id];
+                $this->lockLevel($movement->product_id, $firstId);
+                $this->lockLevel($movement->product_id, $secondId);
+
                 $sourceLevel = $this->lockLevel($movement->product_id, $movement->warehouse_id);
                 $sourceLevel->quantity = (int) $sourceLevel->quantity + (int) $movement->quantity;
                 $sourceLevel->save();
@@ -295,6 +302,13 @@ class StockService
                 break;
 
             case 'transfer':
+                // Lock in a stable order so two opposing transfer reapplications can't deadlock.
+                [$firstId, $secondId] = $movement->warehouse_id < $movement->target_warehouse_id
+                    ? [$movement->warehouse_id, $movement->target_warehouse_id]
+                    : [$movement->target_warehouse_id, $movement->warehouse_id];
+                $this->lockLevel($movement->product_id, $firstId);
+                $this->lockLevel($movement->product_id, $secondId);
+
                 $sourceLevel = $this->lockLevel($movement->product_id, $movement->warehouse_id);
                 if ((int) $sourceLevel->quantity < (int) $movement->quantity) {
                     throw ApiException::conflict('Bu transfer geri yüklenemez: kaynak depoda yeterli stok yok.');

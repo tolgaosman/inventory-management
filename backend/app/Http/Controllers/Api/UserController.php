@@ -107,17 +107,30 @@ class UserController extends Controller
             }
 
             $authUser = request()->user();
-            if ($authUser->role !== 'admin' && isset($data['role'])) {
-                throw ApiException::forbidden('Rol değiştirme yetkiniz yok.');
-            }
 
             if ($authUser->role === 'depo_yonetici') {
-                if (!in_array($user->role, ['depo', 'depo_yonetici'])) {
+                if (!in_array($user->role, ['depo', 'depo_yonetici'], true)) {
                     throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları düzenleyebilirsiniz.');
                 }
             } elseif ($authUser->role === 'satinalma_yonetici') {
-                if (!in_array($user->role, ['satinalma', 'satinalma_yonetici'])) {
+                if (!in_array($user->role, ['satinalma', 'satinalma_yonetici'], true)) {
                     throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları düzenleyebilirsiniz.');
+                }
+            } elseif ($authUser->role !== 'admin') {
+                throw ApiException::forbidden('Kullanıcı düzenleme yetkiniz yok.');
+            }
+
+            if (array_key_exists('role', $data) && $data['role'] !== $user->role) {
+                if ($authUser->role === 'depo_yonetici') {
+                    if (!in_array($data['role'], ['depo', 'depo_yonetici'], true)) {
+                        throw ApiException::forbidden('Sadece kendi departmanınızdaki rollere atama yapabilirsiniz.');
+                    }
+                } elseif ($authUser->role === 'satinalma_yonetici') {
+                    if (!in_array($data['role'], ['satinalma', 'satinalma_yonetici'], true)) {
+                        throw ApiException::forbidden('Sadece kendi departmanınızdaki rollere atama yapabilirsiniz.');
+                    }
+                } elseif ($authUser->role !== 'admin') {
+                    throw ApiException::forbidden('Rol değiştirme yetkiniz yok.');
                 }
             }
 

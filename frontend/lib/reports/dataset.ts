@@ -21,7 +21,6 @@ export interface ReportDataset {
   warehouses: ApiWarehouseDetail[];
   categories: Category[];
   products: ProductRow[];
-  movements: StockMovement[];
   orders: PurchaseOrderRow[];
   suppliers: (Supplier & { productCount: number })[];
   users: AppUser[];
@@ -29,14 +28,19 @@ export interface ReportDataset {
   stocksByProduct: Map<string, Record<string, number>>;
 }
 
-/** Fetches the full (unpaginated, un-truncated) dataset the reports page and its exports both aggregate over. */
+/**
+ * Fetches the full (unpaginated, un-truncated) dataset the reports page and
+ * its exports both aggregate over. Movement-derived numbers (top movers, type
+ * counts) are NOT here — those come from the DB-aggregate `/reports/*`
+ * endpoints (`lib/api/reports.ts`) instead of downloading the whole
+ * stock_movements table just to count/sum it in the browser.
+ */
 export async function fetchReportDataset(): Promise<ReportDataset> {
-  const [warehouses, categoryTree, productsResult, movementsResult, ordersResult, suppliersResult, users, matrix] =
+  const [warehouses, categoryTree, productsResult, ordersResult, suppliersResult, users, matrix] =
     await Promise.all([
       listWarehousesDetailed(),
       listCategoryTree(),
       listProducts({ pageSize: ALL }),
-      listMovements({ pageSize: ALL }),
       listPurchaseOrders({ pageSize: ALL }),
       listSuppliers({ pageSize: ALL }),
       listAppUsers(),
@@ -50,7 +54,6 @@ export async function fetchReportDataset(): Promise<ReportDataset> {
     warehouses,
     categories: categoryTree.all,
     products: productsResult.rows,
-    movements: movementsResult.rows,
     orders: ordersResult.rows,
     suppliers: suppliersResult.rows,
     users,
@@ -60,6 +63,54 @@ export async function fetchReportDataset(): Promise<ReportDataset> {
 
 export function useReportDataset() {
   return useAsync(fetchReportDataset, []);
+}
+
+/**
+ * Full, un-truncated movement list for the selected period — used only by
+ * the CSV/PDF export builder (`lib/export/report-data.ts`), which genuinely
+ * needs every row. Deliberately NOT part of `fetchReportDataset()`/`ReportDataset`:
+ * the on-screen Raporlar page gets its movement-derived numbers from the
+ * DB-aggregate `/reports/*` endpoints instead, so this (expensive) full fetch
+ * only happens when a user actually clicks "Dışa Aktar", not on every page view.
+ */
+export async function fetchReportMovements(dateFrom?: string): Promise<StockMovement[]> {
+  const result = await listMovements({ pageSize: ALL, dateFrom });
+  return result.rows;
+}
+
+export interface TopMover {
+  productId: string;
+  name: string;
+  sku: string;
+  movementCount: number;
+  totalQuantity: number;
+  imageUrl?: string;
+}
+
+/** Pure aggregation over an already-fetched movement list — used by the export builder. */
+export function topMoversFromMovements(movements: StockMovement[], products: ProductRow[], limit = 15): TopMover[] {
+  const byProduct = new Map<string, { count: number; qty: number }>();
+  for (const m of movements) {
+    const cur = byProduct.get(m.productId) ?? { count: 0, qty: 0 };
+    cur.count += 1;
+    cur.qty += m.quantity;
+    byProduct.set(m.productId, cur);
+  }
+  const productsById = new Map(products.map((p) => [p.id, p]));
+  return [...byProduct.entries()]
+    .map(([productId, v]) => {
+      const product = productsById.get(productId);
+      return {
+        productId,
+        name: product?.name ?? "Bilinmeyen ürün",
+        sku: product?.sku ?? "-",
+        movementCount: v.count,
+        totalQuantity: v.qty,
+        imageUrl: product?.imageUrl,
+      };
+    })
+    .sort((a, b) => b.totalQuantity - a.totalQuantity)
+    .slice(0, limit);
 }
 
 export interface WarehouseDetail {
@@ -111,46 +162,6 @@ export function categoryShares(ds: ReportDataset, warehouseId?: string): Categor
     return { categoryId: top.id, name: top.name, units };
   });
   return shares.sort((a, b) => b.units - a.units);
-}
-
-export interface TopMover {
-  productId: string;
-  name: string;
-  sku: string;
-  movementCount: number;
-  totalQuantity: number;
-  imageUrl?: string;
-}
-
-function movementMatchesWarehouse(m: StockMovement, warehouseId?: string): boolean {
-  if (!warehouseId) return true;
-  return m.warehouseId === warehouseId || m.targetWarehouseId === warehouseId;
-}
-
-export function topMovers(ds: ReportDataset, limit = 15, warehouseId?: string): TopMover[] {
-  const byProduct = new Map<string, { count: number; qty: number }>();
-  for (const m of ds.movements) {
-    if (!movementMatchesWarehouse(m, warehouseId)) continue;
-    const cur = byProduct.get(m.productId) ?? { count: 0, qty: 0 };
-    cur.count += 1;
-    cur.qty += m.quantity;
-    byProduct.set(m.productId, cur);
-  }
-  const productsById = new Map(ds.products.map((p) => [p.id, p]));
-  return [...byProduct.entries()]
-    .map(([productId, v]) => {
-      const product = productsById.get(productId);
-      return {
-        productId,
-        name: product?.name ?? "Bilinmeyen ürün",
-        sku: product?.sku ?? "-",
-        movementCount: v.count,
-        totalQuantity: v.qty,
-        imageUrl: product?.imageUrl,
-      };
-    })
-    .sort((a, b) => b.totalQuantity - a.totalQuantity)
-    .slice(0, limit);
 }
 
 /** Memoized per-top-level-category share, one entry per warehouse — feeds the "Depo Bazında Kategori Dağılımı" chart. */
