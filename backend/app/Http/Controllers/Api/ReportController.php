@@ -130,13 +130,39 @@ class ReportController extends Controller
         return response()->json(['total' => $total, 'byType' => $byType, 'byReason' => $byReason]);
     }
 
+    /**
+     * productId => warehouseId => quantity, straight off stock_levels.
+     *
+     * Raporlar only ever reads this shape (see frontend/lib/reports/dataset.ts) —
+     * unlike WarehouseController::stockMatrix() (used by pickers/forms that need
+     * product names, prices, etc.), this skips joining products/categories/warehouses
+     * and the O(products*warehouses) PHP fill loop entirely.
+     */
+    public function stockByProduct()
+    {
+        $rows = DB::table('stock_levels')->select('product_id', 'warehouse_id', 'quantity')->get();
+
+        $byProduct = [];
+        foreach ($rows as $row) {
+            $byProduct[$row->product_id][$row->warehouse_id] = (int) $row->quantity;
+        }
+
+        return response()->json($byProduct);
+    }
+
     public function purchasing(Request $request)
     {
         $since = $this->rangeStart($request->query('range'));
-        $orders = PurchaseOrder::query()->with('items')->where('created_at', '>=', $since)->get();
+        $orders = PurchaseOrder::query()
+            ->with('items')
+            ->where('created_at', '>=', $since)
+            ->where('status', '!=', 'draft')
+            ->get();
 
         $statusBreakdown = [];
         foreach (Labels::PURCHASE_ORDER_STATUS as $status => $label) {
+            if ($status === 'draft') continue;
+            
             $matching = $orders->where('status', $status);
             $statusBreakdown[] = [
                 'status' => $status,

@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, CircleDot, Clock, Hourglass, XCircle, Info } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowLeftRight, ArrowUpRight, CheckCircle2, CircleDot, Clock, Hourglass, XCircle, Info, PackageX, PackagePlus } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -12,11 +12,13 @@ import { MOVEMENT_TYPE_LABELS, PRODUCT_STATUS_LABELS, PURCHASE_STATUS_LABELS } f
 const badgeBase =
   "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap";
 
-export function StockStatusBadge({ level }: { level: "kritik" | "dusuk" | "normal" }) {
+export function StockStatusBadge({ level }: { level: "yok" | "kritik" | "dusuk" | "normal" | "fazla" }) {
   const map = {
+    yok: { label: "Stokta Yok", cls: "bg-muted text-muted-foreground", Icon: PackageX },
     kritik: { label: "Kritik", cls: "bg-status-critical/10 text-status-critical", Icon: AlertTriangle },
     dusuk: { label: "Düşük", cls: "bg-status-warning/12 text-status-warning-foreground", Icon: Clock },
     normal: { label: "Normal", cls: "bg-status-good/10 text-status-good", Icon: CheckCircle2 },
+    fazla: { label: "Fazla", cls: "bg-primary/10 text-primary", Icon: PackagePlus },
   } as const;
   const { label, cls, Icon } = map[level];
   return (

@@ -73,3 +73,17 @@ export async function getPurchasingReport(range: DateRangePreset): Promise<Purch
   const key = `reports:purchasing:${range}`;
   return cachedFetch(key, () => apiFetch<PurchasingReport>("/reports/purchasing", { query: { range } }), REPORT_CACHE_TTL);
 }
+
+/**
+ * productId -> warehouseId -> quantity. A lightweight alternative to
+ * getProductStockMatrix() for Raporlar, which only ever reads this shape —
+ * skips the product/category/warehouse joins and enrichment that pickers
+ * and forms need from the full stock matrix.
+ */
+export async function getStockByProduct(): Promise<Record<string, Record<string, number>>> {
+  return cachedFetch(
+    "reports:stockByProduct",
+    () => apiFetch<Record<string, Record<string, number>>>("/reports/stock-by-product"),
+    REPORT_CACHE_TTL,
+  );
+}

@@ -72,8 +72,8 @@ class ProductController extends Controller
 
         return [
             'total' => count($rows),
-            'critical' => count(array_filter($rows, fn ($p) => $p['critical'])),
-            'low' => count(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] < $p['minStock'] * $mult)),
+            'critical' => count(array_filter($rows, fn ($p) => $p['critical'] && $p['totalStock'] > 0)),
+            'low' => count(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] > 0 && $p['totalStock'] < $p['minStock'] * $mult)),
             'overstock' => count(array_filter($rows, fn ($p) => $p['totalStock'] > $p['maxStock'])),
             'passive' => count(array_filter($rows, fn ($p) => $p['status'] === 'pasif')),
             'stockValue' => array_sum(array_map(fn ($p) => ($p['warehouseStock'] ?? $p['totalStock']) * $p['purchasePrice'], $rows)),
@@ -136,10 +136,12 @@ class ProductController extends Controller
 
         $mult = config('inventory.low_stock_multiplier');
         $stockStatus = $request->query('stockStatus');
-        if ($stockStatus === 'kritik') {
-            $rows = array_values(array_filter($rows, fn ($p) => $p['critical']));
+        if ($stockStatus === 'yok') {
+            $rows = array_values(array_filter($rows, fn ($p) => $p['totalStock'] <= 0));
+        } elseif ($stockStatus === 'kritik') {
+            $rows = array_values(array_filter($rows, fn ($p) => $p['critical'] && $p['totalStock'] > 0));
         } elseif ($stockStatus === 'dusuk') {
-            $rows = array_values(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] < $p['minStock'] * $mult));
+            $rows = array_values(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] > 0 && $p['totalStock'] < $p['minStock'] * $mult));
         } elseif ($stockStatus === 'normal') {
             // Bands are mutually exclusive: "normal" stops where "fazla" starts.
             $rows = array_values(array_filter(

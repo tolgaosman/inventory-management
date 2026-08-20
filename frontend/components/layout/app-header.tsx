@@ -90,7 +90,7 @@ function DashboardFilters() {
 }
 
 export function AppHeader() {
-  const { name, initials, role, signOut } = useAuth();
+  const { name, initials, role, status, signOut } = useAuth();
   const { notifications } = useSettings();
   const pathname = usePathname();
   const isPanel = pathname?.replace(/\/$/, "") === "/panel";
@@ -299,12 +299,21 @@ export function AppHeader() {
         <DropdownMenuTrigger className="flex items-center gap-2 rounded-md py-1 pr-2 pl-1 transition-colors hover:bg-muted">
           <Avatar className="size-8">
             <AvatarFallback className="bg-accent text-accent-foreground text-xs font-semibold">
-              {initials}
+              {status === "loading" ? "" : initials}
             </AvatarFallback>
           </Avatar>
           <span className="hidden text-left text-sm leading-tight sm:block">
-            <span className="block font-medium">{name}</span>
-            <span className="block text-xs text-muted-foreground">{ROLE_LABELS[role]}</span>
+            {status === "loading" ? (
+              <span className="flex flex-col gap-1 py-0.5">
+                <span className="block h-3.5 w-20 rounded bg-muted-foreground/20 animate-pulse" />
+                <span className="block h-2.5 w-16 rounded bg-muted-foreground/10 animate-pulse" />
+              </span>
+            ) : (
+              <>
+                <span className="block font-medium">{name}</span>
+                <span className="block text-xs text-muted-foreground">{ROLE_LABELS[role]}</span>
+              </>
+            )}
           </span>
           <ChevronDown className="size-4 text-muted-foreground" />
         </DropdownMenuTrigger>

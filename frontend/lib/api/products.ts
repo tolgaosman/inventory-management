@@ -12,7 +12,7 @@ export interface ProductQuery extends PagedQuery {
   trashed?: boolean;
   categoryId?: string;
   warehouseId?: string;
-  stockStatus?: "kritik" | "dusuk" | "normal" | "fazla";
+  stockStatus?: "yok" | "kritik" | "dusuk" | "normal" | "fazla";
   status?: "aktif" | "pasif";
   supplierId?: string;
   minPrice?: number;

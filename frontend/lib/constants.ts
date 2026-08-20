@@ -26,7 +26,7 @@ export const MOVEMENT_REASON_LABELS: Record<MovementReason, string> = {
 export const PURCHASE_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
   draft: "Taslak",
   pending_approval: "Onay Bekliyor",
-  ordered: "Sipariş Edildi",
+  ordered: "Sipariş Edildi / Henüz Teslim Alınmadı",
   partially_received: "Kısmen Teslim Alındı",
   received: "Teslim Alındı",
   cancelled: "İptal/Ret",

@@ -109,7 +109,10 @@ class DashboardService
                 ->where('created_at', '>=', $since)
                 ->count();
 
-            $totalPurchaseOrders = PurchaseOrder::query()->where('created_at', '>=', $since)->count();
+            $totalPurchaseOrders = PurchaseOrder::query()
+                ->where('status', '!=', 'draft')
+                ->where('created_at', '>=', $since)
+                ->count();
 
             return [
                 'totalProducts' => Product::query()->count(),

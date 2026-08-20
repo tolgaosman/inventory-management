@@ -93,9 +93,11 @@ const STOCK_STATUS_LABELS: Record<"kritik" | "dusuk" | "normal" | "fazla", strin
   fazla: "Fazla",
 };
 
-function stockLevel(row: ProductRow): "kritik" | "dusuk" | "normal" {
+function stockLevel(row: ProductRow): "yok" | "kritik" | "dusuk" | "normal" | "fazla" {
+  if (row.totalStock <= 0) return "yok";
   if (row.critical) return "kritik";
   if (row.totalStock < row.minStock * 1.5) return "dusuk";
+  if (row.totalStock > row.maxStock) return "fazla";
   return "normal";
 }
 
@@ -183,7 +185,7 @@ export function ProductsClient() {
     () => ({
       search: search || undefined,
       categoryId: categoryId === "all" ? undefined : categoryId,
-      stockStatus: stockStatus === "all" ? undefined : (stockStatus as "kritik" | "dusuk" | "normal" | "fazla"),
+      stockStatus: stockStatus === "all" ? undefined : (stockStatus as "yok" | "kritik" | "dusuk" | "normal" | "fazla"),
       status: statusFilter === "all" ? undefined : (statusFilter as "aktif" | "pasif"),
       warehouseId: warehouseId === "all" ? undefined : warehouseId,
       supplierId: supplierId === "all" ? undefined : supplierId,
@@ -496,8 +498,8 @@ export function ProductsClient() {
             <DataTableColumnFilter
               value={stockStatus}
               onValueChange={setStockStatus}
-              options={["ok", "low", "out"].map((k) => ({ 
-                label: k === "ok" ? "Yeterli" : k === "low" ? "Kritik Seviye" : "Stok Yok", 
+              options={["normal", "dusuk", "kritik", "fazla", "yok"].map((k) => ({ 
+                label: k === "normal" ? "Normal" : k === "dusuk" ? "Düşük Seviye" : k === "kritik" ? "Kritik Seviye" : k === "fazla" ? "Stok Fazlası" : "Stokta Yok", 
                 value: k 
               }))}
               title="Stok Durumu"

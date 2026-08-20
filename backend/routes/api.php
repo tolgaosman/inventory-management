@@ -121,6 +121,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::get('/reports/warehouses', [ReportController::class, 'warehouses'])->middleware('perm:reports.stock|reports.financial');
     Route::get('/reports/movements', [ReportController::class, 'movements'])->middleware('perm:reports.stock|reports.financial');
     Route::get('/reports/purchasing', [ReportController::class, 'purchasing'])->middleware('perm:reports.stock|reports.financial');
+    Route::get('/reports/stock-by-product', [ReportController::class, 'stockByProduct'])->middleware('perm:reports.stock|reports.financial');
 
     // Calendar
     Route::get('/calendar', [CalendarController::class, 'index'])->middleware('perm:products.view');

@@ -723,10 +723,14 @@ export function PurchaseOrdersClient() {
         enableSorting: false,
         meta: { className: "w-[14%] text-center" },
         cell: ({ row }) => {
-          const percent = receiveProgress(row.original);
-          if (percent === 0) {
+          const status = row.original.status;
+          const showProgress = ["ordered", "partially_received", "received"].includes(status);
+          
+          if (!showProgress) {
             return <div className="flex justify-center text-muted-foreground">-</div>;
           }
+
+          const percent = receiveProgress(row.original);
           return (
             <div className="flex flex-col items-center gap-1">
               <Progress value={percent} className="h-1.5 w-full max-w-24">

@@ -37,25 +37,29 @@ export function DataTableColumnFilter({
   const isFiltered = value && value !== "all" && value !== "";
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              "size-6 p-0 hover:bg-muted/50 data-[state=open]:bg-muted/50",
-              isFiltered ? "text-primary" : "text-muted-foreground",
-              className
-            )}
-            title={title || "Filtrele"}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Filter className="size-3.5" />
-          </Button>
-        }
-      />
-      <PopoverContent align="start" className="w-[260px] p-0">
+    <div 
+      onClick={(e) => e.stopPropagation()} 
+      onPointerDown={(e) => e.stopPropagation()}
+      className="inline-flex items-center"
+    >
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "size-6 p-0 hover:bg-muted/50 data-[state=open]:bg-muted/50",
+                isFiltered ? "text-primary" : "text-muted-foreground",
+                className
+              )}
+              title={title || "Filtrele"}
+            >
+              <Filter className="size-3.5" />
+            </Button>
+          }
+        />
+        <PopoverContent align="start" className="w-[260px] p-0">
         <Command>
           <CommandInput placeholder={title || "Ara..."} />
           <CommandList>
@@ -100,6 +104,7 @@ export function DataTableColumnFilter({
           </CommandList>
         </Command>
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </div>
   );
 }
