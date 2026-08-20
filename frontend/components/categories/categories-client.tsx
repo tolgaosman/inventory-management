@@ -136,35 +136,33 @@ function ActionsMenu({
   onDelete: (node: CategoryNode) => void;
 }) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button variant="ghost" size="icon" className="size-8">
-            <MoreHorizontal className="size-4" />
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end">
-        <Can permission="products.manage">
-          <>
-            {isRoot ? (
-              <DropdownMenuItem onClick={() => onAddChild(node.id)}>
-                <Plus className="size-4" />
-                Alt Kategori Ekle
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem onClick={() => onEdit(node)}>
-              <Pencil className="size-4" />
-              Düzenle
+    <Can permission="products.manage">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" size="icon" className="size-8">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end">
+          {isRoot ? (
+            <DropdownMenuItem onClick={() => onAddChild(node.id)}>
+              <Plus className="size-4" />
+              Alt Kategori Ekle
             </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={() => onDelete(node)}>
-              <Trash2 className="size-4" />
-              Sil
-            </DropdownMenuItem>
-          </>
-        </Can>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          ) : null}
+          <DropdownMenuItem onClick={() => onEdit(node)}>
+            <Pencil className="size-4" />
+            Düzenle
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onClick={() => onDelete(node)}>
+            <Trash2 className="size-4" />
+            Sil
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </Can>
   );
 }
 

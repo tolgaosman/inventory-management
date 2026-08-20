@@ -95,19 +95,22 @@ export function AppHeader() {
   const pathname = usePathname();
   const isPanel = pathname?.replace(/\/$/, "") === "/panel";
 
-  const { data: notif } = useAsync(() => getCriticalStockNotifications(5), []);
-  const criticalCount = notif?.total ?? 0;
-  const criticalItems = notif?.items ?? [];
-
-  const { data: pendingApprovalsData } = useAsync(
-    () =>
+  // Both header requests fetched together — one wave instead of two. Both are
+  // cached (getCriticalStockNotifications / listPurchaseOrders in lib/api-cache.ts),
+  // so this also dedupes against whatever the page body itself is fetching.
+  const { data: headerData } = useAsync(async () => {
+    const [notif, pendingApprovalsData] = await Promise.all([
+      getCriticalStockNotifications(5),
       role === "satinalma_yonetici"
         ? listPurchaseOrders({ status: "pending_approval", pageSize: 5 })
         : Promise.resolve({ total: 0, rows: [], page: 1, pageSize: 5 }),
-    [role],
-  );
-  const pendingApprovalCount = pendingApprovalsData?.total ?? 0;
-  const pendingApprovals = pendingApprovalsData?.rows ?? [];
+    ]);
+    return { notif, pendingApprovalsData };
+  }, [role]);
+  const criticalCount = headerData?.notif.total ?? 0;
+  const criticalItems = headerData?.notif.items ?? [];
+  const pendingApprovalCount = headerData?.pendingApprovalsData.total ?? 0;
+  const pendingApprovals = headerData?.pendingApprovalsData.rows ?? [];
 
   const totalNotifs = criticalCount + (role === "satinalma_yonetici" ? pendingApprovalCount : 0);
 
@@ -123,11 +126,15 @@ export function AppHeader() {
       <div className="flex shrink-0 items-center justify-end gap-2">
 
       <Popover>
-        <PopoverTrigger render={<Button variant="ghost" size="icon" className="relative rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors" />}>
-          <Bell className="size-5" />
-          {totalNotifs > 0 && (
-            <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-destructive ring-2 ring-card" />
-          )}
+        <PopoverTrigger className="flex items-center gap-2 rounded-md px-3 py-1.5 transition-colors hover:bg-muted">
+          <div className="relative flex items-center justify-center">
+            <Bell className="size-4 text-muted-foreground" />
+            {totalNotifs > 0 && (
+              <span className="absolute -top-1 -right-1 size-2 rounded-full bg-destructive ring-2 ring-card" />
+            )}
+          </div>
+          <span className="hidden text-sm font-medium sm:block">Bildirimler</span>
+          <ChevronDown className="size-4 text-muted-foreground" />
         </PopoverTrigger>
         <PopoverContent align="end" sideOffset={8} className="w-80 overflow-hidden rounded-lg border border-border bg-popover p-0 shadow-soft">
           {role === "satinalma_yonetici" ? (

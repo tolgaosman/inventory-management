@@ -22,12 +22,15 @@ export function ProductPicker({
   onChange,
   placeholder = "Ürün seçin…",
   stockByProductId,
+  excludeZeroStock = false,
 }: {
   value: string;
   onChange: (id: string) => void;
   placeholder?: string;
   /** When provided, shows each product's quantity in the currently selected warehouse. */
   stockByProductId?: Record<string, number>;
+  /** When true, hides products that have 0 stock according to stockByProductId. */
+  excludeZeroStock?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -81,7 +84,9 @@ export function ProductPicker({
               <CommandEmpty>Ürün bulunamadı.</CommandEmpty>
             )}
             <CommandGroup>
-              {rows.map((p) => {
+              {rows
+                .filter((p) => !excludeZeroStock || !stockByProductId || stockByProductId[p.id] > 0)
+                .map((p) => {
                 const stock = stockByProductId?.[p.id];
                 return (
                   <CommandItem

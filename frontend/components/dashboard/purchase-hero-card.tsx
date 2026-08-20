@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { TrendingUp, Wallet, ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 
@@ -12,6 +13,13 @@ export interface PurchaseHeroData {
 const BAR_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 export function PurchaseHeroCard({ data }: { data: PurchaseHeroData }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 0);
+    return () => clearTimeout(t);
+  }, []);
+
   const bars = [
     { key: "cancelledOrders", label: "İptal", color: BAR_COLORS[0] },
     { key: "pendingDeliveries", label: "Bekleyen", color: BAR_COLORS[1] },
@@ -49,9 +57,9 @@ export function PurchaseHeroCard({ data }: { data: PurchaseHeroData }) {
               <div className="relative w-full max-w-[40px] h-[100px] rounded-full bg-secondary/40 overflow-hidden">
                 {/* Actual Bar Fill */}
                 <div 
-                  className="absolute bottom-0 left-0 w-full rounded-full transition-all duration-700 ease-out"
+                  className="absolute bottom-0 left-0 w-full rounded-full transition-all duration-1000 ease-out"
                   style={{
-                    height: `${heightPercent}%`,
+                    height: mounted ? `${heightPercent}%` : "0%",
                     backgroundColor: b.color,
                     // Subtle glow. Must be color-mix, not a `${color}40` alpha
                     // suffix — b.color is a var() reference, and string-appending

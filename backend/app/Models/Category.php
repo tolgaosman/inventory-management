@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksDeletedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Category extends Model
 {
-    use HasFactory;
+        use SoftDeletes;
+use TracksDeletedBy;
+
+use HasFactory;
 
     public $incrementing = false;
 

@@ -223,21 +223,26 @@ export function ProductsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, categoryId, stockStatus, statusFilter, warehouseId, supplierId, minPrice, maxPrice, page, sorting]);
 
-  const { status, data, staleData, error, refetch } = useAsync(() => listProducts(query), [
-    JSON.stringify(query),
-  ]);
-  const view = data ?? staleData;
+  // One coordinated fetch instead of two independent waves — reference data
+  // (categories/warehouses/suppliers) is cached by lib/api-cache.ts, so
+  // re-running it alongside the product list on every filter change is cheap.
+  const { status, data, staleData, error, refetch } = useAsync(async () => {
+    const [products, categoriesResult, warehousesResult, suppliersResult] = await Promise.all([
+      listProducts(query),
+      listCategories(),
+      listWarehouses(),
+      listSuppliers({ pageSize: 1000 }),
+    ]);
+    return { products, categories: categoriesResult, warehouses: warehousesResult, suppliers: suppliersResult.rows };
+  }, [JSON.stringify(query)]);
+  const view = (data ?? staleData)?.products;
 
-  const { data: refData } = useAsync(
-    () => Promise.all([listCategories(), listWarehouses(), listSuppliers({ pageSize: 1000 })]),
-    [],
-  );
-  const categories = (refData?.[0] ?? []).filter((c) => c.parentId !== null);
+  const categories = ((data ?? staleData)?.categories ?? []).filter((c) => c.parentId !== null);
   // Memoized so the columns useMemo below (which depends on `warehouses`)
-  // doesn't recompute every render just because `refData?.[1] ?? []` builds
-  // a fresh empty-array reference each time.
-  const warehouses = useMemo(() => refData?.[1] ?? [], [refData]);
-  const suppliers = refData?.[2]?.rows ?? [];
+  // doesn't recompute every render just because this builds a fresh
+  // empty-array reference each time.
+  const warehouses = useMemo(() => (data ?? staleData)?.warehouses ?? [], [data, staleData]);
+  const suppliers = (data ?? staleData)?.suppliers ?? [];
 
   const isFiltered = Boolean(
     search || categoryId !== "all" || stockStatus !== "all" || statusFilter !== "all" || warehouseId !== "all" || supplierId !== "all" || minPrice || maxPrice,

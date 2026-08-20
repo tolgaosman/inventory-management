@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Support\Present;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /** Direct port of frontend/lib/mock/dashboard.ts. */
@@ -36,70 +37,78 @@ class DashboardService
     /** @return array<string,int> */
     public function totalsByProduct(): array
     {
-        return DB::table('stock_levels')
-            ->groupBy('product_id')
-            ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as units'))
-            ->pluck('units', 'product_id')
-            ->map(fn ($v) => (int) $v)
-            ->all();
+        return Cache::remember('dashboard:totals_by_product', 60, fn () =>
+            DB::table('stock_levels')
+                ->groupBy('product_id')
+                ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as units'))
+                ->pluck('units', 'product_id')
+                ->map(fn ($v) => (int) $v)
+                ->all()
+        );
     }
 
     /** Active products whose total stock has fallen below their minimum. */
     public function criticalProducts(?array $totals = null): array
     {
-        $totals ??= $this->totalsByProduct();
+        return Cache::remember('dashboard:critical_products', 60, function () use ($totals) {
+            $totals ??= $this->totalsByProduct();
 
-        return Product::query()->where('status', 'aktif')->get()
-            ->map(fn ($p) => Present::product($p) + ['totalStock' => $totals[$p->id] ?? 0])
-            ->filter(fn ($p) => $p['totalStock'] < $p['minStock'])
-            ->values()
-            ->all();
+            return Product::query()->where('status', 'aktif')->get()
+                ->map(fn ($p) => Present::product($p) + ['totalStock' => $totals[$p->id] ?? 0])
+                ->filter(fn ($p) => $p['totalStock'] < $p['minStock'])
+                ->values()
+                ->all();
+        });
     }
 
     public function kpis(int $months, ?string $warehouseId): array
     {
-        $totals = $this->totalsByProduct();
+        $cacheKey = "dashboard:kpis:{$months}:" . ($warehouseId ?? 'all');
 
-        $todayFlow = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
-            ->whereBetween('created_at', [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()])
-            ->groupBy('type')
-            ->select('type', DB::raw('COALESCE(SUM(quantity), 0) as qty'))
-            ->pluck('qty', 'type');
+        return Cache::remember($cacheKey, 60, function () use ($months, $warehouseId) {
+            $totals = $this->totalsByProduct();
 
-        $onHandUnits = (int) DB::table('stock_levels')
-            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->sum('quantity');
+            $todayFlow = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+                ->whereBetween('created_at', [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()])
+                ->groupBy('type')
+                ->select('type', DB::raw('COALESCE(SUM(quantity), 0) as qty'))
+                ->pluck('qty', 'type');
 
-        $since = $this->rangeStart($months);
-        // Purchase orders have no warehouse dimension in the UI's filter model,
-        // so they're scoped by date only.
-        $scopedOrders = PurchaseOrder::query()->with('items')->where('created_at', '>=', $since)->get();
+            $onHandUnits = (int) DB::table('stock_levels')
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+                ->sum('quantity');
 
-        $openOrders = $scopedOrders->filter(fn ($po) => in_array($po->status, ['ordered', 'partially_received'], true));
-        $purchaseTotalValue = $scopedOrders
-            ->filter(fn ($po) => ! in_array($po->status, ['cancelled', 'draft', 'pending_approval'], true))
-            ->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity * (float) $i->unit_price));
+            $since = $this->rangeStart($months);
+            // Purchase orders have no warehouse dimension in the UI's filter model,
+            // so they're scoped by date only.
+            $scopedOrders = PurchaseOrder::query()->with('items')->where('created_at', '>=', $since)->get();
 
-        $incomingUnits = $openOrders->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity - (int) $i->received_quantity));
+            $openOrders = $scopedOrders->filter(fn ($po) => in_array($po->status, ['ordered', 'partially_received'], true));
+            $purchaseTotalValue = $scopedOrders
+                ->filter(fn ($po) => ! in_array($po->status, ['cancelled', 'draft', 'pending_approval'], true))
+                ->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity * (float) $i->unit_price));
 
-        return [
-            'totalProducts' => Product::query()->count(),
-            'totalWarehouses' => $warehouseId ? 1 : Warehouse::query()->count(),
-            'criticalStockCount' => count($this->criticalProducts($totals)),
-            'todayIn' => (int) ($todayFlow['giris'] ?? 0),
-            'todayOut' => (int) ($todayFlow['cikis'] ?? 0),
-            'openPurchaseOrders' => $openOrders->count(),
-            'pendingDeliveries' => $scopedOrders->where('status', 'partially_received')->count(),
-            'purchaseTotalValue' => (float) $purchaseTotalValue,
-            'cancelledOrders' => $scopedOrders->where('status', 'cancelled')->count(),
-            'totalPurchaseOrders' => $scopedOrders->count(),
-            'onHandUnits' => $onHandUnits,
-            'incomingUnits' => (int) $incomingUnits,
-            'totalUsers' => User::query()->count(),
-            'totalSuppliers' => Supplier::query()->count(),
-            'categoryCount' => Category::query()->count(),
-            'productVariantCount' => Product::query()->count(),
-        ];
+            $incomingUnits = $openOrders->sum(fn ($po) => $po->items->sum(fn ($i) => (int) $i->quantity - (int) $i->received_quantity));
+
+            return [
+                'totalProducts' => Product::query()->count(),
+                'totalWarehouses' => $warehouseId ? 1 : Warehouse::query()->count(),
+                'criticalStockCount' => count($this->criticalProducts($totals)),
+                'todayIn' => (int) ($todayFlow['giris'] ?? 0),
+                'todayOut' => (int) ($todayFlow['cikis'] ?? 0),
+                'openPurchaseOrders' => $openOrders->count(),
+                'pendingDeliveries' => $scopedOrders->where('status', 'partially_received')->count(),
+                'purchaseTotalValue' => (float) $purchaseTotalValue,
+                'cancelledOrders' => $scopedOrders->where('status', 'cancelled')->count(),
+                'totalPurchaseOrders' => $scopedOrders->count(),
+                'onHandUnits' => $onHandUnits,
+                'incomingUnits' => (int) $incomingUnits,
+                'totalUsers' => User::query()->count(),
+                'totalSuppliers' => Supplier::query()->count(),
+                'categoryCount' => Category::query()->count(),
+                'productVariantCount' => Product::query()->count(),
+            ];
+        });
     }
 
     public function monthlyFlow(int $months, ?string $warehouseId): array
@@ -118,6 +127,7 @@ class DashboardService
         $movements = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
             ->where('created_at', '>=', $now->copy()->startOfMonth()->subMonths($months - 1))
             ->whereIn('type', ['giris', 'cikis'])
+            ->where('reason', '!=', 'sayim_duzeltme')
             ->get(['type', 'quantity', 'created_at']);
 
         // Transfers are excluded from both series — they move stock, not volume.

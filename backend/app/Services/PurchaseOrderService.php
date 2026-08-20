@@ -197,15 +197,15 @@ class PurchaseOrderService
         return Present::purchaseOrder($po->fresh(['items']));
     }
 
-    public function delete(string $id): void
+    public function delete(string $id, string $userId): void
     {
-        DB::transaction(function () use ($id) {
+        DB::transaction(function () use ($id, $userId) {
             $po = $this->findOrFail($id, lock: true);
             if (! in_array($po->status, ['draft', 'cancelled'], true)) {
                 throw ApiException::conflict('Yalnızca taslak ve iptal edilmiş siparişler silinebilir.');
             }
             $po->items()->delete();
-            $po->delete();
+            $po->deleteAs($userId);
         });
     }
 
@@ -400,14 +400,14 @@ class PurchaseOrderService
         });
     }
 
-    public function bulkDelete(array $ids): array
+    public function bulkDelete(array $ids, string $userId): array
     {
-        return $this->bulk($ids, function (PurchaseOrder $po) {
+        return $this->bulk($ids, function (PurchaseOrder $po) use ($userId) {
             if (! in_array($po->status, ['draft', 'cancelled'], true)) {
                 return 'Yalnızca taslak ve iptal edilmiş siparişler silinebilir.';
             }
             $po->items()->delete();
-            $po->delete();
+            $po->deleteAs($userId);
 
             return null;
         });

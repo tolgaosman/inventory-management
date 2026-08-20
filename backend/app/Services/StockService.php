@@ -235,4 +235,77 @@ class StockService
             ->where('warehouse_id', $warehouseId)
             ->value('quantity') ?? 0);
     }
+
+    /**
+     * Undoes the stock effect of a movement being soft-deleted ("cancelled"):
+     * a giriş's quantity is removed, a çıkış's is put back, and a transfer's
+     * is put back into the source warehouse and taken back out of the target.
+     * Caller is expected to hold the movement row locked inside a transaction.
+     */
+    public function reverseMovement(StockMovement $movement): void
+    {
+        switch ($movement->type) {
+            case 'giris':
+                $level = $this->lockLevel($movement->product_id, $movement->warehouse_id);
+                if ((int) $level->quantity < (int) $movement->quantity) {
+                    throw ApiException::conflict('Bu stok girişi silinemez: depoda yeterli stok yok (stok başka işlemlerde kullanılmış olabilir).');
+                }
+                $level->quantity = (int) $level->quantity - (int) $movement->quantity;
+                $level->save();
+                break;
+
+            case 'cikis':
+                $level = $this->lockLevel($movement->product_id, $movement->warehouse_id);
+                $level->quantity = (int) $level->quantity + (int) $movement->quantity;
+                $level->save();
+                break;
+
+            case 'transfer':
+                $sourceLevel = $this->lockLevel($movement->product_id, $movement->warehouse_id);
+                $sourceLevel->quantity = (int) $sourceLevel->quantity + (int) $movement->quantity;
+                $sourceLevel->save();
+
+                $targetLevel = $this->lockLevel($movement->product_id, $movement->target_warehouse_id);
+                if ((int) $targetLevel->quantity < (int) $movement->quantity) {
+                    throw ApiException::conflict('Bu transfer silinemez: hedef depoda yeterli stok yok.');
+                }
+                $targetLevel->quantity = (int) $targetLevel->quantity - (int) $movement->quantity;
+                $targetLevel->save();
+                break;
+        }
+    }
+
+    /** Re-applies a movement's original stock effect when it is restored from trash. */
+    public function reapplyMovement(StockMovement $movement): void
+    {
+        switch ($movement->type) {
+            case 'giris':
+                $level = $this->lockLevel($movement->product_id, $movement->warehouse_id);
+                $level->quantity = (int) $level->quantity + (int) $movement->quantity;
+                $level->save();
+                break;
+
+            case 'cikis':
+                $level = $this->lockLevel($movement->product_id, $movement->warehouse_id);
+                if ((int) $level->quantity < (int) $movement->quantity) {
+                    throw ApiException::conflict('Bu hareket geri yüklenemez: depoda yeterli stok yok.');
+                }
+                $level->quantity = (int) $level->quantity - (int) $movement->quantity;
+                $level->save();
+                break;
+
+            case 'transfer':
+                $sourceLevel = $this->lockLevel($movement->product_id, $movement->warehouse_id);
+                if ((int) $sourceLevel->quantity < (int) $movement->quantity) {
+                    throw ApiException::conflict('Bu transfer geri yüklenemez: kaynak depoda yeterli stok yok.');
+                }
+                $sourceLevel->quantity = (int) $sourceLevel->quantity - (int) $movement->quantity;
+                $sourceLevel->save();
+
+                $targetLevel = $this->lockLevel($movement->product_id, $movement->target_warehouse_id);
+                $targetLevel->quantity = (int) $targetLevel->quantity + (int) $movement->quantity;
+                $targetLevel->save();
+                break;
+        }
+    }
 }

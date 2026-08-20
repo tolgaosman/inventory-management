@@ -116,23 +116,22 @@ export function WarehousesClient() {
   const transferGuard = useSubmitGuard();
   const deleteGuard = useSubmitGuard();
 
-  // Data fetching
-  const { status: whStatus, data: warehouses, refetch: refetchWarehouses } = useAsync(
-    listWarehousesDetailed,
-    [],
-  );
+  // One coordinated fetch instead of three independent waves — warehouses and
+  // categories are cached by lib/api-cache.ts, so re-running them alongside
+  // the matrix on every filter change is cheap.
+  const { status: fetchStatus, data, staleData, refetch: refetchAll } = useAsync(async () => {
+    const [warehouses, matrix, categories] = await Promise.all([
+      listWarehousesDetailed(),
+      getProductStockMatrix({ search, warehouseId: selectedWarehouseId, categoryId: selectedCategoryId }),
+      listCategories(),
+    ]);
+    return { warehouses, matrix, categories };
+  }, [search, selectedWarehouseId, selectedCategoryId]);
 
-  const { status: matrixStatus, data: matrix, staleData: staleMatrix, refetch: refetchMatrix } = useAsync(
-    () =>
-      getProductStockMatrix({
-        search,
-        warehouseId: selectedWarehouseId,
-        categoryId: selectedCategoryId,
-      }),
-    [search, selectedWarehouseId, selectedCategoryId],
-  );
-
-  const displayMatrix = matrix ?? staleMatrix;
+  const whStatus = fetchStatus;
+  const warehouses = (data ?? staleData)?.warehouses;
+  const matrixStatus = fetchStatus;
+  const displayMatrix = (data ?? staleData)?.matrix;
   const isMatrixLoading = matrixStatus === "loading";
 
   // Reset page when filters change
@@ -147,7 +146,7 @@ export function WarehousesClient() {
     return displayMatrix.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   }, [displayMatrix, page]);
 
-  const { data: categories } = useAsync(listCategories, []);
+  const categories = (data ?? staleData)?.categories;
 
   // Summary Metrics
   const summaryMetrics = useMemo(() => {
@@ -224,8 +223,7 @@ export function WarehousesClient() {
         });
 
         setTransferProduct(null);
-        refetchWarehouses();
-        refetchMatrix();
+        refetchAll();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Transfer hatası oluştu.");
       }
@@ -251,8 +249,7 @@ export function WarehousesClient() {
       } else {
         await createWarehouseInput(values);
       }
-      refetchWarehouses();
-      refetchMatrix();
+      refetchAll();
     } catch (err) {
       toast.error(editingWarehouse ? "Depo güncellenemedi" : "Depo oluşturulamadı", {
         description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
@@ -269,8 +266,7 @@ export function WarehousesClient() {
         await deleteWarehouseInput(deleting.id);
         toast.success("Depo silindi.", { description: `${deleting.name} kaldırıldı.` });
         setDeleting(undefined);
-        refetchWarehouses();
-        refetchMatrix();
+        refetchAll();
       } catch (err) {
         toast.error("Depo silinemedi", {
           description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
@@ -546,15 +542,7 @@ export function WarehousesClient() {
                   );
                 })}
                 <TableHead style={{ width: "10%" }} className="text-center">
-                  <div className="flex justify-center items-center gap-1">
-                    Toplam Stok
-                    <DataTableColumnFilter
-                      value={selectedWarehouseId}
-                      onValueChange={setSelectedWarehouseId}
-                      options={warehouses?.map(w => ({ label: w.name, value: w.id })) || []}
-                      title="Depo Vurgula"
-                    />
-                  </div>
+                  Toplam Stok
                 </TableHead>
                 <TableHead style={{ width: "10%" }} className="text-center">Stok Değeri</TableHead>
                 {can("stock.transfer") && (

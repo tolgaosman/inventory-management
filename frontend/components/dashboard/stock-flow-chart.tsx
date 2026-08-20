@@ -175,6 +175,7 @@ export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
               strokeWidth={CHART_LINE_WIDTH}
               dot={false}
               activeDot={chartActiveDot(SERIES.inbound)}
+              animationDuration={1000}
             />
             <Line
               type="linear"
@@ -183,6 +184,7 @@ export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
               strokeWidth={CHART_LINE_WIDTH}
               dot={false}
               activeDot={chartActiveDot(SERIES.outbound)}
+              animationDuration={1000}
             />
             <Line
               type="linear"
@@ -191,6 +193,7 @@ export function StockFlowChart({ data }: { data: MonthlyFlow[] }) {
               strokeWidth={CHART_LINE_WIDTH}
               dot={false}
               activeDot={chartActiveDot(SERIES.net)}
+              animationDuration={1000}
             />
           </ComposedChart>
         </ResponsiveContainer>

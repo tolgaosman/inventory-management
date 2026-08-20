@@ -2,7 +2,7 @@
 
 import { CalendarClock, Flame, Building2, Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight } from "lucide-react";
 import { CommandHero, type CommandHeroChip } from "@/components/common/command-hero";
-import { formatSigned } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import type { MovementType } from "@/lib/types";
 
 interface MovementHeroStats {
@@ -58,8 +58,22 @@ export function MovementCommandHero({
   return (
     <CommandHero
       title="Stok Hareket Merkezi"
-      headlineLabel="Bugünkü Net Stok Değişimi"
-      headlineValue={stats ? formatSigned(net) : undefined}
+      headlineContent={
+        <div className="flex gap-8">
+          <div className="space-y-1.5">
+            <p className="text-xl font-bold tracking-tight text-surface-inverse-foreground/70">Bugünkü Giriş</p>
+            <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground">
+              {stats ? formatNumber(stats.todayIn) : "—"}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-xl font-bold tracking-tight text-surface-inverse-foreground/70">Bugünkü Çıkış</p>
+            <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground">
+              {stats ? formatNumber(stats.todayOut) : "—"}
+            </span>
+          </div>
+        </div>
+      }
       meterLabel="Bugünkü Giriş Oranı"
       meterPercent={todayTotal > 0 ? inPercent : undefined}
       meterValueLabel={stats && todayTotal > 0 ? `%${inPercent}` : stats ? "—" : undefined}

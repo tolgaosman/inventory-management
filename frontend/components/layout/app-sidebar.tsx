@@ -12,6 +12,7 @@ export function SidebarBrand({ onNavigate }: { onNavigate?: () => void }) {
     <Link
       href="/panel"
       onClick={onNavigate}
+      prefetch={false}
       className="flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border/50 gap-1.5"
     >
       <Image src={browserLogo} alt="Envanter Yönetimi" className="h-[34px] w-auto object-contain" priority />

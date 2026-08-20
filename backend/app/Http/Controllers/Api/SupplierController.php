@@ -22,7 +22,7 @@ class SupplierController extends Controller
             ->select('supplier_id', DB::raw('COUNT(*) as c'))
             ->pluck('c', 'supplier_id');
 
-        $rows = Supplier::query()->get()
+        $rows = Supplier::query()->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed())->get()
             ->map(fn ($s) => Present::supplier($s) + ['productCount' => (int) ($productCounts[$s->id] ?? 0)])
             ->all();
 
@@ -130,9 +130,9 @@ class SupplierController extends Controller
         return response()->json(Present::supplier($supplier));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        DB::transaction(function () use ($id) {
+        DB::transaction(function () use ($request, $id) {
             $supplier = Supplier::query()->lockForUpdate()->find($id);
             if (! $supplier) {
                 throw ApiException::notFound('Tedarikçi bulunamadı.');
@@ -143,9 +143,19 @@ class SupplierController extends Controller
                 throw ApiException::validation('Bu tedarikçiye bağlı ürünler olduğu için silinemez. Önce ürünlerin tedarikçisini değiştiriniz.');
             }
 
-            $supplier->delete();
+            $supplier->deleteAs($request->user()->getKey());
         });
 
         return response()->json(['deleted' => true]);
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\Supplier::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }

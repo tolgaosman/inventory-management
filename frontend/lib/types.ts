@@ -10,6 +10,7 @@ export interface AppUser {
   role: Role;
   initials: string;
   mustChangePassword?: boolean;
+  deletedAt?: string;
 }
 
 export interface Warehouse {
@@ -18,12 +19,14 @@ export interface Warehouse {
   city: string;
   address: string;
   capacity: number;
+  deletedAt?: string;
 }
 
 export interface Category {
   id: string;
   name: string;
   parentId: string | null;
+  deletedAt?: string;
 }
 
 export interface Supplier {
@@ -33,6 +36,7 @@ export interface Supplier {
   email: string;
   phone: string;
   city: string;
+  deletedAt?: string;
 }
 
 export type ProductStatus = "aktif" | "pasif";
@@ -52,6 +56,7 @@ export interface Product {
   status: ProductStatus;
   supplierId: string;
   imageUrl?: string;
+  deletedAt?: string;
 }
 
 /** Quantity of a single product inside a single warehouse. */
@@ -87,6 +92,7 @@ export interface StockMovement {
   userId: string;
   note?: string;
   createdAt: string; // ISO date
+  deletedAt?: string;
 }
 
 export type PurchaseOrderStatus =
@@ -123,6 +129,7 @@ export interface PurchaseOrder {
   invoiceFilePath?: string | null;
   createdBy?: string;
   approvedBy?: string;
+  deletedAt?: string;
 }
 
 export type QuoteCurrency = "try" | "usd" | "eur" | "gbp";
@@ -145,6 +152,7 @@ export interface QuoteRequest {
   items: QuoteRequestItem[];
   createdAt: string;
   createdBy: string;
+  createdById?: string;
   validUntil: string;
   deliveryDate: string;
   deliveryAddress: string;
@@ -157,6 +165,7 @@ export interface QuoteRequest {
   status: QuoteRequestStatus;
   approvedBy?: string;
   approvedAt?: string;
+  deletedAt?: string;
 }
 
 export type QuoteRequestStatus = "pending_approval" | "approved" | "rejected";

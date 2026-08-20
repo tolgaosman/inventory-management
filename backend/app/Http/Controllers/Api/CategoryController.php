@@ -63,7 +63,9 @@ class CategoryController extends Controller
 
     public function tree(Request $request)
     {
-        $categories = Category::query()->get();
+        $categories = Category::query()
+            ->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed())
+            ->get();
         $metrics = $this->metricsByCategory();
         $search = $request->query('search');
 
@@ -232,9 +234,9 @@ class CategoryController extends Controller
         return response()->json(Present::category($category));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        DB::transaction(function () use ($id) {
+        DB::transaction(function () use ($request, $id) {
             $category = Category::query()->lockForUpdate()->find($id);
             if (! $category) {
                 throw ApiException::notFound('Kategori bulunamadı.');
@@ -250,9 +252,19 @@ class CategoryController extends Controller
                 throw ApiException::conflict("Bu kategoriye bağlı {$productCount} ürün olduğu için silinemez. Önce ürünleri başka bir kategoriye taşıyın.");
             }
 
-            $category->delete();
+            $category->deleteAs($request->user()->getKey());
         });
 
         return response()->json(['deleted' => true]);
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\Category::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }

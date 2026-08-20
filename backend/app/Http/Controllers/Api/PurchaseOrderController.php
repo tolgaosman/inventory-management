@@ -21,7 +21,7 @@ class PurchaseOrderController extends Controller
 
     public function index(Request $request)
     {
-        $query = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse', 'createdByUser', 'approvedByUser']);
+        $query = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse', 'createdByUser', 'approvedByUser'])->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed());
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
@@ -198,9 +198,9 @@ class PurchaseOrderController extends Controller
         return response()->json($this->service->update($id, $data, $request->user()));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        $this->service->delete($id);
+        $this->service->delete($id, $request->user()->getKey());
 
         return response()->json(null, 204);
     }
@@ -306,6 +306,16 @@ class PurchaseOrderController extends Controller
     {
         $data = $request->validate(['ids' => ['required', 'array']]);
 
-        return response()->json($this->service->bulkDelete($data['ids']));
+        return response()->json($this->service->bulkDelete($data['ids'], $request->user()->getKey()));
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\PurchaseOrder::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }

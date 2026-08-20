@@ -36,14 +36,16 @@ export function CommandHero({
   title,
   headlineLabel,
   headlineValue,
+  headlineContent,
   meterLabel,
   meterPercent,
   meterValueLabel,
   chips,
 }: {
   title: string;
-  headlineLabel: string;
-  headlineValue: string | undefined;
+  headlineLabel?: string;
+  headlineValue?: string | undefined;
+  headlineContent?: React.ReactNode;
   meterLabel?: string;
   meterPercent?: number;
   meterValueLabel?: string;
@@ -56,10 +58,16 @@ export function CommandHero({
     <PanelCard variant="inverse" title={title} className="shadow-hero">
       <div className="mt-4 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1.5">
-          <p className="text-xl font-bold tracking-tight text-surface-inverse-foreground/70">{headlineLabel}</p>
-          <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground">
-            {headlineValue ?? "—"}
-          </span>
+          {headlineContent ? (
+            headlineContent
+          ) : (
+            <>
+              <p className="text-xl font-bold tracking-tight text-surface-inverse-foreground/70">{headlineLabel}</p>
+              <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground">
+                {headlineValue ?? "—"}
+              </span>
+            </>
+          )}
         </div>
 
         {showMeter && (

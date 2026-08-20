@@ -24,7 +24,7 @@ const linkIdle =
 
 function SidebarLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
   return (
-    <Link href={item.href} onClick={onNavigate} className={cn(linkBase, active ? linkActive : linkIdle)}>
+    <Link href={item.href} onClick={onNavigate} prefetch={false} className={cn(linkBase, active ? linkActive : linkIdle)}>
       <item.icon className="size-3.5 shrink-0" />
       <span className="truncate">{item.label}</span>
     </Link>
@@ -65,6 +65,7 @@ function SidebarGroup({
                 key={child.href}
                 href={child.href}
                 onClick={onNavigate}
+                prefetch={false}
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-1 text-[12px] transition-colors",
                   childActive

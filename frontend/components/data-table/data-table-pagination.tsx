@@ -20,6 +20,10 @@ export function DataTablePagination({
 }: DataTablePaginationProps) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
+  if (pageCount <= 1) {
+    return null;
+  }
+
   return (
     <div className={cn("flex flex-wrap items-center gap-4 border-t border-border/60 bg-muted/10 p-4 text-sm text-muted-foreground", className)}>
       <div className="flex items-center gap-1.5">

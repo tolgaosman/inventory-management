@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\StockMovement;
 use App\Services\StockService;
 use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /** Direct port of frontend/lib/api/movements.ts. */
 class MovementController extends Controller
@@ -16,11 +18,14 @@ class MovementController extends Controller
     {
     }
 
-    public function index(Request $request)
+    /**
+     * Shared filter set behind both `index()` and `summary()`. `$includeType`
+     * is off for the tab-count query in `summary()`, which needs everything
+     * *except* type filtered so it can group the remainder by type.
+     */
+    private function applyFilters($query, Request $request, bool $includeType = true)
     {
-        $query = StockMovement::query()->orderByDesc('created_at')->orderByDesc('id');
-
-        if ($type = $request->query('type')) {
+        if ($includeType && ($type = $request->query('type'))) {
             $query->where('type', $type);
         }
         if ($reason = $request->query('reason')) {
@@ -54,6 +59,19 @@ class MovementController extends Controller
             $query->whereIn('product_id', $productIds);
         }
 
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $query = $this->applyFilters(
+            StockMovement::query()
+                ->when($request->query('trashed') === '1', fn ($q) => $q->onlyTrashed())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id'),
+            $request,
+        );
+
         $total = (clone $query)->count();
         $page = max((int) $request->query('page', 1), 1);
         $pageSize = max((int) $request->query('pageSize', 10), 1);
@@ -65,6 +83,40 @@ class MovementController extends Controller
             'total' => $total,
             'page' => $page,
             'pageSize' => $pageSize,
+        ]);
+    }
+
+    /**
+     * Aggregate counts for the movement-history page's tab badges and hero
+     * card — replaces what used to be 6 separate `listMovements()` calls
+     * fetched into the browser just to read `.total` off each, with 2 real
+     * SQL aggregate queries. Tab counts respect the caller's active filters
+     * (minus `type`, since that's what's being broken down); the "today"/fire
+     * hero numbers are always global, matching the previous hero behavior.
+     */
+    public function summary(Request $request)
+    {
+        $typeCounts = $this->applyFilters(StockMovement::query(), $request, includeType: false)
+            ->selectRaw('type, COUNT(*) as cnt')
+            ->groupBy('type')
+            ->pluck('cnt', 'type');
+
+        $todayFrom = now()->startOfDay();
+        $todayTo = now()->endOfDay();
+
+        $todayIn = StockMovement::query()->where('type', 'giris')->whereBetween('created_at', [$todayFrom, $todayTo])->count();
+        $todayOut = StockMovement::query()->where('type', 'cikis')->whereBetween('created_at', [$todayFrom, $todayTo])->count();
+        $fireCount = StockMovement::query()->where('reason', 'fire')->count();
+
+        return response()->json([
+            'typeCounts' => [
+                'giris' => (int) ($typeCounts['giris'] ?? 0),
+                'cikis' => (int) ($typeCounts['cikis'] ?? 0),
+                'transfer' => (int) ($typeCounts['transfer'] ?? 0),
+            ],
+            'todayIn' => $todayIn,
+            'todayOut' => $todayOut,
+            'fireCount' => $fireCount,
         ]);
     }
 
@@ -123,5 +175,41 @@ class MovementController extends Controller
         ]);
 
         return response()->json(['quantity' => $this->stock->quantity($data['productId'], $data['warehouseId'])]);
+    }
+
+    /**
+     * "Deleting" a movement means cancelling it: its stock effect is reversed
+     * (giriş removed, çıkış put back, transfer reversed both sides) before the
+     * row itself is soft-deleted.
+     */
+    public function destroy(Request $request, string $id)
+    {
+        DB::transaction(function () use ($request, $id) {
+            $movement = StockMovement::query()->lockForUpdate()->find($id);
+            if (! $movement) {
+                throw ApiException::notFound('Hareket bulunamadı.');
+            }
+
+            $this->stock->reverseMovement($movement);
+            $movement->deleteAs($request->user()->getKey());
+        });
+
+        return response()->json(['deleted' => true]);
+    }
+
+    /** Restoring a cancelled movement re-applies its original stock effect. */
+    public function restore(Request $request, string $id)
+    {
+        DB::transaction(function () use ($request, $id) {
+            $movement = StockMovement::withTrashed()->lockForUpdate()->find($id);
+            if (! $movement) {
+                throw ApiException::notFound('Kayıt bulunamadı.');
+            }
+
+            $this->stock->reapplyMovement($movement);
+            $movement->restoreTracked();
+        });
+
+        return response()->json(['restored' => true]);
     }
 }

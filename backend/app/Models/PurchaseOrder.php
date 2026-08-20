@@ -2,11 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksDeletedBy;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseOrder extends Model
 {
-    public $incrementing = false;
+        use SoftDeletes;
+use TracksDeletedBy;
+
+public $incrementing = false;
 
     protected $keyType = 'string';
 

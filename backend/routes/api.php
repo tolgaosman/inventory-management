@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\SupplierScorecardController;
+use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WarehouseController;
 use App\Http\Middleware\EnsurePasswordChanged;
@@ -34,6 +35,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/categories', [CategoryController::class, 'store'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::put('/categories/{id}', [CategoryController::class, 'update'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy'])->middleware(['perm:products.manage', 'throttle:writes']);
+    Route::post('/categories/{id}/restore', [CategoryController::class, 'restore'])->middleware(['perm:products.manage', 'throttle:writes']);
 
     // Warehouses
     Route::get('/warehouses', [WarehouseController::class, 'index'])->middleware('perm:products.view');
@@ -43,6 +45,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/warehouses', [WarehouseController::class, 'store'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
     Route::put('/warehouses/{id}', [WarehouseController::class, 'update'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
     Route::delete('/warehouses/{id}', [WarehouseController::class, 'destroy'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
+    Route::post('/warehouses/{id}/restore', [WarehouseController::class, 'restore'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
 
     // Suppliers
     Route::get('/suppliers', [SupplierController::class, 'index'])->middleware('perm:suppliers.view');
@@ -51,6 +54,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/suppliers', [SupplierController::class, 'store'])->middleware(['perm:suppliers.manage', 'throttle:writes']);
     Route::put('/suppliers/{id}', [SupplierController::class, 'update'])->middleware(['perm:suppliers.manage', 'throttle:writes']);
     Route::delete('/suppliers/{id}', [SupplierController::class, 'destroy'])->middleware(['perm:suppliers.manage', 'throttle:writes']);
+    Route::post('/suppliers/{id}/restore', [SupplierController::class, 'restore'])->middleware(['perm:suppliers.manage', 'throttle:writes']);
 
     // Products
     Route::get('/products', [ProductController::class, 'index'])->middleware('perm:products.view');
@@ -61,16 +65,20 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::put('/products/{id}', [ProductController::class, 'update'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::patch('/products/{id}/status', [ProductController::class, 'toggleStatus'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::delete('/products/{id}', [ProductController::class, 'destroy'])->middleware(['perm:products.manage', 'throttle:writes']);
+    Route::post('/products/{id}/restore', [ProductController::class, 'restore'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::post('/products/bulk-status', [ProductController::class, 'bulkStatus'])->middleware(['perm:products.manage', 'throttle:bulk']);
     Route::post('/products/bulk-delete', [ProductController::class, 'bulkDelete'])->middleware(['perm:products.manage', 'throttle:bulk']);
     Route::post('/products/import', [ProductController::class, 'bulkImport'])->middleware(['perm:products.manage', 'throttle:bulk']);
 
     // Stock movements
     Route::get('/movements', [MovementController::class, 'index'])->middleware('perm:stock.view');
+    Route::get('/movements/summary', [MovementController::class, 'summary'])->middleware('perm:stock.view');
     Route::post('/stock/in', [MovementController::class, 'stockIn'])->middleware(['perm:stock.in', 'throttle:writes']);
     Route::post('/stock/out', [MovementController::class, 'stockOut'])->middleware(['perm:stock.out', 'throttle:writes']);
     Route::post('/stock/transfer', [MovementController::class, 'transfer'])->middleware(['perm:stock.transfer', 'throttle:writes']);
     Route::get('/stock/quantity', [MovementController::class, 'quantity'])->middleware('perm:products.view');
+    Route::delete('/movements/{id}', [MovementController::class, 'destroy'])->middleware(['perm:stock.in|stock.out|stock.transfer', 'throttle:writes']);
+    Route::post('/movements/{id}/restore', [MovementController::class, 'restore'])->middleware(['perm:stock.in|stock.out|stock.transfer', 'throttle:writes']);
 
     // Purchase orders
     Route::get('/purchase-orders/stats', [PurchaseOrderController::class, 'stats'])->middleware('perm:purchase.view');
@@ -80,6 +88,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::put('/purchase-orders/{id}', [PurchaseOrderController::class, 'update'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::delete('/purchase-orders/{id}', [PurchaseOrderController::class, 'destroy'])->middleware(['perm:purchase.manage', 'throttle:writes']);
+    Route::post('/purchase-orders/{id}/restore', [PurchaseOrderController::class, 'restore'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/order', [PurchaseOrderController::class, 'markOrdered'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/request-approval', [PurchaseOrderController::class, 'requestApproval'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/share', [PurchaseOrderController::class, 'share'])->middleware(['perm:purchase.manage', 'throttle:writes']);
@@ -99,6 +108,8 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/quote-requests', [QuoteRequestController::class, 'store'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::post('/quote-requests/{id}/approve', [QuoteRequestController::class, 'approve'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/quote-requests/{id}/reject', [QuoteRequestController::class, 'reject'])->middleware(['perm:purchase.approve', 'throttle:writes']);
+    Route::delete('/quote-requests/{id}', [QuoteRequestController::class, 'destroy'])->middleware(['perm:purchase.manage', 'throttle:writes']);
+    Route::post('/quote-requests/{id}/restore', [QuoteRequestController::class, 'restore'])->middleware(['perm:purchase.manage', 'throttle:writes']);
 
 
     // Dashboard + notifications
@@ -119,8 +130,13 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/users', [UserController::class, 'store'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::put('/users/{id}', [UserController::class, 'update'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::delete('/users/{id}', [UserController::class, 'destroy'])->middleware(['perm:users.manage', 'throttle:writes']);
+    Route::post('/users/{id}/restore', [UserController::class, 'restore'])->middleware(['perm:users.manage', 'throttle:writes']);
 
     // Settings — every authenticated role may read/update (company profile, own notification prefs).
     Route::get('/settings', [SettingsController::class, 'show']);
     Route::put('/settings', [SettingsController::class, 'update'])->middleware('throttle:writes');
+
+    // Trash — records the current user has soft-deleted themselves.
+    Route::get('/trash', [TrashController::class, 'index']);
+    Route::post('/trash/{type}/{id}/restore', [TrashController::class, 'restore'])->middleware('throttle:writes');
 });

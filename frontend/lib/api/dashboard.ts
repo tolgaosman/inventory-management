@@ -1,5 +1,6 @@
 import type { CategoryShare, MonthlyFlow, Product, StockMovement } from "@/lib/types";
 import { apiFetch } from "./client";
+import { cachedFetch } from "@/lib/api-cache";
 
 export type DateRangePreset = "bu-ay" | "son-3-ay" | "son-6-ay" | "bu-yil";
 
@@ -80,5 +81,10 @@ export async function getDashboardData(
 export async function getCriticalStockNotifications(
   limit = 5,
 ): Promise<{ total: number; items: (Product & { totalStock: number })[] }> {
-  return apiFetch("/notifications/critical-stock", { query: { limit } });
+  // Cache for 30 s — displayed in the header on every page; real-time freshness not needed.
+  return cachedFetch(
+    `notifications:critical-stock:${limit}`,
+    () => apiFetch("/notifications/critical-stock", { query: { limit } }),
+    30_000,
+  );
 }

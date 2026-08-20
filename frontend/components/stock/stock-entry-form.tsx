@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
 import { ArrowDownToLine, ArrowUpFromLine, type LucideIcon } from "lucide-react";
 import { TINTS, type TintName } from "@/lib/tints";
@@ -69,6 +69,12 @@ export function StockEntryForm({
     () => (productId ? getProduct(productId) : Promise.resolve(undefined)),
     [productId],
   );
+
+  useEffect(() => {
+    if (product && product.supplierId) {
+      setSupplierId(product.supplierId);
+    }
+  }, [product]);
 
   const { data: matrix } = useAsync(
     () => (warehouseId ? getProductStockMatrix({ warehouseId }) : Promise.resolve(undefined)),
@@ -192,7 +198,12 @@ export function StockEntryForm({
 
           <div className="space-y-2">
             <Label>Ürün</Label>
-            <ProductPicker value={productId} onChange={setProductId} stockByProductId={stockByProductId} />
+            <ProductPicker 
+              value={productId} 
+              onChange={setProductId} 
+              stockByProductId={stockByProductId} 
+              excludeZeroStock={mode === "cikis"}
+            />
             {warehouseId && productId && currentQuantity != null && (
               <p className="text-xs text-muted-foreground">
                 Mevcut: <span className="font-medium text-foreground">{formatNumber(currentQuantity)}</span>{" "}
@@ -263,10 +274,12 @@ export function StockEntryForm({
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
+                    {suppliers
+                      .filter((s) => !product || s.id === product.supplierId)
+                      .map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

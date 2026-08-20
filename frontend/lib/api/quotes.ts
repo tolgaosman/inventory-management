@@ -70,6 +70,15 @@ export async function rejectQuoteRequest(id: string): Promise<QuoteRequest> {
   return apiFetch<QuoteRequest>(`/quote-requests/${id}/reject`, { method: "POST" });
 }
 
+export async function deleteQuoteRequest(id: string): Promise<boolean> {
+  await apiFetch<{ deleted: boolean }>(`/quote-requests/${id}`, { method: "DELETE" });
+  return true;
+}
+
+export async function restoreQuoteRequest(id: string): Promise<void> {
+  await apiFetch<void>(`/quote-requests/${id}/restore`, { method: "POST" });
+}
+
 /** For the supplier-selection dialog: quotable (draft or pending-approval) orders grouped by supplier, with totals for display. */
 export interface DraftOrderOption {
   id: string;

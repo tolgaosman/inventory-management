@@ -113,6 +113,7 @@ export function CategoryRadialChart({ shares }: { shares: CategoryShare[] }) {
                   dataKey="units"
                   stroke="none"
                   cornerRadius={8}
+                  animationDuration={1000}
                   shape={(props: SliceShapeProps) => {
                     const isHovered =
                       hoveredCategory === props.payload.categoryId || props.isActive;

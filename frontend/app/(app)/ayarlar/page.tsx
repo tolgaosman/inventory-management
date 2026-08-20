@@ -16,6 +16,8 @@ import {
   Wallet,
   Palette,
   Globe,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { PageHeader } from "@/components/common/page-header";
 import { SubmitButton } from "@/components/common/submit-button";
@@ -39,11 +41,12 @@ import { useCurrency, type CurrencyCode } from "@/lib/currency-context";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useSettings } from "@/lib/settings-context";
 import { TIMEZONE_OPTIONS } from "@/lib/constants";
-import { relativeTimeFromNow } from "@/lib/format";
+import { relativeTimeFromNow, formatDateTime } from "@/lib/format";
 import { TINTS, type TintName } from "@/lib/tints";
-import { LANGUAGE_OPTIONS } from "@/lib/translate";
+
 import { changePassword } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
+import { listTrash, restoreTrashItem, type TrashItem, type TrashItemType } from "@/lib/api/trash";
 import type { Role } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
 
@@ -212,6 +215,109 @@ const ROLE_TINTS: Record<Role, TintName> = {
 };
 
 
+const TRASH_TYPE_LABELS: Record<TrashItemType, string> = {
+  product: "Ürün",
+  category: "Kategori",
+  supplier: "Tedarikçi",
+  warehouse: "Depo",
+  user: "Kullanıcı",
+  purchaseOrder: "Satın Alma Siparişi",
+  quoteRequest: "Teklif İsteği",
+  movement: "Stok Hareketi",
+};
+
+/** The trash bin: everything the current user has soft-deleted themselves, restorable in place. */
+function TrashSection() {
+  const [items, setItems] = useState<TrashItem[] | null>(null);
+  const [restoringKey, setRestoringKey] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const rows = await listTrash();
+      setItems(rows);
+    } catch (err) {
+      toast.error("Çöp kutusu yüklenemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmeyen bir hata oluştu.",
+      });
+      setItems([]);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
+  }, []);
+
+  async function handleRestore(item: TrashItem) {
+    const key = `${item.type}:${item.id}`;
+    setRestoringKey(key);
+    try {
+      await restoreTrashItem(item.type, item.id);
+      toast.success("Geri yüklendi.", { description: item.label });
+      setItems((prev) => (prev ? prev.filter((i) => !(i.type === item.type && i.id === item.id)) : prev));
+    } catch (err) {
+      toast.error("Geri yüklenemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmeyen bir hata oluştu.",
+      });
+    } finally {
+      setRestoringKey(null);
+    }
+  }
+
+  return (
+    <Section index={2} className="space-y-3">
+      <CategoryHeader
+        icon={Trash2}
+        tint="red"
+        title="Çöp Kutusu"
+        description="Sildiğiniz kayıtlar burada görünür; istediğiniz an geri yükleyebilirsiniz."
+      />
+      <Card>
+        <CardContent className="px-6 py-4">
+          {items === null ? (
+            <div className="space-y-2">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : items.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">Çöp kutunuz boş.</p>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {items.map((item) => {
+                const key = `${item.type}:${item.id}`;
+                return (
+                  <div key={key} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-micro font-medium text-muted-foreground">
+                          {TRASH_TYPE_LABELS[item.type]}
+                        </span>
+                        <span className="truncate text-sm font-medium text-foreground">{item.label}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatDateTime(item.deletedAt)} tarihinde silindi
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRestore(item)}
+                      disabled={restoringKey === key}
+                    >
+                      <RotateCcw className={cn("size-3.5", restoringKey === key && "animate-spin")} />
+                      Geri Yükle
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </Section>
+  );
+}
+
 function passwordStrength(pw: string): { score: number; label: string; tone: "critical" | "warning" | "good" } {
   if (!pw) return { score: 0, label: "", tone: "critical" };
   let points = 0;
@@ -230,11 +336,9 @@ export default function SettingsPage() {
     userProfile,
     notifications,
     timezone,
-    language,
     updateUserProfile,
     updateNotifications,
     setTimezone,
-    setLanguage,
   } = useSettings();
 
   const { theme, setTheme } = useTheme();
@@ -407,35 +511,6 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5 notranslate flex flex-col">
-                  <Label className="text-xs font-semibold text-foreground">Arayüz Dili</Label>
-                  {mounted ? (
-                    <div className="grid grid-cols-2 gap-2 flex-1">
-                      {LANGUAGE_OPTIONS.map((l) => (
-                        <OptionCard
-                          compact
-                          key={l.value}
-                          icon={() => (
-                            <img
-                              src={`https://flagcdn.com/w40/${l.value === "en" ? "gb" : l.value}.png`}
-                              srcSet={`https://flagcdn.com/w80/${l.value === "en" ? "gb" : l.value}.png 2x`}
-                              width="24"
-                              alt={l.value.toUpperCase()}
-                              className="rounded-[3px]"
-                            />
-                          )}
-                          label={l.value.toUpperCase()}
-                          tint="teal"
-                          selected={language === l.value}
-                          onClick={() => l.value !== language && setLanguage(l.value)}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <Skeleton className="flex-1 min-h-[60px] w-full" />
-                  )}
-                </div>
 
                 <div className="space-y-1.5 flex flex-col">
                   <Label className="text-xs font-semibold text-foreground">Saat Dilimi</Label>
@@ -464,7 +539,6 @@ export default function SettingsPage() {
                     <Skeleton className="h-full min-h-[68px] w-full" />
                   )}
                 </div>
-              </div>
             </div>
           </SectionCard>
 
@@ -529,6 +603,9 @@ export default function SettingsPage() {
           </SectionCard>
         </div>
       </Section>
+
+      {/* ÇÖP KUTUSU */}
+      <TrashSection />
       </SectionStack>
     </div>
   );

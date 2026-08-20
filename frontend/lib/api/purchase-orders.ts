@@ -1,7 +1,15 @@
 import type { PagedQuery, PagedResult, Product, PurchaseOrder, PurchaseOrderItem, PurchaseOrderStatus } from "@/lib/types";
 import { apiFetch } from "./client";
+import { cachedFetch, invalidateCache } from "@/lib/api-cache";
+
+const PO_CACHE_TTL = 10_000; // 10 s — live operational data, short-lived dedup rather than long staleness
+
+export function invalidatePurchaseOrders(): void {
+  invalidateCache("purchaseOrders:");
+}
 
 export interface PurchaseOrderQuery extends PagedQuery {
+  trashed?: boolean;
   status?: PurchaseOrderStatus;
   excludeStatus?: PurchaseOrderStatus;
   supplierId?: string;
@@ -34,23 +42,30 @@ export type PurchaseOrderDetail = Omit<PurchaseOrderRow, "items"> & {
 export async function listPurchaseOrders(
   query: PurchaseOrderQuery = {},
 ): Promise<PagedResult<PurchaseOrderRow>> {
-  return apiFetch<PagedResult<PurchaseOrderRow>>("/purchase-orders", {
-    query: {
-      status: query.status,
-      excludeStatus: query.excludeStatus,
-      supplierId: query.supplierId,
-      warehouseId: query.warehouseId,
-      priority: query.priority,
-      dateFrom: query.dateFrom,
-      dateTo: query.dateTo,
-      is_my_drafts: query.isMyDrafts ? "1" : undefined,
-      search: query.search,
-      page: query.page,
-      pageSize: query.pageSize,
-      sortBy: query.sortBy,
-      sortDir: query.sortDir,
-    },
-  });
+  const key = `purchaseOrders:list:${JSON.stringify(query)}`;
+  return cachedFetch(
+    key,
+    () =>
+      apiFetch<PagedResult<PurchaseOrderRow>>("/purchase-orders", {
+        query: {
+          trashed: query.trashed ? "1" : undefined,
+          status: query.status,
+          excludeStatus: query.excludeStatus,
+          supplierId: query.supplierId,
+          warehouseId: query.warehouseId,
+          priority: query.priority,
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          is_my_drafts: query.isMyDrafts ? "1" : undefined,
+          search: query.search,
+          page: query.page,
+          pageSize: query.pageSize,
+          sortBy: query.sortBy,
+          sortDir: query.sortDir,
+        },
+      }),
+    PO_CACHE_TTL,
+  );
 }
 
 export async function getPurchaseOrder(id: string): Promise<PurchaseOrderDetail> {
@@ -79,7 +94,7 @@ export interface PurchaseOrderStats {
 }
 
 export async function getPurchaseOrderStats(): Promise<PurchaseOrderStats> {
-  return apiFetch<PurchaseOrderStats>("/purchase-orders/stats");
+  return cachedFetch("purchaseOrders:stats", () => apiFetch<PurchaseOrderStats>("/purchase-orders/stats"), PO_CACHE_TTL);
 }
 
 export interface PurchaseOrderItemInput {
@@ -99,6 +114,7 @@ export interface CreatePurchaseOrderInput {
 }
 
 export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Promise<PurchaseOrder> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrder>("/purchase-orders", { method: "POST", body: input });
 }
 
@@ -115,31 +131,38 @@ export async function updatePurchaseOrder(
   id: string,
   input: UpdatePurchaseOrderInput,
 ): Promise<PurchaseOrder> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrder>(`/purchase-orders/${id}`, { method: "PUT", body: input });
 }
 
 export async function deletePurchaseOrder(id: string): Promise<boolean> {
+  invalidatePurchaseOrders();
   await apiFetch<void>(`/purchase-orders/${id}`, { method: "DELETE" });
   return true;
 }
 
 export async function markPurchaseOrderOrdered(id: string): Promise<PurchaseOrder> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/order`, { method: "POST" });
 }
 
 export async function requestPurchaseOrderApproval(id: string): Promise<PurchaseOrderRow> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/request-approval`, { method: "POST" });
 }
 
 export async function sharePurchaseOrder(id: string, userIds: string[]): Promise<PurchaseOrderRow> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/share`, { method: "POST", body: { userIds } });
 }
 
 export async function approvePurchaseOrder(id: string): Promise<PurchaseOrderRow> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/approve`, { method: "POST" });
 }
 
 export async function rejectPurchaseOrderApproval(id: string, reason: string): Promise<PurchaseOrder> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrder>(`/purchase-orders/${id}/reject`, {
     method: "POST",
     body: { reason },
@@ -159,6 +182,7 @@ export async function receivePurchaseOrder(
 ): Promise<PurchaseOrderRow> {
   // One request for the whole receipt: the server writes every stock movement
   // and the order update in a single transaction.
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/receive`, {
     method: "POST",
     body: { receivedQuantities, idempotencyKey: ctx.idempotencyKey },
@@ -176,6 +200,7 @@ export async function uploadPurchaseOrderInvoice(id: string, file: File): Promis
 }
 
 export async function cancelPurchaseOrder(id: string, reason: string): Promise<PurchaseOrderRow> {
+  invalidatePurchaseOrders();
   return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/cancel`, {
     method: "POST",
     body: { reason },
@@ -188,14 +213,17 @@ export interface BulkOperationResult {
 }
 
 export async function bulkMarkPurchaseOrdersOrdered(ids: string[]): Promise<BulkOperationResult> {
+  invalidatePurchaseOrders();
   return apiFetch<BulkOperationResult>("/purchase-orders/bulk-order", { method: "POST", body: { ids } });
 }
 
 export async function bulkCancelPurchaseOrders(ids: string[]): Promise<BulkOperationResult> {
+  invalidatePurchaseOrders();
   return apiFetch<BulkOperationResult>("/purchase-orders/bulk-cancel", { method: "POST", body: { ids } });
 }
 
 export async function bulkDeletePurchaseOrders(ids: string[]): Promise<BulkOperationResult> {
+  invalidatePurchaseOrders();
   return apiFetch<BulkOperationResult>("/purchase-orders/bulk-delete", { method: "POST", body: { ids } });
 }
 
@@ -223,5 +251,14 @@ export interface SupplierScorecard {
 }
 
 export async function getSupplierScorecards(): Promise<SupplierScorecard[]> {
-  return apiFetch<SupplierScorecard[]>("/suppliers/scorecards");
+  return cachedFetch(
+    "purchaseOrders:scorecards",
+    () => apiFetch<SupplierScorecard[]>("/suppliers/scorecards"),
+    PO_CACHE_TTL,
+  );
+}
+
+export async function restorePurchaseOrder(id: string): Promise<void> {
+  invalidatePurchaseOrders();
+  await apiFetch<void>(`/purchase-orders/${id}/restore`, { method: "POST" });
 }

@@ -19,9 +19,9 @@ use Illuminate\Support\Facades\Hash;
  */
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $query = User::query();
+        $query = User::query()->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed());
         $user = auth()->user();
         
         if ($user->role === 'depo_yonetici') {
@@ -175,9 +175,19 @@ class UserController extends Controller
             }
 
             $user->tokens()->delete();
-            $user->delete();
+            $user->deleteAs($request->user()->getKey());
         });
 
         return response()->json(['deleted' => true]);
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\User::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }

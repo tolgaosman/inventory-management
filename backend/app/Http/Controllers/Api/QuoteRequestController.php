@@ -45,8 +45,8 @@ class QuoteRequestController extends Controller
 
     public function index(Request $request)
     {
-        $rows = QuoteRequest::query()
-            ->with(['items', 'supplier'])
+        $rows = QuoteRequest::query()->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed())
+            ->with(['items', 'supplier', 'createdByUser'])
             ->when($request->query('supplierId'), fn ($q, $id) => $q->where('supplier_id', $id))
             ->orderByDesc('created_at')
             ->get()
@@ -64,7 +64,7 @@ class QuoteRequestController extends Controller
 
     public function show(string $id)
     {
-        $quote = QuoteRequest::query()->with(['items', 'supplier'])->find($id);
+        $quote = QuoteRequest::query()->with(['items', 'supplier', 'createdByUser'])->find($id);
         if (! $quote) {
             throw ApiException::notFound('Teklif isteği bulunamadı.');
         }
@@ -185,7 +185,7 @@ class QuoteRequestController extends Controller
             return $quote;
         });
 
-        return response()->json(Present::quoteRequest($quote->fresh(['items'])), 201);
+        return response()->json(Present::quoteRequest($quote->fresh(['items', 'createdByUser'])), 201);
     }
 
     private function transitionApproval(Request $request, string $id, string $to, string $conflictMessage): object
@@ -207,7 +207,7 @@ class QuoteRequestController extends Controller
             return $quote;
         });
 
-        return response()->json(Present::quoteRequest($quote->fresh(['items'])));
+        return response()->json(Present::quoteRequest($quote->fresh(['items', 'createdByUser'])));
     }
 
     public function approve(Request $request, string $id)
@@ -251,7 +251,7 @@ class QuoteRequestController extends Controller
         $search = $request->query('search');
 
         $quotes = QuoteRequest::query()
-            ->with(['items', 'supplier'])
+            ->with(['items', 'supplier', 'createdByUser'])
             ->when($supplierId, fn ($q, $id) => $q->where('supplier_id', $id))
             ->get()
             ->filter(fn ($q) => TextTools::matches([$q->code, $q->supplier->name ?? null], $search))
@@ -287,5 +287,29 @@ class QuoteRequestController extends Controller
             (int) $request->query('page', 1),
             (int) $request->query('pageSize', 10),
         ));
+    }
+
+    public function destroy(Request $request, string $id)
+    {
+        DB::transaction(function () use ($request, $id) {
+            $quote = QuoteRequest::query()->lockForUpdate()->find($id);
+            if (! $quote) {
+                throw ApiException::notFound('Teklif isteği bulunamadı.');
+            }
+
+            $quote->deleteAs($request->user()->getKey());
+        });
+
+        return response()->json(['deleted' => true]);
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\QuoteRequest::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }

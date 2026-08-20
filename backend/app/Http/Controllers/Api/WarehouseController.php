@@ -46,11 +46,11 @@ class WarehouseController extends Controller
         return $totals;
     }
 
-    public function index()
+    public function index(Request $request)
     {
         $totals = $this->levelTotals();
 
-        $rows = Warehouse::query()->get()->map(fn ($w) => Present::warehouse($w) + [
+        $rows = Warehouse::query()->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed())->get()->map(fn ($w) => Present::warehouse($w) + [
             'units' => $totals[$w->id]['units'] ?? 0,
             'productCount' => $totals[$w->id]['productCount'] ?? 0,
         ])->all();
@@ -240,9 +240,9 @@ class WarehouseController extends Controller
         return response()->json(Present::warehouse($warehouse));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        DB::transaction(function () use ($id) {
+        DB::transaction(function () use ($request, $id) {
             $warehouse = Warehouse::query()->lockForUpdate()->find($id);
             if (! $warehouse) {
                 throw ApiException::notFound('Depo bulunamadı.');
@@ -255,9 +255,19 @@ class WarehouseController extends Controller
 
             // Empty levels can go; movements keep their FK and would block the delete.
             StockLevel::query()->where('warehouse_id', $id)->delete();
-            $warehouse->delete();
+            $warehouse->deleteAs($request->user()->getKey());
         });
 
         return response()->json(['deleted' => true]);
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\Warehouse::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }

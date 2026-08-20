@@ -28,7 +28,7 @@ import {
 import { useAsync } from "@/lib/hooks/use-async";
 import { useChangedSince } from "@/lib/hooks/use-reset-on-change";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
-import { listMovements, type MovementQuery } from "@/lib/api/movements";
+import { listMovements, getMovementSummary, type MovementQuery } from "@/lib/api/movements";
 import { listWarehouses, listUsers } from "@/lib/api/catalog";
 import { listProducts } from "@/lib/api/products";
 import { buildReportExcel } from "@/lib/export/excel";
@@ -111,60 +111,44 @@ export function MovementHistoryClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, type, reason, warehouseId, userId, dateFrom, dateTo, page]);
 
-  const { status, data, staleData, error, refetch } = useAsync(() => listMovements(query), [
-    JSON.stringify(query),
-  ]);
-  const view = data ?? staleData;
-
-  const { data: refData } = useAsync(
-    () => Promise.all([
+  // One coordinated fetch instead of 4 independent waves: everything the page
+  // needs resolves together in a single Promise.all, so the UI fills in at
+  // once instead of piecemeal. Reference data (warehouses/users/products) is
+  // cached by lib/api-cache.ts, so re-running this on every filter change is
+  // cheap for those — only the movements list and summary counts are genuinely
+  // re-fetched from the network.
+  const { status, data, staleData, error, refetch } = useAsync(async () => {
+    const [movements, warehouses, users, productsResult, summary] = await Promise.all([
+      listMovements(query),
       listWarehouses().catch(() => []),
       can("users.manage") ? listUsers().catch(() => []) : Promise.resolve([]),
-      listProducts({ pageSize: 2000 }).catch(() => ({ rows: [] }))
-    ]),
-    [can],
-  );
-  const warehouses = useMemo(() => refData?.[0] ?? [], [refData]);
-  const users = useMemo(() => refData?.[1] ?? [], [refData]);
-  const products = useMemo(() => refData?.[2]?.rows ?? [], [refData]);
-
-  const { data: typeCounts } = useAsync(() => {
-    const base = { ...query, type: undefined, page: 1, pageSize: 1 };
-    return Promise.all([
-      listMovements({ ...base, type: "giris" }),
-      listMovements({ ...base, type: "cikis" }),
-      listMovements({ ...base, type: "transfer" }),
+      listProducts({ pageSize: 2000 }).catch(() => ({ rows: [], total: 0, page: 1, pageSize: 2000 })),
+      getMovementSummary(query).catch(() => undefined),
     ]);
-  }, [search, warehouseId, userId, dateFrom, dateTo]);
-  const [inResult, outResult, transferResult] = typeCounts ?? [];
+    return { movements, warehouses, users, products: productsResult.rows, summary };
+  }, [JSON.stringify(query), can]);
 
-  // Hero data: today's net flow, fire/iade anomaly count, and the busiest
-  // warehouse — none of these are aggregated anywhere else in the app today,
-  // every movement view is an all-time total.
+  const view = (data ?? staleData)?.movements;
+  const warehouses = useMemo(() => (data ?? staleData)?.warehouses ?? [], [data, staleData]);
+  const users = useMemo(() => (data ?? staleData)?.users ?? [], [data, staleData]);
+  const products = useMemo(() => (data ?? staleData)?.products ?? [], [data, staleData]);
+  const summary = (data ?? staleData)?.summary;
+
+  // Hero data: today's net flow and fire/iade anomaly count, plus the
+  // top-volume warehouse derived client-side from the already-loaded list.
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const { data: heroStats } = useAsync(async () => {
-    const todayFrom = toStartOfDayIso(todayStr);
-    const todayTo = toEndOfDayIso(todayStr);
-    const [todayIn, todayOut, fire, warehouseCounts] = await Promise.all([
-      listMovements({ type: "giris", dateFrom: todayFrom, dateTo: todayTo, page: 1, pageSize: 1 }),
-      listMovements({ type: "cikis", dateFrom: todayFrom, dateTo: todayTo, page: 1, pageSize: 1 }),
-      listMovements({ reason: "fire", page: 1, pageSize: 1 }),
-      Promise.all(
-        warehouses.map((w) =>
-          listMovements({ warehouseId: w.id, page: 1, pageSize: 1 }).then((r) => ({ id: w.id, name: w.name, count: r.total })),
-        ),
-      ),
-    ]);
-    const topWarehouse = [...warehouseCounts].sort((a, b) => b.count - a.count)[0];
+  const heroStats = useMemo(() => {
+    if (!summary) return undefined;
+    const topWarehouse = [...warehouses].sort((a, b) => (b.units ?? 0) - (a.units ?? 0))[0];
     return {
-      todayIn: todayIn.total,
-      todayOut: todayOut.total,
-      fireCount: fire.total,
+      todayIn: summary.todayIn,
+      todayOut: summary.todayOut,
+      fireCount: summary.fireCount,
       topWarehouseId: topWarehouse?.id,
       topWarehouseName: topWarehouse?.name,
-      topWarehouseCount: topWarehouse?.count,
+      topWarehouseCount: topWarehouse?.units,
     };
-  }, [warehouses, todayStr]);
+  }, [summary, warehouses]);
 
   const isFiltered = Boolean(
     search || type !== "all" || reason !== "all" || warehouseId !== "all" || userId !== "all" || dateFrom || dateTo,
@@ -417,9 +401,9 @@ export function MovementHistoryClient() {
         }}
         typeBreakdown={{
           total: view?.total,
-          in: inResult?.total,
-          out: outResult?.total,
-          transfer: transferResult?.total,
+          in: summary?.typeCounts.giris,
+          out: summary?.typeCounts.cikis,
+          transfer: summary?.typeCounts.transfer,
         }}
         onTypeClick={(t) => setType(t)}
       />

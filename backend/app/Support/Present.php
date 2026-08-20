@@ -42,6 +42,7 @@ class Present
             'city' => $w->city,
             'address' => $w->address,
             'capacity' => (int) $w->capacity,
+            'deletedAt' => self::date($w->deleted_at ?? null),
         ];
     }
 
@@ -51,6 +52,7 @@ class Present
             'id' => $c->id,
             'name' => $c->name,
             'parentId' => $c->parent_id,
+            'deletedAt' => self::date($c->deleted_at ?? null),
         ];
     }
 
@@ -63,6 +65,7 @@ class Present
             'email' => $s->email,
             'phone' => $s->phone,
             'city' => $s->city,
+            'deletedAt' => self::date($s->deleted_at ?? null),
         ];
     }
 
@@ -75,6 +78,7 @@ class Present
             'role' => $u->role,
             'initials' => $u->initials,
             'mustChangePassword' => $u->must_change_password,
+            'deletedAt' => self::date($u->deleted_at ?? null),
         ];
     }
 
@@ -95,6 +99,7 @@ class Present
             'status' => $p->status,
             'supplierId' => $p->supplier_id,
             'imageUrl' => $p->image_url,
+            'deletedAt' => self::date($p->deleted_at ?? null),
         ];
     }
 
@@ -124,6 +129,7 @@ class Present
             'userId' => $m->user_id,
             'note' => $m->note,
             'createdAt' => self::date($m->created_at),
+            'deletedAt' => self::date($m->deleted_at ?? null),
         ], fn ($v) => $v !== null);
     }
 
@@ -159,6 +165,7 @@ class Present
             'createdBy' => $po->relationLoaded('createdByUser') ? ($po->createdByUser->name ?? null) : null,
             'approvedBy' => $po->relationLoaded('approvedByUser') ? ($po->approvedByUser->name ?? null) : null,
             'sharedWith' => $po->shared_with,
+            'deletedAt' => self::date($po->deleted_at ?? null),
         ], fn ($v) => $v !== null);
     }
 
@@ -180,7 +187,8 @@ class Present
                 ])->all()
                 : [],
             'createdAt' => self::date($q->created_at),
-            'createdBy' => $q->created_by,
+            'createdById' => $q->created_by,
+            'createdBy' => $q->relationLoaded('createdByUser') ? ($q->createdByUser->name ?? null) : null,
             'validUntil' => self::date($q->valid_until),
             'deliveryDate' => self::date($q->delivery_date),
             'deliveryAddress' => $q->delivery_address,
@@ -193,6 +201,7 @@ class Present
             'status' => $q->status,
             'approvedBy' => $q->approved_by,
             'approvedAt' => self::date($q->approved_at),
+            'deletedAt' => self::date($q->deleted_at ?? null),
         ], fn ($v) => $v !== null);
     }
 

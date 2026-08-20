@@ -94,12 +94,15 @@ export function SuppliersClient() {
     [search, page],
   );
 
-  const { status, data, staleData, error, refetch } = useAsync(() => listSuppliers(query), [
-    JSON.stringify(query),
-  ]);
-  const { data: scorecards } = useAsync(getSupplierScorecards, []);
+  // One coordinated fetch instead of two independent waves — getSupplierScorecards
+  // is cached by lib/api-cache.ts, so re-running it on every filter change is cheap.
+  const { status, data, staleData, error, refetch } = useAsync(async () => {
+    const [suppliers, scorecards] = await Promise.all([listSuppliers(query), getSupplierScorecards()]);
+    return { suppliers, scorecards };
+  }, [JSON.stringify(query)]);
+  const scorecards = (data ?? staleData)?.scorecards;
 
-  const rawView = data ?? staleData;
+  const rawView = (data ?? staleData)?.suppliers;
   const view = useMemo(() => {
     if (!rawView) return rawView;
     const rows: SupplierRow[] = rawView.rows.map((s) => ({

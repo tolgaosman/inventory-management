@@ -234,31 +234,30 @@ export function PurchaseOrdersClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, status, supplierId, warehouseFilter, priorityFilter, page]);
 
-  const { status: fetchStatus, data, staleData, error, refetch } = useAsync(
-    () => listPurchaseOrders(query),
-    [JSON.stringify(query)],
-  );
-  const view = data ?? staleData;
+  // One coordinated fetch instead of 4 independent waves: everything the page
+  // needs resolves together in a single Promise.all, so the UI fills in at
+  // once instead of piecemeal. Suppliers/warehouses/stats/scorecards are all
+  // cached by lib/api-cache.ts, so re-running this on every filter change is
+  // cheap for those — only the order list itself is genuinely re-fetched.
+  const { status: fetchStatus, data, staleData, error, refetch } = useAsync(async () => {
+    const [orders, suppliersResult, warehousesResult, stats, scorecards] = await Promise.all([
+      listPurchaseOrders(query),
+      listSuppliers({ pageSize: 1000 }),
+      listWarehouses(),
+      getPurchaseOrderStats(),
+      getSupplierScorecards(),
+    ]);
+    return { orders, suppliers: suppliersResult.rows, warehouses: warehousesResult, stats, scorecards };
+  }, [JSON.stringify(query)]);
 
-  const { data: refData } = useAsync(
-    () => Promise.all([listSuppliers({ pageSize: 1000 }), listWarehouses()]),
-    [],
-  );
-  const suppliers = refData?.[0]?.rows ?? [];
-  const warehouses = refData?.[1] ?? [];
-
-  const { data: stats, refetch: refetchStats } = useAsync(() => getPurchaseOrderStats(), []);
-
-  const { data: scorecardData, status: scorecardStatus, refetch: refetchScorecards } = useAsync(
-    () => getSupplierScorecards(),
-    [],
-  );
-  const scorecards = scorecardData ?? [];
+  const view = (data ?? staleData)?.orders;
+  const suppliers = (data ?? staleData)?.suppliers ?? [];
+  const warehouses = (data ?? staleData)?.warehouses ?? [];
+  const stats = (data ?? staleData)?.stats;
+  const scorecards = (data ?? staleData)?.scorecards ?? [];
 
   function refetchAll() {
     refetch();
-    refetchStats();
-    refetchScorecards();
   }
 
   const isFiltered =
@@ -1158,7 +1157,7 @@ export function PurchaseOrdersClient() {
           <TabsContent value="scorecard">
             <SupplierScorecardPanel
               scorecards={scorecards}
-              loading={scorecardStatus === "loading" && scorecards.length === 0}
+              loading={fetchStatus === "loading" && scorecards.length === 0}
               currency={currency}
               rate={rate}
             />

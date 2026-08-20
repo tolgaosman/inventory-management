@@ -85,7 +85,8 @@ class ProductController extends Controller
         $totals = $this->totalsByProduct();
         $categoryNames = $this->categoryNames();
 
-        $query = Product::query();
+        $query = Product::query()
+            ->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed());
 
         if ($catId = $request->query('categoryId')) {
             $query->whereIn('category_id', array_keys($this->categoryAndDescendantIds($catId)));
@@ -322,9 +323,9 @@ class ProductController extends Controller
         return response()->json($this->toRow($product, $this->categoryNames(), $this->totalsByProduct()));
     }
 
-    public function destroy(string $id)
+    public function destroy(Request $request, string $id)
     {
-        DB::transaction(function () use ($id) {
+        DB::transaction(function () use ($request, $id) {
             $product = Product::query()->lockForUpdate()->find($id);
             if (! $product) {
                 throw ApiException::notFound('Ürün bulunamadı.');
@@ -334,7 +335,7 @@ class ProductController extends Controller
             }
 
             StockLevel::query()->where('product_id', $id)->delete();
-            $product->delete();
+            $product->deleteAs($request->user()->getKey());
         });
 
         return response()->json(null, 204);
@@ -356,8 +357,9 @@ class ProductController extends Controller
     public function bulkDelete(Request $request)
     {
         $data = $request->validate(['ids' => ['required', 'array'], 'ids.*' => ['string']]);
+        $userId = $request->user()->getKey();
 
-        return response()->json(DB::transaction(function () use ($data) {
+        return response()->json(DB::transaction(function () use ($data, $userId) {
             $deletedCount = 0;
             $failedSkus = [];
 
@@ -373,7 +375,7 @@ class ProductController extends Controller
                     continue;
                 }
                 StockLevel::query()->where('product_id', $id)->delete();
-                $product->delete();
+                $product->deleteAs($userId);
                 $deletedCount++;
             }
 
@@ -447,5 +449,15 @@ class ProductController extends Controller
 
             return ['importedCount' => $importedCount, 'errors' => $errors];
         }));
+    }
+
+    public function restore(string $id)
+    {
+        $model = \App\Models\Product::withTrashed()->find($id);
+        if (!$model) {
+            throw \App\Exceptions\ApiException::notFound('Kayıt bulunamadı.');
+        }
+        $model->restoreTracked();
+        return response()->json(['restored' => true]);
     }
 }
