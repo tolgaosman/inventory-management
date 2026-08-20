@@ -26,6 +26,7 @@ class CalendarController extends Controller
         $to = $request->query('to');
 
         $movements = StockMovement::query()
+            ->with('user')
             ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('created_at', '<=', $to))
             ->orderByDesc('created_at')

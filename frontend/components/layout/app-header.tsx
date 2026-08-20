@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation";
 import { Bell, ChevronDown, LogOut, Settings, AlertTriangle, Warehouse, CalendarRange, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
-import { ROLE_LABELS } from "@/lib/constants";
+import { ROLE_LABELS, PURCHASE_STATUS_LABELS } from "@/lib/constants";
+import { receivePercent } from "@/lib/purchase-order-actions";
 
 import { getCriticalStockNotifications, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
-import { listPurchaseOrders } from "@/lib/api/purchase-orders";
+import { listPurchaseOrders, getPendingReceiptOrders } from "@/lib/api/purchase-orders";
 import { listWarehouses } from "@/lib/api/catalog";
+import { PackageCheck } from "lucide-react";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useDashboardFilter } from "@/lib/dashboard-filter-context";
 import {
@@ -95,24 +97,32 @@ export function AppHeader() {
   const pathname = usePathname();
   const isPanel = pathname?.replace(/\/$/, "") === "/panel";
 
+  const isDepoRole = role === "depo" || role === "depo_yonetici";
+
   // Both header requests fetched together — one wave instead of two. Both are
   // cached (getCriticalStockNotifications / listPurchaseOrders in lib/api-cache.ts),
   // so this also dedupes against whatever the page body itself is fetching.
   const { data: headerData } = useAsync(async () => {
-    const [notif, pendingApprovalsData] = await Promise.all([
+    const [notif, pendingApprovalsData, pendingReceiptOrders] = await Promise.all([
       getCriticalStockNotifications(5),
       role === "satinalma_yonetici"
         ? listPurchaseOrders({ status: "pending_approval", pageSize: 5 })
         : Promise.resolve({ total: 0, rows: [], page: 1, pageSize: 5 }),
+      isDepoRole ? getPendingReceiptOrders() : Promise.resolve([]),
     ]);
-    return { notif, pendingApprovalsData };
+    return { notif, pendingApprovalsData, pendingReceiptOrders };
   }, [role]);
   const criticalCount = headerData?.notif.total ?? 0;
   const criticalItems = headerData?.notif.items ?? [];
   const pendingApprovalCount = headerData?.pendingApprovalsData.total ?? 0;
   const pendingApprovals = headerData?.pendingApprovalsData.rows ?? [];
+  const pendingReceiptOrders = headerData?.pendingReceiptOrders ?? [];
+  const pendingReceiptCount = pendingReceiptOrders.length;
 
-  const totalNotifs = criticalCount + (role === "satinalma_yonetici" ? pendingApprovalCount : 0);
+  const totalNotifs =
+    criticalCount +
+    (role === "satinalma_yonetici" ? pendingApprovalCount : 0) +
+    (isDepoRole ? pendingReceiptCount : 0);
 
   return (
     <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card px-4 md:px-6">
@@ -142,7 +152,7 @@ export function AppHeader() {
               <div className="bg-muted/40 p-2 border-b border-border">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="stock" className="text-xs">
-                    Kritik Stok {criticalCount > 0 && `(${criticalCount})`}
+                    Stok İhtiyaçları {criticalCount > 0 && `(${criticalCount})`}
                   </TabsTrigger>
                   <TabsTrigger value="approval" className="text-xs">
                     Onay Bekleyen {pendingApprovalCount > 0 && `(${pendingApprovalCount})`}
@@ -155,7 +165,7 @@ export function AppHeader() {
                   {criticalCount === 0 ? (
                     <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
                       <Bell className="mb-2 size-6 text-muted-foreground" />
-                      <p className="text-sm font-medium text-foreground">Kritik stok uyarısı yok</p>
+                      <p className="text-sm font-medium text-foreground">Stok ihtiyacı yok</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">Tüm ürünler güvenli stok seviyesinde.</p>
                     </div>
                   ) : (
@@ -188,7 +198,7 @@ export function AppHeader() {
                       href="/urunler?stockStatus=kritik"
                       className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-primary transition-colors hover:bg-primary/10"
                     >
-                      Tüm kritik ürünleri gör ({criticalCount})
+                      Tüm stok ihtiyaçlarını gör ({criticalCount})
                     </Link>
                   </div>
                 )}
@@ -234,6 +244,107 @@ export function AppHeader() {
                 )}
               </TabsContent>
             </Tabs>
+          ) : isDepoRole ? (
+            <Tabs defaultValue="stock">
+              <div className="bg-muted/40 p-2 border-b border-border">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="stock" className="text-xs">
+                    Stok Uyarıları {criticalCount > 0 && `(${criticalCount})`}
+                  </TabsTrigger>
+                  <TabsTrigger value="purchases" className="text-xs">
+                    Satın Alınanlar {pendingReceiptCount > 0 && `(${pendingReceiptCount})`}
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+
+              <TabsContent value="stock" className="mt-0">
+                <div className="max-h-80 space-y-0.5 overflow-y-auto p-2 custom-scrollbar">
+                  {criticalCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+                      <Bell className="mb-2 size-6 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground">Stok ihtiyacı yok</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Tüm ürünler güvenli stok seviyesinde.</p>
+                    </div>
+                  ) : (
+                    criticalItems.map((p) => (
+                      <Link
+                        key={p.id}
+                        href={`/urunler/${p.id}`}
+                        className="group flex items-start gap-2.5 rounded-md p-2.5 transition-colors hover:bg-muted"
+                      >
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0 text-status-critical" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+                            {p.name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Mevcut{" "}
+                            <span className="font-medium tabular-nums text-status-critical">
+                              {p.totalStock}
+                            </span>{" "}
+                            · Minimum <span className="tabular-nums">{p.minStock}</span>
+                          </p>
+                        </div>
+                      </Link>
+                    ))
+                  )}
+                </div>
+                {criticalCount > 0 && (
+                  <div className="border-t border-border bg-muted/30 p-2">
+                    <Link
+                      href="/urunler?stockStatus=kritik"
+                      className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                    >
+                      Tüm stok ihtiyaçlarını gör ({criticalCount})
+                    </Link>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="purchases" className="mt-0">
+                <div className="max-h-80 space-y-0.5 overflow-y-auto p-2 custom-scrollbar">
+                  {pendingReceiptCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
+                      <PackageCheck className="mb-2 size-6 text-muted-foreground" />
+                      <p className="text-sm font-medium text-foreground">Bekleyen teslimat yok</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">Tüm satın alımlar stoğa işlendi.</p>
+                    </div>
+                  ) : (
+                    pendingReceiptOrders.map((po) => (
+                      <Link
+                        key={po.id}
+                        href={`/stok/islem?purchaseOrderId=${po.id}`}
+                        className="group flex items-start gap-2.5 rounded-md p-2.5 transition-colors hover:bg-muted"
+                      >
+                        <PackageCheck className="mt-0.5 size-4 shrink-0 text-status-warning" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary">
+                            {po.supplierName}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {PURCHASE_STATUS_LABELS[po.status]} · %
+                            {receivePercent(po.receivedTotal, po.orderedTotal)} teslim alındı
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {po.items.length} kalem bekliyor · Kod: <span className="font-medium">{po.code}</span>
+                          </p>
+                        </div>
+                      </Link>
+                    ))
+                  )}
+                </div>
+                {pendingReceiptCount > 0 && (
+                  <div className="border-t border-border bg-muted/30 p-2">
+                    <Link
+                      href="/stok/islem"
+                      className="flex items-center justify-center rounded-md px-3 py-2 text-center text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                    >
+                      Tüm bekleyenleri gör ({pendingReceiptCount})
+                    </Link>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
           ) : (
             <>
               <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
@@ -252,7 +363,7 @@ export function AppHeader() {
                 {criticalCount === 0 ? (
                   <div className="flex flex-col items-center justify-center px-4 py-8 text-center">
                     <Bell className="mb-2 size-6 text-muted-foreground" />
-                    <p className="text-sm font-medium text-foreground">Kritik stok uyarısı yok</p>
+                    <p className="text-sm font-medium text-foreground">Stok ihtiyacı yok</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">Tüm ürünler güvenli stok seviyesinde.</p>
                   </div>
                 ) : (

@@ -47,6 +47,16 @@ export function getAvailableActions(po: PurchaseOrderActionInput): PurchaseOrder
   };
 }
 
+/**
+ * How much of an order has physically arrived, by unit count — the single
+ * definition shared by the orders table, the detail page, the notification
+ * bell and the stock-entry form, so all four can never show different numbers
+ * for the same order.
+ */
+export function receivePercent(receivedTotal: number, orderedTotal: number): number {
+  return orderedTotal > 0 ? Math.round((receivedTotal / orderedTotal) * 100) : 0;
+}
+
 export type PerformanceTone = "good" | "warning" | "critical" | "neutral";
 
 /**

@@ -101,7 +101,7 @@ export function CriticalStockList({
     <Card className="flex h-full flex-col">
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 pb-2">
         <div className="flex items-center gap-2">
-          <CardTitle className="text-base font-semibold tracking-tight text-foreground">Kritik Stok Uyarıları</CardTitle>
+          <CardTitle className="text-base font-semibold tracking-tight text-foreground">Stok İhtiyaçları</CardTitle>
           {selected.size > 0 && (
             <span className="rounded-full bg-primary/10 px-2 py-0.5 text-micro font-medium text-primary">
               {selected.size} seçili
@@ -203,7 +203,7 @@ export function CriticalStockList({
           </Link>
         </div>
         {items.length === 0 ? (
-          <EmptyState icon={ShieldCheck} title="Kritik stok yok" description="Tüm ürünler minimum seviyenin üzerinde." />
+          <EmptyState icon={ShieldCheck} title="Stok ihtiyacı yok" description="Tüm ürünler minimum seviyenin üzerinde." />
         ) : filtered.length === 0 ? (
           <EmptyState icon={Search} title="Sonuç bulunamadı" description="Arama veya filtreleri değiştirin." />
         ) : (

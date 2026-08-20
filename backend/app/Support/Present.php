@@ -127,6 +127,12 @@ class Present
             'supplierId' => $m->supplier_id,
             'purchaseOrderId' => $m->purchase_order_id,
             'userId' => $m->user_id,
+            // Present the acting user's name directly rather than making every
+            // caller cross-reference a separately-fetched (often permission- or
+            // department-scoped, see UserController::index) user list — that
+            // list frequently doesn't include the user who performed a given
+            // movement, which showed as a blank "kim tarafından yapıldı" cell.
+            'userName' => $m->relationLoaded('user') ? ($m->user->name ?? null) : null,
             'note' => $m->note,
             'createdAt' => self::date($m->created_at),
             'deletedAt' => self::date($m->deleted_at ?? null),

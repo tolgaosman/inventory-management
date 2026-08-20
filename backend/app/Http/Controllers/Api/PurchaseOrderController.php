@@ -93,6 +93,74 @@ class PurchaseOrderController extends Controller
         return response()->json(TextTools::paginate($rows, $page, $pageSize));
     }
 
+    /**
+     * Every order still awaiting (full) receipt — "ordered" (Bekleyen Satın
+     * Alımlar) and "partially_received" (Kısmen Teslim Alındı) — regardless
+     * of whether its invoice has been uploaded yet. Feeds the "Satın
+     * Alınanlar" notification tab and the stock-entry form's purchase-order
+     * picker (frontend/components/stock/stock-entry-form.tsx). The invoice
+     * is only required at the moment of actually receiving (`receive()`
+     * below still enforces that) — it's not a reason to hide an order
+     * that's genuinely still outstanding from these "what's pending" views.
+     */
+    public function pendingReceipt(Request $request)
+    {
+        $query = PurchaseOrder::query()
+            ->with(['items', 'supplier', 'warehouse'])
+            ->whereIn('status', ['ordered', 'partially_received']);
+
+        if ($warehouseId = $request->query('warehouseId')) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        $productsById = null;
+
+        $rows = $query->get()->map(function (PurchaseOrder $po) use (&$productsById) {
+            $outstanding = $po->items->filter(fn ($i) => (int) $i->quantity > (int) $i->received_quantity);
+            if ($outstanding->isEmpty()) {
+                return null;
+            }
+
+            $productsById ??= Product::query()->get()->keyBy('id');
+
+            return [
+                'id' => $po->id,
+                'code' => $po->code,
+                'status' => $po->status,
+                'supplierId' => $po->supplier_id,
+                'supplierName' => $po->supplier->name ?? '-',
+                'warehouseId' => $po->warehouse_id,
+                'warehouseName' => $po->warehouse->name ?? '-',
+                'expectedAt' => $po->expected_at?->toIso8601String(),
+                // Whether this order can actually be received right now —
+                // `receive()` still requires an invoice; orders without one
+                // yet still show up here (they're genuinely pending), just
+                // not selectable in the stock-entry form's quick-receive picker.
+                'hasInvoice' => (bool) $po->invoice_file_path,
+                // Totals span EVERY line, not just the outstanding ones below —
+                // a caller can't derive the real receive percentage from `items`
+                // alone, since fully-received lines are filtered out of it.
+                'orderedTotal' => (int) $po->items->sum('quantity'),
+                'receivedTotal' => (int) $po->items->sum('received_quantity'),
+                'items' => $outstanding->map(function ($i) use ($productsById) {
+                    $p = $productsById->get($i->product_id);
+
+                    return [
+                        'productId' => $i->product_id,
+                        'productName' => $p->name ?? '-',
+                        'sku' => $p->sku ?? '-',
+                        'unit' => $p->unit ?? '',
+                        'quantity' => (int) $i->quantity,
+                        'receivedQuantity' => (int) $i->received_quantity,
+                        'outstandingQuantity' => (int) $i->quantity - (int) $i->received_quantity,
+                    ];
+                })->values()->all(),
+            ];
+        })->filter()->values()->all();
+
+        return response()->json($rows);
+    }
+
     public function show(string $id)
     {
         $po = PurchaseOrder::query()->with(['items', 'supplier', 'warehouse', 'createdByUser', 'approvedByUser'])->find($id);

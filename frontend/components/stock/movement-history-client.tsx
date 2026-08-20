@@ -190,7 +190,7 @@ export function MovementHistoryClient() {
                 const targetName = m.targetWarehouseId
                   ? warehouses.find((w) => w.id === m.targetWarehouseId)?.name ?? "-"
                   : "-";
-                const userName = users.find((u) => u.id === m.userId)?.name ?? "-";
+                const userName = m.userName ?? "-";
                 return [
                   formatDateTime(m.createdAt),
                   MOVEMENT_TYPE_LABELS[m.type],
@@ -343,7 +343,7 @@ export function MovementHistoryClient() {
           )
         },
         cell: ({ row }) => {
-          const userName = users.find((u) => u.id === row.original.userId)?.name ?? "-";
+          const userName = row.original.userName ?? "-";
           return <span className="block truncate text-center" title={userName}>{userName}</span>;
         },
       },
@@ -427,15 +427,6 @@ export function MovementHistoryClient() {
                     className="h-9 pl-8"
                   />
                 </div>
-                {isFiltered && (
-                  <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
-                    <X className="size-4" />
-                    Temizle
-                  </Button>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
                 <Input
                   type="date"
                   value={dateFrom}
@@ -452,6 +443,13 @@ export function MovementHistoryClient() {
                   className="h-9 w-fit"
                   aria-label="Bitiş tarihi"
                 />
+
+                {isFiltered && (
+                  <Button variant="ghost" size="sm" onClick={clearFilters} className="shrink-0">
+                    <X className="size-4" />
+                    Temizle
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -190,6 +190,51 @@ export async function receivePurchaseOrder(
   });
 }
 
+export interface PendingReceiptItem {
+  productId: string;
+  productName: string;
+  sku: string;
+  unit: string;
+  quantity: number;
+  receivedQuantity: number;
+  outstandingQuantity: number;
+}
+
+/**
+ * A purchase order still awaiting (full) receipt — status "ordered" or
+ * "partially_received", regardless of invoice state. Every such order is
+ * genuinely pending and should be visible; `hasInvoice` says whether it can
+ * actually be received right now (`receivePurchaseOrder` still requires one).
+ */
+export interface PendingReceiptOrder {
+  id: string;
+  code: string;
+  status: PurchaseOrderStatus;
+  supplierId: string;
+  supplierName: string;
+  warehouseId: string;
+  warehouseName: string;
+  expectedAt?: string;
+  hasInvoice: boolean;
+  /**
+   * Totals across every line of the order. `items` below only carries the
+   * lines with something still outstanding, so the receive percentage must
+   * come from these two rather than from summing `items`.
+   */
+  orderedTotal: number;
+  receivedTotal: number;
+  items: PendingReceiptItem[];
+}
+
+export async function getPendingReceiptOrders(warehouseId?: string): Promise<PendingReceiptOrder[]> {
+  const key = `purchaseOrders:pendingReceipt:${warehouseId ?? "all"}`;
+  return cachedFetch(
+    key,
+    () => apiFetch<PendingReceiptOrder[]>("/purchase-orders/pending-receipt", { query: { warehouseId } }),
+    PO_CACHE_TTL,
+  );
+}
+
 export async function uploadPurchaseOrderInvoice(id: string, file: File): Promise<{ invoiceFilePath: string }> {
   const formData = new FormData();
   formData.append("invoice", file);

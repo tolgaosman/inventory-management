@@ -46,8 +46,7 @@ import { WarehouseFormSheet } from "@/components/warehouses/warehouse-form-sheet
 import { useAsync } from "@/lib/hooks/use-async";
 import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
-import { useAuth } from "@/lib/auth";
-import { getWarehouse, listUsers, listWarehouses } from "@/lib/api/catalog";
+import { getWarehouse, listWarehouses } from "@/lib/api/catalog";
 import { listWarehousesDetailed, getProductStockMatrix, updateWarehouseInput, deleteWarehouseInput } from "@/lib/api/warehouses";
 import { listMovements } from "@/lib/api/movements";
 import { ApiError } from "@/lib/api/client";
@@ -61,7 +60,6 @@ export function WarehouseDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const { currency, rates } = useCurrency();
   const { showKurus } = useSettings();
-  const { can } = useAuth();
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -73,9 +71,8 @@ export function WarehouseDetailClient({ id }: { id: string }) {
         getProductStockMatrix({ warehouseId: id }),
         listMovements({ warehouseId: id, pageSize: 50 }),
         listWarehouses(),
-        can("users.manage") ? listUsers().catch(() => []) : Promise.resolve([]),
       ]),
-    [id, can],
+    [id],
   );
   const view = data ?? staleData;
 
@@ -125,7 +122,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
     );
   }
 
-  const [detailList, { warehouse, levels }, products, movements, allWarehouses, users] = view;
+  const [detailList, { warehouse, levels }, products, movements, allWarehouses] = view;
   const detail = detailList.find((w) => w.id === id);
 
   if (!detail) {
@@ -303,7 +300,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
                 <CardHeader className="px-5 pb-2">
                   <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
                     <AlertTriangle className="size-4 text-status-critical" />
-                    Kritik Stok
+                    Stok İhtiyaçları
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 px-5 pt-2">
@@ -340,7 +337,6 @@ export function WarehouseDetailClient({ id }: { id: string }) {
                         ? allWarehouses.find((w) => w.id === m.targetWarehouseId)
                         : undefined;
                       const sourceWarehouse = allWarehouses.find((w) => w.id === m.warehouseId);
-                      const user = users.find((u) => u.id === m.userId);
                       const isIncomingTransfer = m.targetWarehouseId === id;
                       return (
                         <div key={m.id} className="rounded-lg px-2 py-2 text-sm hover:bg-muted/50">
@@ -366,7 +362,7 @@ export function WarehouseDetailClient({ id }: { id: string }) {
                           </div>
                           <div className="mt-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                             <span>
-                              {user?.name ?? "Bilinmeyen kullanıcı"} · {formatDateTime(m.createdAt)}
+                              {m.userName ?? "Bilinmeyen kullanıcı"} · {formatDateTime(m.createdAt)}
                             </span>
                             {m.note ? <span className="italic">&ldquo;{m.note}&rdquo;</span> : null}
                           </div>

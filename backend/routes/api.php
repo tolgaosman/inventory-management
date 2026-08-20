@@ -83,6 +83,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     // Purchase orders
     Route::get('/purchase-orders/stats', [PurchaseOrderController::class, 'stats'])->middleware('perm:purchase.view');
     Route::get('/purchase-orders/quotable-grouped', [QuoteRequestController::class, 'quotableGrouped'])->middleware('perm:purchase.view');
+    Route::get('/purchase-orders/pending-receipt', [PurchaseOrderController::class, 'pendingReceipt'])->middleware('perm:purchase.manage|purchase.receive');
     Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->middleware('perm:purchase.view');
     Route::get('/purchase-orders/{id}', [PurchaseOrderController::class, 'show'])->middleware('perm:purchase.view');
     Route::post('/purchase-orders', [PurchaseOrderController::class, 'store'])->middleware(['perm:purchase.manage', 'throttle:writes']);

@@ -72,7 +72,7 @@ class ProductController extends Controller
 
         return [
             'total' => count($rows),
-            'critical' => count(array_filter($rows, fn ($p) => $p['critical'] && $p['totalStock'] > 0)),
+            'critical' => count(array_filter($rows, fn ($p) => $p['critical'])),
             'low' => count(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] > 0 && $p['totalStock'] < $p['minStock'] * $mult)),
             'overstock' => count(array_filter($rows, fn ($p) => $p['totalStock'] > $p['maxStock'])),
             'passive' => count(array_filter($rows, fn ($p) => $p['status'] === 'pasif')),
@@ -139,7 +139,7 @@ class ProductController extends Controller
         if ($stockStatus === 'yok') {
             $rows = array_values(array_filter($rows, fn ($p) => $p['totalStock'] <= 0));
         } elseif ($stockStatus === 'kritik') {
-            $rows = array_values(array_filter($rows, fn ($p) => $p['critical'] && $p['totalStock'] > 0));
+            $rows = array_values(array_filter($rows, fn ($p) => $p['critical']));
         } elseif ($stockStatus === 'dusuk') {
             $rows = array_values(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] > 0 && $p['totalStock'] < $p['minStock'] * $mult));
         } elseif ($stockStatus === 'normal') {

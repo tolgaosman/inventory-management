@@ -283,7 +283,7 @@ export function CategoriesClient() {
           {
             icon: AlertTriangle,
             tint: "red",
-            label: "Kritik Stoklu Kategori",
+            label: "Stok İhtiyacı Olan Kategori",
             value: formatNumber(stats?.criticalCategoryCount ?? 0),
           },
         ]}

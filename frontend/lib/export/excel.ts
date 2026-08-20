@@ -102,7 +102,7 @@ function setWorksheetFormatting(
           fillColor = { fgColor: { rgb: "FFEB9C" } }; // Neutral Fill (#FFEB9C)
           fontColor = { rgb: "9C6500" }; // Neutral Text (#9C6500)
           isBold = true;
-        } else if (trimmedVal === "Sipariş Edildi") {
+        } else if (trimmedVal === "Bekleyen Satın Alımlar") {
           fillColor = { fgColor: { rgb: "B4C6E7" } }; // 60% Accent 5
           fontColor = { rgb: "1F497D" }; // Dark Blue, Text 2, Darker 50%
           isBold = true;

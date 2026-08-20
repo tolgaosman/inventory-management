@@ -38,7 +38,7 @@ export function ProductsCommandHero({
 
   const chips: CommandHeroChip[] = [
     { key: "total", icon: Package, label: "toplam ürün", value: stats?.total, onClick: onTotalClick },
-    { key: "critical", icon: AlertTriangle, label: "kritik stok", value: stats?.critical, onClick: onCriticalClick },
+    { key: "critical", icon: AlertTriangle, label: "stok ihtiyacı", value: stats?.critical, onClick: onCriticalClick },
     { key: "low", icon: TrendingDown, label: "düşük stok", value: stats?.low, onClick: onLowClick },
     { key: "overstock", icon: PackagePlus, label: "stok fazlası", value: stats?.overstock, onClick: onOverstockClick },
     { key: "passive", icon: CircleDot, label: "pasif ürün", value: stats?.passive, onClick: onPassiveClick },

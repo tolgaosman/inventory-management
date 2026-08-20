@@ -97,7 +97,7 @@ export function TransferHistoryTable({
         header: "Kullanıcı",
         meta: { className: "w-[15%] text-center" },
         cell: ({ row }) => {
-          const userName = users.find((u) => u.id === row.original.userId)?.name ?? "-";
+          const userName = row.original.userName ?? "-";
           return <span className="block truncate" title={userName}>{userName}</span>;
         },
       },

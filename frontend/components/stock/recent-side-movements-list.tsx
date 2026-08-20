@@ -15,25 +15,19 @@ export function RecentSideMovementsList({
   movements,
   products,
   className,
+  /** Renders just the table/empty-state, no PanelCard shell — for embedding inside a tabbed panel that already provides one. */
+  noCard,
 }: {
   mode: "giris" | "cikis";
   movements: StockMovement[];
   products: Product[];
   className?: string;
+  noCard?: boolean;
 }) {
   const isGiris = mode === "giris";
 
-  return (
-    <PanelCard
-      className={className}
-      title={
-        <span className="flex items-center gap-2">
-          <History className="size-4 text-muted-foreground" />
-          {isGiris ? "Son Stok Girişleri" : "Son Stok Çıkışları"}
-        </span>
-      }
-      bodyClassName="flex flex-col"
-    >
+  const content = (
+    <>
       {movements.length === 0 ? (
         <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground py-8">
           Henüz stok {isGiris ? "girişi" : "çıkışı"} bulunmuyor.
@@ -81,6 +75,25 @@ export function RecentSideMovementsList({
           </Table>
         </div>
       )}
+    </>
+  );
+
+  if (noCard) {
+    return content;
+  }
+
+  return (
+    <PanelCard
+      className={className}
+      title={
+        <span className="flex items-center gap-2">
+          <History className="size-4 text-muted-foreground" />
+          {isGiris ? "Son Stok Girişleri" : "Son Stok Çıkışları"}
+        </span>
+      }
+      bodyClassName="flex flex-col"
+    >
+      {content}
     </PanelCard>
   );
 }

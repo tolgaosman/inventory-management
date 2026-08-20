@@ -66,6 +66,7 @@ class MovementController extends Controller
     {
         $query = $this->applyFilters(
             StockMovement::query()
+                ->with('user')
                 ->when($request->query('trashed') === '1', fn ($q) => $q->onlyTrashed())
                 ->orderByDesc('created_at')
                 ->orderByDesc('id'),

@@ -322,6 +322,36 @@
             }
         },
         {
+            "name": "api/categories/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/categories/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "categories",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/warehouses",
             "request": {
                 "method": "GET",
@@ -523,6 +553,36 @@
             }
         },
         {
+            "name": "api/warehouses/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/warehouses/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "warehouses",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/suppliers",
             "request": {
                 "method": "GET",
@@ -690,6 +750,36 @@
                         "api",
                         "suppliers",
                         ":id"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/suppliers/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/suppliers/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "suppliers",
+                        ":id",
+                        "restore"
                     ]
                 }
             }
@@ -928,6 +1018,36 @@
             }
         },
         {
+            "name": "api/products/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/products/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "products",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/products/bulk-status",
             "request": {
                 "method": "POST",
@@ -1038,6 +1158,35 @@
                     "path": [
                         "api",
                         "movements"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/movements/summary",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/movements/summary",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "movements",
+                        "summary"
                     ]
                 }
             }
@@ -1159,6 +1308,65 @@
             }
         },
         {
+            "name": "api/movements/{id}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/movements/:id",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "movements",
+                        ":id"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/movements/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/movements/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "movements",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/purchase-orders/stats",
             "request": {
                 "method": "GET",
@@ -1212,6 +1420,35 @@
                         "api",
                         "purchase-orders",
                         "quotable-grouped"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/purchase-orders/pending-receipt",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/purchase-orders/pending-receipt",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "purchase-orders",
+                        "pending-receipt"
                     ]
                 }
             }
@@ -1360,6 +1597,36 @@
             }
         },
         {
+            "name": "api/purchase-orders/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/purchase-orders/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "purchase-orders",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/purchase-orders/{id}/order",
             "request": {
                 "method": "POST",
@@ -1415,6 +1682,36 @@
                         "purchase-orders",
                         ":id",
                         "request-approval"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/purchase-orders/{id}/share",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/purchase-orders/:id/share",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "purchase-orders",
+                        ":id",
+                        "share"
                     ]
                 }
             }
@@ -1830,6 +2127,65 @@
             }
         },
         {
+            "name": "api/quote-requests/{id}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/quote-requests/:id",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "quote-requests",
+                        ":id"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/quote-requests/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/quote-requests/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "quote-requests",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/dashboard",
             "request": {
                 "method": "GET",
@@ -2003,6 +2359,35 @@
             }
         },
         {
+            "name": "api/reports/stock-by-product",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/reports/stock-by-product",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "reports",
+                        "stock-by-product"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/calendar",
             "request": {
                 "method": "GET",
@@ -2145,6 +2530,36 @@
             }
         },
         {
+            "name": "api/users/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/users/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "users",
+                        ":id",
+                        "restore"
+                    ]
+                }
+            }
+        },
+        {
             "name": "api/settings",
             "request": {
                 "method": "GET",
@@ -2196,6 +2611,65 @@
                     "path": [
                         "api",
                         "settings"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/trash",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/trash",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "trash"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "api/trash/{type}/{id}/restore",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Accept",
+                        "value": "application/json",
+                        "type": "text"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/trash/:type/:id/restore",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "trash",
+                        ":type",
+                        ":id",
+                        "restore"
                     ]
                 }
             }

@@ -22,7 +22,7 @@ class Labels
 
     public const PURCHASE_ORDER_STATUS = [
         'draft' => 'Taslak',
-        'ordered' => 'Sipariş Edildi',
+        'ordered' => 'Bekleyen Satın Alımlar',
         'partially_received' => 'Kısmen Teslim Alındı',
         'received' => 'Teslim Alındı',
         'cancelled' => 'İptal Edildi',

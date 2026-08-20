@@ -354,7 +354,7 @@ export function ReportsClient() {
           className="grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"
           items={[
             { icon: Package, tint: "blue", label: "Toplam Ürün", value: formatNumber(kpis.totalProducts) },
-            { icon: AlertTriangle, tint: "red", label: "Kritik Stok", value: formatNumber(kpis.criticalStockCount), emphasize: kpis.criticalStockCount > 0 },
+            { icon: AlertTriangle, tint: "red", label: "Stok İhtiyaçları", value: formatNumber(kpis.criticalStockCount), emphasize: kpis.criticalStockCount > 0 },
             { icon: ArrowDownToLine, tint: "green", label: "Bugün Giriş", value: `${formatNumber(kpis.todayIn)} adet` },
             { icon: ArrowUpFromLine, tint: "amber", label: "Bugün Çıkış", value: `${formatNumber(kpis.todayOut)} adet` },
             { icon: ShoppingCart, tint: "teal", label: "Açık Sipariş", value: formatNumber(kpis.openPurchaseOrders) },
@@ -387,7 +387,7 @@ export function ReportsClient() {
 
             <Section index={1}>
               <PanelCard
-                title="Kritik Stok"
+                title="Stok İhtiyaçları"
                 meta={criticalProducts.length > 0 ? `${criticalProducts.length} ürün` : undefined}
                 actions={
                   <Link href="/urunler?stockStatus=kritik" className="flex items-center gap-1 text-xs text-primary hover:underline">
@@ -396,7 +396,7 @@ export function ReportsClient() {
                 }
               >
                 {criticalProducts.length === 0 ? (
-                  <EmptyState icon={CheckCircle2} title="Kritik stok yok" description="Tüm ürünler minimum stok seviyesinin üzerinde." />
+                  <EmptyState icon={CheckCircle2} title="Stok ihtiyacı yok" description="Tüm ürünler minimum stok seviyesinin üzerinde." />
                 ) : (
                   <div className="max-h-[340px] space-y-2 overflow-y-auto custom-scrollbar pr-1">
                     {criticalProducts.map((p) => {

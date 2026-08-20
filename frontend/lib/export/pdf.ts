@@ -229,7 +229,7 @@ function renderSection(
         if (rawText === "Kısmen Teslim Alındı") {
           hook.cell.styles.fontSize = 8.5; // Biraz küçülttük ki sığsın
         }
-      } else if (rawText === "Sipariş Edildi") {
+      } else if (rawText === "Bekleyen Satın Alımlar") {
         hook.cell.styles.fillColor = [180, 198, 231]; // 60% Accent 5 (#B4C6E7)
         hook.cell.styles.textColor = [31, 73, 125]; // Dark Blue, Text 2, Darker 50% (#1F497D)
         hook.cell.styles.fontStyle = "bold";

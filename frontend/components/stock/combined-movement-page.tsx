@@ -1,13 +1,16 @@
 "use client";
 
-import { ArrowDownToLine, ArrowUpFromLine, Package, ArrowLeftRight } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, Package, ArrowLeftRight, History, PackageCheck } from "lucide-react";
 import { StatGrid } from "@/components/common/stat-card";
 import { Section, SectionStack } from "@/components/common/section";
 import { PageHeader } from "@/components/common/page-header";
+import { PanelCard } from "@/components/common/panel-card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Can } from "@/components/common/can";
 import { ForbiddenState } from "@/components/common/forbidden-state";
 import { StockEntryForm } from "@/components/stock/stock-entry-form";
 import { RecentSideMovementsList } from "@/components/stock/recent-side-movements-list";
+import { PendingPurchasesList } from "@/components/stock/pending-purchases-list";
 import { TransferForm } from "@/components/stock/transfer-form";
 import { RecentTransfersList } from "@/components/stock/recent-transfers-list";
 import { useAsync } from "@/lib/hooks/use-async";
@@ -96,12 +99,33 @@ export function CombinedMovementPage() {
               />
               <div className="lg:relative">
                 <div className="lg:absolute lg:inset-0">
-                  <RecentSideMovementsList
-                    className="h-full"
-                    mode="giris"
-                    movements={girisStats?.rows.slice(0, 10) ?? []}
-                    products={productResult?.rows ?? []}
-                  />
+                  <PanelCard className="h-full" bodyClassName="flex min-h-0 flex-1 flex-col p-0">
+                    <Tabs defaultValue="recent" className="flex h-full min-h-0 flex-1 flex-col gap-0">
+                      <div className="border-b border-border px-2 pt-2">
+                        <TabsList variant="line" className="w-full justify-start">
+                          <TabsTrigger value="recent">
+                            <History className="size-4" />
+                            Son Stok Girişleri
+                          </TabsTrigger>
+                          <TabsTrigger value="pending">
+                            <PackageCheck className="size-4" />
+                            Bekleyen Satın Alımlar
+                          </TabsTrigger>
+                        </TabsList>
+                      </div>
+                      <TabsContent value="recent" className="flex min-h-0 flex-1 flex-col px-4 lg:px-5">
+                        <RecentSideMovementsList
+                          mode="giris"
+                          movements={girisStats?.rows.slice(0, 10) ?? []}
+                          products={productResult?.rows ?? []}
+                          noCard
+                        />
+                      </TabsContent>
+                      <TabsContent value="pending" className="flex min-h-0 flex-1 flex-col px-4 lg:px-5">
+                        <PendingPurchasesList noCard />
+                      </TabsContent>
+                    </Tabs>
+                  </PanelCard>
                 </div>
               </div>
             </Can>

@@ -80,7 +80,7 @@ export default function PanelPage() {
               {
                 icon: AlertTriangle,
                 tint: "red",
-                label: "Kritik Stok",
+                label: "Stok İhtiyacı",
                 value: formatNumber(view.kpis.criticalStockCount),
                 emphasize: view.kpis.criticalStockCount > 0,
               },

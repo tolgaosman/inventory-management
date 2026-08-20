@@ -93,7 +93,7 @@ import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
 import { useCurrency } from "@/lib/currency-context";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings-context";
-import { getAvailableActions } from "@/lib/purchase-order-actions";
+import { getAvailableActions, receivePercent } from "@/lib/purchase-order-actions";
 import { cn } from "@/lib/utils";
 import {
   listPurchaseOrders,
@@ -139,7 +139,7 @@ const STATUS_OPTIONS: PurchaseOrderStatus[] = [
 ];
 
 function receiveProgress(row: PurchaseOrderRow): number {
-  return row.orderedTotal > 0 ? Math.round((row.receivedTotal / row.orderedTotal) * 100) : 0;
+  return receivePercent(row.receivedTotal, row.orderedTotal);
 }
 
 export function PurchaseOrdersClient() {
@@ -364,7 +364,7 @@ export function PurchaseOrdersClient() {
   async function handleMarkOrdered(row: PurchaseOrderRow) {
     try {
       await markPurchaseOrderOrdered(row.id);
-      toast.success("Sipariş gönderildi.", { description: `${row.code} artık "Sipariş Edildi" durumunda.` });
+      toast.success("Sipariş gönderildi.", { description: `${row.code} artık "Bekleyen Satın Alımlar" durumunda.` });
       refetchAll();
     } catch (err) {
       toast.error("Sipariş gönderilemedi", {
@@ -388,7 +388,7 @@ export function PurchaseOrdersClient() {
   async function handleApprove(row: PurchaseOrderRow) {
     try {
       await approvePurchaseOrder(row.id);
-      toast.success("Sipariş onaylandı.", { description: `${row.code} artık "Sipariş Edildi" durumunda.` });
+      toast.success("Sipariş onaylandı.", { description: `${row.code} artık "Bekleyen Satın Alımlar" durumunda.` });
       refetchAll();
     } catch (err) {
       toast.error("Sipariş onaylanamadı", {

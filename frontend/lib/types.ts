@@ -90,6 +90,8 @@ export interface StockMovement {
   /** Set when this "giriş" was created by receiving a purchase order — ties the movement back to it. */
   purchaseOrderId?: string;
   userId: string;
+  /** The acting user's name, resolved server-side — present whenever that user still exists. */
+  userName?: string;
   note?: string;
   createdAt: string; // ISO date
   deletedAt?: string;
