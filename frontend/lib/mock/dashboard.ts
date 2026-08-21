@@ -205,7 +205,7 @@ export function getWarehouseDetails(warehouseId?: string): WarehouseDetail[] {
       const units = levels.reduce((sum, s) => sum + s.quantity, 0);
       const totalValue = levels.reduce((sum, s) => {
         const product = products.find((p) => p.id === s.productId);
-        return sum + (product ? s.quantity * product.purchasePrice : 0);
+        return sum + (product ? s.quantity * (product.purchasePrice ?? 0) : 0);
       }, 0);
       const productCount = new Set(levels.filter((s) => s.quantity > 0).map((s) => s.productId)).size;
       return {

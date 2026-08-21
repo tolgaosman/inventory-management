@@ -35,10 +35,13 @@ class DashboardService
     }
 
     /** @return array<string,int> */
-    public function totalsByProduct(): array
+    public function totalsByProduct(?string $warehouseId = null): array
     {
-        return Cache::remember('dashboard:totals_by_product', 60, fn () =>
+        $cacheKey = 'dashboard:totals_by_product:'.($warehouseId ?? 'all');
+
+        return Cache::remember($cacheKey, 60, fn () =>
             DB::table('stock_levels')
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->groupBy('product_id')
                 ->select('product_id', DB::raw('COALESCE(SUM(quantity), 0) as units'))
                 ->pluck('units', 'product_id')
@@ -47,11 +50,13 @@ class DashboardService
         );
     }
 
-    /** Active products whose total stock has fallen below their minimum. */
-    public function criticalProducts(?array $totals = null): array
+    /** Active products whose total stock (in the selected warehouse, if any) has fallen below their minimum. */
+    public function criticalProducts(?string $warehouseId = null, ?array $totals = null): array
     {
-        return Cache::remember('dashboard:critical_products', 60, function () use ($totals) {
-            $totals ??= $this->totalsByProduct();
+        $cacheKey = 'dashboard:critical_products:'.($warehouseId ?? 'all');
+
+        return Cache::remember($cacheKey, 60, function () use ($warehouseId, $totals) {
+            $totals ??= $this->totalsByProduct($warehouseId);
 
             return Product::query()->where('status', 'aktif')->get()
                 ->map(fn ($p) => Present::product($p) + ['totalStock' => $totals[$p->id] ?? 0])
@@ -66,7 +71,7 @@ class DashboardService
         $cacheKey = "dashboard:kpis:{$months}:" . ($warehouseId ?? 'all');
 
         return Cache::remember($cacheKey, 60, function () use ($months, $warehouseId) {
-            $totals = $this->totalsByProduct();
+            $totals = $this->totalsByProduct($warehouseId);
 
             $todayFlow = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
                 ->whereBetween('created_at', [Carbon::today()->startOfDay(), Carbon::today()->endOfDay()])
@@ -79,45 +84,56 @@ class DashboardService
                 ->sum('quantity');
 
             $since = $this->rangeStart($months);
-            // Purchase orders have no warehouse dimension in the UI's filter model,
-            // so they're scoped by date only. Real DB aggregates instead of pulling
-            // every order + line item into PHP (matches PurchaseOrderController::stats()).
+            // Purchase orders carry their own delivery warehouse_id, so PO-derived
+            // figures scope by it too when a warehouse is selected. Real DB
+            // aggregates instead of pulling every order + line item into PHP
+            // (matches PurchaseOrderController::stats()).
             $openOrdersCount = PurchaseOrder::query()
                 ->whereIn('status', ['ordered', 'partially_received'])
                 ->where('created_at', '>=', $since)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->count();
 
             $purchaseTotalValue = (float) DB::table('purchase_order_items')
                 ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
                 ->whereNotIn('purchase_orders.status', ['cancelled', 'draft', 'pending_approval'])
                 ->where('purchase_orders.created_at', '>=', $since)
+                ->when($warehouseId, fn ($q) => $q->where('purchase_orders.warehouse_id', $warehouseId))
                 ->sum(DB::raw('purchase_order_items.quantity * purchase_order_items.unit_price'));
 
             $incomingUnits = (int) DB::table('purchase_order_items')
                 ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
                 ->whereIn('purchase_orders.status', ['ordered', 'partially_received'])
                 ->where('purchase_orders.created_at', '>=', $since)
+                ->when($warehouseId, fn ($q) => $q->where('purchase_orders.warehouse_id', $warehouseId))
                 ->sum(DB::raw('purchase_order_items.quantity - purchase_order_items.received_quantity'));
 
             $pendingDeliveries = PurchaseOrder::query()
                 ->where('status', 'partially_received')
                 ->where('created_at', '>=', $since)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->count();
 
             $cancelledOrders = PurchaseOrder::query()
                 ->where('status', 'cancelled')
                 ->where('created_at', '>=', $since)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->count();
 
             $totalPurchaseOrders = PurchaseOrder::query()
                 ->where('status', '!=', 'draft')
                 ->where('created_at', '>=', $since)
+                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
                 ->count();
 
+            $totalProducts = $warehouseId
+                ? DB::table('stock_levels')->where('warehouse_id', $warehouseId)->distinct()->count('product_id')
+                : Product::query()->count();
+
             return [
-                'totalProducts' => Product::query()->count(),
+                'totalProducts' => $totalProducts,
                 'totalWarehouses' => $warehouseId ? 1 : Warehouse::query()->count(),
-                'criticalStockCount' => count($this->criticalProducts($totals)),
+                'criticalStockCount' => count($this->criticalProducts($warehouseId, $totals)),
                 'todayIn' => (int) ($todayFlow['giris'] ?? 0),
                 'todayOut' => (int) ($todayFlow['cikis'] ?? 0),
                 'openPurchaseOrders' => $openOrdersCount,
@@ -218,9 +234,10 @@ class DashboardService
             ->all();
     }
 
-    public function recentMovements(int $limit, ?string $warehouseId): array
+    public function recentMovements(int $limit, ?string $warehouseId, ?int $months = null): array
     {
         $movements = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+            ->when($months, fn ($q) => $q->where('created_at', '>=', $this->rangeStart($months)))
             ->with(['product', 'warehouse', 'targetWarehouse', 'user'])
             ->orderByDesc('created_at')
             ->limit($limit)
@@ -235,9 +252,10 @@ class DashboardService
         ])->all();
     }
 
-    public function topMovers(int $limit, ?string $warehouseId): array
+    public function topMovers(int $limit, ?string $warehouseId, ?int $months = null): array
     {
         $aggregates = $this->scopeToWarehouse(StockMovement::query(), $warehouseId)
+            ->when($months, fn ($q) => $q->where('created_at', '>=', $this->rangeStart($months)))
             ->groupBy('product_id')
             ->select([
                 'product_id',

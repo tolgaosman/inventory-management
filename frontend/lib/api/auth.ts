@@ -18,7 +18,8 @@ export type Permission =
   | "reports.stock"
   | "reports.financial"
   | "financial.view"
-  | "users.manage";
+  | "users.manage"
+  | "roles.manage";
 
 export interface Session {
   user: AppUser;

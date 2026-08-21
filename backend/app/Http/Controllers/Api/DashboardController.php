@@ -19,7 +19,7 @@ class DashboardController extends Controller
         $months = DashboardService::MONTHS_BY_RANGE[$range] ?? 6;
         $warehouseId = $request->query('warehouseId') ?: null;
 
-        $critical = $this->service->criticalProducts();
+        $critical = $this->service->criticalProducts($warehouseId);
 
         return response()->json([
             'kpis' => $this->service->kpis($months, $warehouseId),
@@ -28,8 +28,8 @@ class DashboardController extends Controller
             'monthlyFlow' => $this->service->monthlyFlow(max($months, 5), $warehouseId),
             'categoryShares' => $this->service->categoryShares($warehouseId),
             'warehouseTotals' => $this->service->warehouseStockTotals($warehouseId),
-            'recentMovements' => $this->service->recentMovements(8, $warehouseId),
-            'topMovers' => $this->service->topMovers(6, $warehouseId),
+            'recentMovements' => $this->service->recentMovements(8, $warehouseId, $months),
+            'topMovers' => $this->service->topMovers(6, $warehouseId, $months),
             'criticalProducts' => array_slice($critical, 0, 6),
         ]);
     }

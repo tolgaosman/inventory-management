@@ -1,5 +1,5 @@
 import type { PagedQuery, PagedResult, Product, PurchaseOrder, PurchaseOrderItem, PurchaseOrderStatus } from "@/lib/types";
-import { apiFetch } from "./client";
+import { apiFetch, ApiError, BASE_URL, getToken } from "./client";
 import { cachedFetch, invalidateCache } from "@/lib/api-cache";
 
 const PO_CACHE_TTL = 10_000; // 10 s — live operational data, short-lived dedup rather than long staleness
@@ -18,6 +18,7 @@ export interface PurchaseOrderQuery extends PagedQuery {
   dateFrom?: string;
   dateTo?: string;
   isMyDrafts?: boolean;
+  createdBy?: string;
 }
 
 /** A purchase order plus the denormalized fields the list/detail views render. */
@@ -57,6 +58,7 @@ export async function listPurchaseOrders(
           dateFrom: query.dateFrom,
           dateTo: query.dateTo,
           is_my_drafts: query.isMyDrafts ? "1" : undefined,
+          created_by: query.createdBy,
           search: query.search,
           page: query.page,
           pageSize: query.pageSize,
@@ -98,14 +100,18 @@ export async function getPurchaseOrderStats(): Promise<PurchaseOrderStats> {
 }
 
 export interface PurchaseOrderItemInput {
-  productId: string;
+  productId?: string;
+  productName?: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
 }
 
 export interface CreatePurchaseOrderInput {
-  supplierId: string;
-  warehouseId: string;
+  supplierId?: string;
+  adhocSupplierName?: string;
+  adhocSupplierEmail?: string;
+  warehouseId?: string;
   expectedAt: string;
   priority?: "low" | "medium" | "high";
   notes?: string;
@@ -120,6 +126,8 @@ export async function createPurchaseOrder(input: CreatePurchaseOrderInput): Prom
 
 export interface UpdatePurchaseOrderInput {
   supplierId?: string;
+  adhocSupplierName?: string;
+  adhocSupplierEmail?: string;
   warehouseId?: string;
   expectedAt?: string;
   priority?: "low" | "medium" | "high";
@@ -170,6 +178,7 @@ export async function rejectPurchaseOrderApproval(id: string, reason: string): P
 }
 
 export interface ReceivePurchaseOrderContext {
+  warehouseId?: string;
   /** Ignored by the server — the receiving user comes from the auth token. */
   userId?: string;
   idempotencyKey?: string;
@@ -185,7 +194,7 @@ export async function receivePurchaseOrder(
   invalidatePurchaseOrders();
   return apiFetch<PurchaseOrderRow>(`/purchase-orders/${id}/receive`, {
     method: "POST",
-    body: { receivedQuantities, idempotencyKey: ctx.idempotencyKey },
+    body: { receivedQuantities, warehouseId: ctx.warehouseId, idempotencyKey: ctx.idempotencyKey },
     idempotencyKey: ctx.idempotencyKey,
   });
 }
@@ -235,7 +244,27 @@ export async function getPendingReceiptOrders(warehouseId?: string): Promise<Pen
   );
 }
 
+/**
+ * Fetches the invoice as a Blob rather than linking straight to `/storage/...`
+ * — that path is served as a static file (no Content-Disposition header), so
+ * a plain `<a download>` gets ignored cross-origin and just opens the PDF in
+ * a new tab. Routing it through the API and saving the Blob ourselves forces
+ * an actual download regardless of origin.
+ */
+export async function downloadPurchaseOrderInvoice(id: string): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch(`${BASE_URL}/purchase-orders/${id}/invoice/download`, { headers });
+  if (!response.ok) {
+    throw new ApiError("Fatura indirilemedi.", response.status === 404 ? "NOT_FOUND" : "UNKNOWN", response.status);
+  }
+  return response.blob();
+}
+
 export async function uploadPurchaseOrderInvoice(id: string, file: File): Promise<{ invoiceFilePath: string }> {
+  invalidatePurchaseOrders();
   const formData = new FormData();
   formData.append("invoice", file);
   return apiFetch<{ invoiceFilePath: string }>(`/purchase-orders/${id}/invoice`, {

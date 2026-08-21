@@ -20,7 +20,7 @@ export function KpiMetaBar({ items, className }: { items: KpiMetaItem[]; classNa
   return (
     <div
       className={cn(
-        "flex items-stretch gap-2 overflow-x-auto custom-scrollbar rounded-xl border border-border bg-card px-3 py-2.5",
+        "flex items-stretch divide-x divide-border overflow-x-auto custom-scrollbar rounded-xl border border-border bg-card px-3 py-2.5",
         className,
       )}
     >
@@ -28,17 +28,14 @@ export function KpiMetaBar({ items, className }: { items: KpiMetaItem[]; classNa
         const Icon = item.icon;
         const tintKey = item.tint || "blue";
         return (
-          <div key={item.label} className="flex shrink-0 items-center gap-2">
-            <div className="flex items-center gap-2 px-2">
-              <div className={cn("flex size-6 shrink-0 items-center justify-center rounded-md", TINTS[tintKey])}>
-                <Icon className="size-3.5" />
-              </div>
-              <div className="whitespace-nowrap">
-                <span className="text-xs text-muted-foreground">{item.label}</span>{" "}
-                <span className="text-xs font-semibold tabular-nums text-foreground">{item.value}</span>
-              </div>
+          <div key={item.label} className="flex flex-1 shrink-0 items-center justify-center gap-2 px-4">
+            <div className={cn("flex size-6 shrink-0 items-center justify-center rounded-md", TINTS[tintKey])}>
+              <Icon className="size-3.5" />
             </div>
-            {idx !== items.length - 1 && <span className="my-1 w-px shrink-0 bg-border" />}
+            <div className="whitespace-nowrap">
+              <span className="text-xs text-muted-foreground">{item.label}</span>{" "}
+              <span className="text-xs font-semibold tabular-nums text-foreground">{item.value}</span>
+            </div>
           </div>
         );
       })}

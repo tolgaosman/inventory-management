@@ -6,6 +6,11 @@ import { useState, useRef } from "react";
 // parser xlsx used to. No cell styling is needed here (template writer only
 // sets column widths), so the patched build is a drop-in replacement.
 import * as XLSX from "xlsx";
+// exceljs only builds the outbound template (never parses an uploaded file,
+// so the CVE concern above doesn't apply to it) — it's the one of these three
+// libraries that actually supports writing in-cell dropdown data validation,
+// which the plain `xlsx` community build doesn't.
+import ExcelJS from "exceljs";
 import { toast } from "sonner";
 import {
   FileSpreadsheet,
@@ -46,8 +51,7 @@ interface ParsedImportRow {
   categoryId: string;
   brand: string;
   unit: string;
-  purchasePrice: number;
-  salePrice: number;
+  purchasePrice?: number;
   minStock: number;
   maxStock: number;
   supplierName: string;
@@ -90,17 +94,16 @@ export function ProductImportModal({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   }
 
-  function handleDownloadTemplate() {
+  async function handleDownloadTemplate() {
     const headers = [
       "Ürün Adı",
       "SKU",
       "Barkod",
       "Kategori",
       "Marka",
-      "Birim",
-      "Alış Fiyatı",
-      "Satış Fiyatı",
-      "Minimum Stok",
+      "Birim (Adet/Lisans)",
+      "Son Satın Alış Fiyatı",
+      "Min Stok",
       "Maksimum Stok",
       "Tedarikçi",
     ];
@@ -112,9 +115,8 @@ export function ProductImportModal({
         "869000000101",
         categories[0]?.name || "Sunucu & Veri Merkezi",
         "Dell",
-        "adet",
+        "Adet",
         45000,
-        58000,
         2,
         10,
         suppliers[0]?.name || "TeknoDağıtım A.Ş.",
@@ -125,22 +127,124 @@ export function ProductImportModal({
         "869000000102",
         categories[1]?.name || "Ağ & Siber Güvenlik",
         "Cisco",
-        "adet",
+        "Adet",
         28000,
-        36000,
         3,
         15,
         suppliers[1]?.name || "SiberAğ Sistemleri",
       ],
     ];
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);
-    ws["!cols"] = headers.map((h) => ({ wch: Math.max(h.length + 4, 15) }));
-    XLSX.utils.book_append_sheet(wb, ws, "Ürünler");
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Ürünler");
+    sheet.addRow(headers);
+    sampleRows.forEach((row) => sheet.addRow(row));
 
-    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([wbout], {
+    sheet.columns = headers.map((h) => {
+      let width = Math.max(h.length + 4, 15);
+      if (h === "Kategori") width = 45;
+      if (h === "Tedarikçi") width = 45;
+      if (h === "Ürün Adı") width = 45;
+      if (h === "Marka") width = 30;
+      if (h === "Son Satın Alış Fiyatı") width = 25;
+      return { width };
+    });
+
+    // Style the header row
+    const headerRow = sheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF0F172A" },
+      };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FF334155" } },
+        bottom: { style: "thin", color: { argb: "FF334155" } },
+        left: { style: "thin", color: { argb: "FF334155" } },
+        right: { style: "thin", color: { argb: "FF334155" } },
+      };
+    });
+
+    // Center align all cells
+    sheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.alignment = { vertical: "middle", horizontal: "center" };
+      });
+    });
+
+    // Category names live on a hidden sheet so the dropdown can reference a
+    // cell range (a literal comma-joined list breaks on category names that
+    // themselves contain a comma, and has a length limit besides).
+    const categoryNames = categories.map((c) => c.name).filter(Boolean);
+    if (categoryNames.length > 0) {
+      const lookupSheet = workbook.addWorksheet("Kategoriler");
+      categoryNames.forEach((name, i) => {
+        lookupSheet.getCell(i + 1, 1).value = name;
+      });
+      lookupSheet.state = "hidden";
+
+      const categoryColumn = headers.indexOf("Kategori") + 1; // 1-based
+      const lastDataRow = 1000; // generous headroom past the 2 sample rows
+      for (let row = 2; row <= lastDataRow; row++) {
+        sheet.getCell(row, categoryColumn).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [`Kategoriler!$A$1:$A$${categoryNames.length}`],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Geçersiz kategori",
+          error: "Lütfen listeden bir kategori seçin.",
+        };
+      }
+    }
+
+    // Tedarikçi dropdown validation
+    const supplierNames = suppliers.map((s) => s.name).filter(Boolean);
+    if (supplierNames.length > 0) {
+      const supplierSheet = workbook.addWorksheet("Tedarikciler");
+      supplierNames.forEach((name, i) => {
+        supplierSheet.getCell(i + 1, 1).value = name;
+      });
+      supplierSheet.state = "hidden";
+
+      const supplierColumn = headers.indexOf("Tedarikçi") + 1;
+      for (let row = 2; row <= 1000; row++) {
+        sheet.getCell(row, supplierColumn).dataValidation = {
+          type: "list",
+          allowBlank: true,
+          formulae: [`Tedarikciler!$A$1:$A$${supplierNames.length}`],
+          showErrorMessage: true,
+          errorStyle: "stop",
+          errorTitle: "Geçersiz tedarikçi",
+          error: "Lütfen listeden bir tedarikçi seçin.",
+        };
+      }
+    }
+
+    // Only two short, comma-free values — a literal inline list is fine here,
+    // unlike Kategori's hidden-sheet range.
+    const unitColumn = headers.indexOf("Birim (Adet/Lisans)") + 1;
+    for (let row = 2; row <= 1000; row++) {
+      sheet.getCell(row, unitColumn).dataValidation = {
+        type: "list",
+        allowBlank: true,
+        formulae: ['"Adet,Lisans"'],
+        showErrorMessage: true,
+        errorStyle: "stop",
+        errorTitle: "Geçersiz birim",
+        error: 'Lütfen "Adet" veya "Lisans" seçin.',
+      };
+    }
+
+    // Barkod values are long digit strings — format the column as a plain
+    // integer so Excel's default "General" format doesn't switch a
+    // manually-typed long number to scientific notation.
+    sheet.getColumn(headers.indexOf("Barkod") + 1).numFmt = "0";
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
     downloadBlob(blob, "Urun_Yukleme_Sablonu.xlsx");
@@ -204,9 +308,9 @@ export function ProductImportModal({
         const barcode = findVal("Barkod", "Barcode");
         const catName = findVal("Kategori", "Category");
         const brand = findVal("Marka", "Brand") || "Genel";
-        const unit = findVal("Birim", "Unit") || "adet";
-        const purchasePrice = Number(findVal("Alış Fiyatı", "Alış", "Purchase Price")) || 0;
-        const salePrice = Number(findVal("Satış Fiyatı", "Satış", "Sale Price")) || 0;
+        const unit = findVal("Birim", "Unit") || "Adet";
+        const rawPurchasePrice = findVal("Son Satın Alış Fiyatı", "Alış Fiyatı", "Alış", "Purchase Price");
+        const purchasePrice = rawPurchasePrice ? Number(rawPurchasePrice) : undefined;
         const minStock = Number(findVal("Minimum Stok", "Min Stok", "Min")) || 5;
         const maxStock = Number(findVal("Maksimum Stok", "Maks Stok", "Max")) || 50;
         const suppName = findVal("Tedarikçi", "Supplier");
@@ -245,7 +349,6 @@ export function ProductImportModal({
           brand,
           unit,
           purchasePrice,
-          salePrice,
           minStock,
           maxStock,
           supplierName: matchedSupp?.name || suppName || "-",
@@ -295,8 +398,8 @@ export function ProductImportModal({
         categoryId: r.categoryId,
         brand: r.brand,
         unit: r.unit,
-        purchasePrice: r.purchasePrice,
-        salePrice: r.salePrice,
+        purchasePrice: r.purchasePrice ?? null,
+        salePrice: null,
         minStock: r.minStock,
         maxStock: r.maxStock,
         supplierId: r.supplierId,
@@ -482,7 +585,6 @@ export function ProductImportModal({
                       <TableHead className="h-8 font-semibold">SKU</TableHead>
                       <TableHead className="h-8 font-semibold">Kategori</TableHead>
                       <TableHead className="h-8 text-right font-semibold">Alış</TableHead>
-                      <TableHead className="h-8 text-right font-semibold">Satış</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -504,8 +606,9 @@ export function ProductImportModal({
                         <TableCell className="py-2 font-medium truncate max-w-40 text-foreground">{row.name || "-"}</TableCell>
                         <TableCell className="py-2 font-mono text-micro text-muted-foreground">{row.sku || "-"}</TableCell>
                         <TableCell className="py-2 truncate max-w-32 text-muted-foreground">{row.categoryName}</TableCell>
-                        <TableCell className="py-2 text-right tabular-nums text-foreground">{formatCurrency(row.purchasePrice, "TRY", 1, showKurus)}</TableCell>
-                        <TableCell className="py-2 text-right tabular-nums text-foreground">{formatCurrency(row.salePrice, "TRY", 1, showKurus)}</TableCell>
+                        <TableCell className="py-2 text-right tabular-nums text-foreground">
+                          {row.purchasePrice != null ? formatCurrency(row.purchasePrice, "TRY", 1, showKurus) : "-"}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

@@ -98,7 +98,6 @@ export default function PanelPage() {
               { icon: Building2, tint: "plum", label: "Kayıtlı Tedarikçi", value: formatNumber(view.kpis.totalSuppliers) },
               { icon: Users, tint: "teal", label: "Sistem Kullanıcısı", value: formatNumber(view.kpis.totalUsers) },
               { icon: Layers, tint: "plum", label: "Kategori Sayısı", value: formatNumber(view.kpis.categoryCount) },
-              { icon: Tag, tint: "blue", label: "Ürün Çeşidi", value: formatNumber(view.kpis.productVariantCount) },
             ]}
           />
           </Section>

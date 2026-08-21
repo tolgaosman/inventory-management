@@ -11,6 +11,7 @@ use App\Support\Present;
 use App\Support\TextTools;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 /** Direct port of frontend/lib/api/purchase-orders.ts (CRUD + workflow + stats). */
 class PurchaseOrderController extends Controller
@@ -28,6 +29,9 @@ class PurchaseOrderController extends Controller
         }
         if ($excludeStatus = $request->query('excludeStatus')) {
             $query->where('status', '!=', $excludeStatus);
+        }
+        if ($createdBy = $request->query('created_by')) {
+            $query->where('created_by', $createdBy);
         }
         if ($supplierId = $request->query('supplierId')) {
             $query->where('supplier_id', $supplierId);
@@ -132,10 +136,9 @@ class PurchaseOrderController extends Controller
                 'warehouseId' => $po->warehouse_id,
                 'warehouseName' => $po->warehouse->name ?? '-',
                 'expectedAt' => $po->expected_at?->toIso8601String(),
-                // Whether this order can actually be received right now —
-                // `receive()` still requires an invoice; orders without one
-                // yet still show up here (they're genuinely pending), just
-                // not selectable in the stock-entry form's quick-receive picker.
+                // Informational only — receiving no longer requires an
+                // invoice; this just lets the UI show whether one has been
+                // uploaded yet and offer an upload control if not.
                 'hasInvoice' => (bool) $po->invoice_file_path,
                 // Totals span EVERY line, not just the outstanding ones below —
                 // a caller can't derive the real receive percentage from `items`
@@ -267,14 +270,20 @@ class PurchaseOrderController extends Controller
 
     public function store(Request $request)
     {
+        $isDraft = $request->boolean('isDraft');
+
         $data = $request->validate([
-            'supplierId' => ['required', 'string'],
-            'warehouseId' => ['required', 'string'],
+            'supplierId' => ['nullable', 'string'],
+            'adhocSupplierName' => ['nullable', 'string'],
+            'adhocSupplierEmail' => ['nullable', 'string', 'email'],
+            'warehouseId' => ['nullable', 'string'],
             'expectedAt' => ['required', 'string'],
             'priority' => ['nullable', 'in:low,medium,high'],
             'notes' => ['nullable', 'string'],
-            'items' => ['required', 'array'],
-            'items.*.productId' => ['required', 'string'],
+            'items' => [$isDraft ? 'present' : 'required', 'array'],
+            'items.*.productId' => ['nullable', 'string'],
+            'items.*.productName' => ['nullable', 'string'],
+            'items.*.unit' => ['nullable', 'string'],
             'items.*.quantity' => ['required', 'numeric'],
             'items.*.unitPrice' => ['required', 'numeric'],
             'isDraft' => ['nullable', 'boolean'],
@@ -286,13 +295,17 @@ class PurchaseOrderController extends Controller
     public function update(Request $request, string $id)
     {
         $data = $request->validate([
-            'supplierId' => ['sometimes', 'string'],
-            'warehouseId' => ['sometimes', 'string'],
+            'supplierId' => ['sometimes', 'nullable', 'string'],
+            'adhocSupplierName' => ['sometimes', 'nullable', 'string'],
+            'adhocSupplierEmail' => ['sometimes', 'nullable', 'string', 'email'],
+            'warehouseId' => ['sometimes', 'nullable', 'string'],
             'expectedAt' => ['sometimes', 'string'],
             'priority' => ['sometimes', 'in:low,medium,high'],
             'notes' => ['sometimes', 'nullable', 'string'],
             'items' => ['sometimes', 'array'],
-            'items.*.productId' => ['required_with:items', 'string'],
+            'items.*.productId' => ['sometimes', 'nullable', 'string'],
+            'items.*.productName' => ['sometimes', 'nullable', 'string'],
+            'items.*.unit' => ['sometimes', 'nullable', 'string'],
             'items.*.quantity' => ['required_with:items', 'numeric'],
             'items.*.unitPrice' => ['required_with:items', 'numeric'],
         ]);
@@ -344,12 +357,14 @@ class PurchaseOrderController extends Controller
     {
         $data = $request->validate([
             'receivedQuantities' => ['required', 'array'],
+            'warehouseId' => ['nullable', 'string'],
             'idempotencyKey' => ['nullable', 'string'],
         ]);
 
         return response()->json($this->service->receive(
             $id,
             $data['receivedQuantities'],
+            $data['warehouseId'] ?? null,
             $request->user()->getKey(),
             $data['idempotencyKey'] ?? null,
         ));
@@ -388,6 +403,24 @@ class PurchaseOrderController extends Controller
         $po->save();
 
         return response()->json(['invoiceFilePath' => $path]);
+    }
+
+    /**
+     * A plain `<a href>` to the /storage/... URL can't force a download: that
+     * path is served as a static file (bypassing Laravel), so it carries no
+     * Content-Disposition header and the `download` attribute is ignored
+     * cross-origin — the browser just opens the PDF in a new tab. Streaming
+     * it through the API instead lets us set the header explicitly.
+     */
+    public function downloadInvoice(string $id)
+    {
+        $po = PurchaseOrder::findOrFail($id);
+        if (! $po->invoice_file_path || ! Storage::disk('public')->exists($po->invoice_file_path)) {
+            throw ApiException::notFound('Fatura belgesi bulunamadı.');
+        }
+
+        $extension = pathinfo($po->invoice_file_path, PATHINFO_EXTENSION) ?: 'pdf';
+        return Storage::disk('public')->download($po->invoice_file_path, "fatura-{$po->code}.{$extension}");
     }
 
     public function bulkOrder(Request $request)

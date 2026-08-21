@@ -8,6 +8,8 @@ import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { SteppedFormDialog } from "@/components/common/stepped-form-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -40,34 +42,63 @@ import { formatCurrency } from "@/lib/format";
 import type { PurchaseOrder, Supplier } from "@/lib/types";
 
 const itemSchema = z.object({
-  productId: z.string().min(1, "Ürün seçin."),
+  isAdhoc: z.boolean().default(false),
+  productId: z.string().optional(),
+  productName: z.string().optional(),
+  unit: z.string().optional(),
   quantity: z.coerce.number().int().positive("Miktar 0'dan büyük olmalı."),
   unitPrice: z.coerce.number().nonnegative("Birim fiyat negatif olamaz."),
+}).superRefine((val, ctx) => {
+  if (val.isAdhoc) {
+    if (!val.productName?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ürün adı gerekli.", path: ["productName"] });
+    }
+    if (!val.unit?.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Birim gerekli.", path: ["unit"] });
+    }
+  } else if (!val.productId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Ürün seçin.", path: ["productId"] });
+  }
 });
 
 const PRIORITIES = ["low", "medium", "high"] as const;
 
 const schema = z
   .object({
-    supplierId: z.string().min(1, "Tedarikçi seçin."),
-    warehouseId: z.string().min(1, "Teslim deposu seçin."),
+    useOtherSupplier: z.boolean().default(false),
+    supplierId: z.string().optional(),
+    adhocSupplierName: z.string().optional(),
+    adhocSupplierEmail: z.string().email("Geçerli bir e-posta girin.").optional().or(z.literal("")),
+    warehouseId: z.string().optional(),
     expectedAt: z.string().min(1, "Beklenen teslim tarihi gerekli."),
     priority: z.enum(PRIORITIES),
     notes: z.string().optional(),
     items: z.array(itemSchema).min(1, "En az bir kalem ekleyin."),
   })
   .superRefine((values, ctx) => {
+    if (values.useOtherSupplier) {
+      if (!values.adhocSupplierName?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tedarikçi adı gerekli.", path: ["adhocSupplierName"] });
+      }
+      if (!values.adhocSupplierEmail?.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "E-posta gerekli.", path: ["adhocSupplierEmail"] });
+      }
+    } else if (!values.supplierId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Tedarikçi seçin.", path: ["supplierId"] });
+    }
+
     const seen = new Set<string>();
     values.items.forEach((item, index) => {
-      if (!item.productId) return;
-      if (seen.has(item.productId)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "Bu ürün zaten eklendi.",
-          path: ["items", index, "productId"],
-        });
+      if (!item.isAdhoc && item.productId) {
+        if (seen.has(item.productId)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Bu ürün zaten eklendi.",
+            path: ["items", index, "productId"],
+          });
+        }
+        seen.add(item.productId);
       }
-      seen.add(item.productId);
     });
   });
 
@@ -84,7 +115,7 @@ function toDateInputValue(iso: string): string {
   return iso.slice(0, 10);
 }
 
-const EMPTY_ITEM = { productId: "", quantity: 1, unitPrice: 0 };
+const EMPTY_ITEM = { isAdhoc: false, productId: "", productName: "", unit: "Adet", quantity: 1, unitPrice: 0 };
 
 interface PurchaseOrderFormSheetProps {
   open: boolean;
@@ -94,7 +125,6 @@ interface PurchaseOrderFormSheetProps {
   /** Pre-filled items for the "start a request from a critical-stock product" deep link (create mode only). */
   initialItems?: { productId: string; quantity: number; unitPrice: number }[];
   suppliers: Supplier[];
-  warehouses: WarehouseOption[];
   onSaved: (values: FormValues & { isDraft?: boolean }) => Promise<void>;
 }
 
@@ -104,7 +134,6 @@ export function PurchaseOrderFormSheet({
   order,
   initialItems,
   suppliers,
-  warehouses,
   onSaved,
 }: PurchaseOrderFormSheetProps) {
   const [draftPromptOpen, setDraftPromptOpen] = useState(false);
@@ -115,8 +144,10 @@ export function PurchaseOrderFormSheet({
   const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      useOtherSupplier: false,
       supplierId: "",
-      warehouseId: "",
+      adhocSupplierName: "",
+      adhocSupplierEmail: "",
       expectedAt: "",
       priority: "medium",
       notes: "",
@@ -124,27 +155,42 @@ export function PurchaseOrderFormSheet({
     },
   });
 
+  // Keep useOtherSupplier in sync with form data changes manually if needed
+  const useOtherSupplier = form.watch("useOtherSupplier");
+
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
 
   useEffect(() => {
     if (!open) return;
     if (order) {
+      const isAdhoc = !order.supplierId;
       form.reset({
-        supplierId: order.supplierId,
-        warehouseId: order.warehouseId,
+        useOtherSupplier: isAdhoc,
+        supplierId: order.supplierId || "",
+        adhocSupplierName: order.adhocSupplierName || "",
+        adhocSupplierEmail: order.adhocSupplierEmail || "",
         expectedAt: toDateInputValue(order.expectedAt),
         priority: order.priority || "medium",
         notes: order.notes ?? "",
-        items: order.items.map((i) => ({ productId: i.productId, quantity: i.quantity, unitPrice: i.unitPrice })),
+        items: order.items.map((i) => ({ 
+          isAdhoc: !i.productId,
+          productId: i.productId || "", 
+          productName: i.productName || "",
+          unit: i.unit || "Adet",
+          quantity: i.quantity, 
+          unitPrice: i.unitPrice 
+        })),
       });
     } else {
       form.reset({
+        useOtherSupplier: false,
         supplierId: "",
-        warehouseId: "",
+        adhocSupplierName: "",
+        adhocSupplierEmail: "",
         expectedAt: "",
         priority: "medium",
         notes: "",
-        items: initialItems && initialItems.length > 0 ? initialItems : [EMPTY_ITEM],
+        items: initialItems && initialItems.length > 0 ? initialItems.map(i => ({...i, isAdhoc: false})) : [EMPTY_ITEM],
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,6 +202,8 @@ export function PurchaseOrderFormSheet({
     const price = Number(item?.unitPrice) || 0;
     return sum + qty * price;
   }, 0);
+
+  const today = new Date().toISOString().split("T")[0];
 
   async function onSubmit(values: FormValues, isDraft = false) {
     await guard(async () => {
@@ -179,17 +227,15 @@ export function PurchaseOrderFormSheet({
   }
 
   async function handleSaveDraft() {
-    const isValid = await form.trigger();
+    const isValid = await form.trigger(["useOtherSupplier", "supplierId", "adhocSupplierName", "adhocSupplierEmail", "expectedAt", "priority"]);
     if (!isValid) {
       toast.error("Taslak kaydetmek için lütfen zorunlu alanları (Tedarikçi vb.) doldurun.");
       return;
     }
     setDraftPromptOpen(false);
-    // Submit with current values. If some are empty, Zod might block it normally, 
-    // but form.getValues bypasses resolver here if we don't call handleSubmit.
-    // However, our backend requires required fields anyway. Let's just pass them.
     const values = form.getValues();
-    onSubmit(values as unknown as FormValues, true);
+    const validItems = values.items?.filter((i) => (i.isAdhoc && i.productName) || (!i.isAdhoc && i.productId)) || [];
+    onSubmit({ ...values, items: validItems } as unknown as FormValues, true);
   }
 
   return (
@@ -209,62 +255,94 @@ export function PurchaseOrderFormSheet({
           {
             id: "basics",
             label: "Temel Bilgiler",
-            onValidate: () => form.trigger(["supplierId", "warehouseId", "expectedAt", "priority"]),
+            onValidate: () => form.trigger(["useOtherSupplier", "supplierId", "adhocSupplierName", "adhocSupplierEmail", "expectedAt", "priority"]),
             content: (
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Tedarikçi</Label>
+                  {!useOtherSupplier && (
+                    <FormField
+                      control={form.control}
+                      name="supplierId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
+                            <FormControl>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Sistemde kayıtlı tedarikçi seçin">
+                                  {field.value ? suppliers.find((s) => s.id === field.value)?.name : "Tedarikçi seçin"}
+                                </SelectValue>
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {suppliers.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <div className="flex items-start space-x-3 pt-1 mb-2">
+                    <FormField
+                      control={form.control}
+                      name="useOtherSupplier"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <Checkbox checked={field.value} onCheckedChange={(checked) => {
+                                field.onChange(checked);
+                                if (checked) {
+                                  form.setValue("supplierId", "");
+                                } else {
+                                  form.setValue("adhocSupplierName", "");
+                                  form.setValue("adhocSupplierEmail", "");
+                                }
+                              }} 
+                            />
+                          </FormControl>
+                          <FormLabel className="font-normal cursor-pointer text-sm m-0">Sistemde Kayıtlı Olmayan Tedarikçi</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  {useOtherSupplier && (
+                    <div className="space-y-3 pt-2">
+                      <FormField
+                        control={form.control}
+                        name="adhocSupplierName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input placeholder="Tedarikçi adı" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="adhocSupplierEmail"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input type="email" placeholder="E-posta (Opsiyonel, gönderim için)" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="supplierId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tedarikçi</FormLabel>
-                        <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue>
-                                {field.value ? suppliers.find((s) => s.id === field.value)?.name : "Tedarikçi seçin"}
-                              </SelectValue>
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {suppliers.map((s) => (
-                              <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="warehouseId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Teslim Deposu</FormLabel>
-                        <Select value={field.value as string} onValueChange={(v) => field.onChange(v ?? "")}>
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue>
-                                {field.value ? warehouses.find((w) => w.id === field.value)?.name : "Depo seçin"}
-                              </SelectValue>
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {warehouses.map((w) => (
-                              <SelectItem key={w.id} value={w.id}>
-                                {w.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                   <FormField
                     control={form.control}
                     name="expectedAt"
@@ -272,7 +350,7 @@ export function PurchaseOrderFormSheet({
                       <FormItem>
                         <FormLabel>Beklenen Teslim Tarihi</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" min={today} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -431,13 +509,14 @@ function PurchaseOrderItemRow({
   onRemove: () => void;
   removeDisabled: boolean;
 }) {
+  const isAdhoc = useWatch({ control, name: `items.${index}.isAdhoc` });
   const productId = useWatch({ control, name: `items.${index}.productId` });
   const quantity = useWatch({ control, name: `items.${index}.quantity` });
   const unitPrice = useWatch({ control, name: `items.${index}.unitPrice` });
 
   const { data: product } = useAsync(
-    () => (productId ? getProduct(productId as string) : Promise.resolve(undefined)),
-    [productId],
+    () => (!isAdhoc && productId ? getProduct(productId as string) : Promise.resolve(undefined)),
+    [productId, isAdhoc],
   );
 
   // Auto-fill the unit price once per product selection, from the product's
@@ -446,28 +525,80 @@ function PurchaseOrderItemRow({
   // in the user's selected display currency, never to convert the stored value.
   const autoFilledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (product && autoFilledFor.current !== product.id) {
+    if (!isAdhoc && product && autoFilledFor.current !== product.id) {
       autoFilledFor.current = product.id;
-      setValue(`items.${index}.unitPrice`, product.purchasePrice, { shouldValidate: true });
+      setValue(`items.${index}.unitPrice`, product.purchasePrice ?? 0, { shouldValidate: true });
     }
-  }, [product, index, setValue]);
+  }, [product, index, setValue, isAdhoc]);
 
   const subtotal = (Number(quantity) || 0) * (Number(unitPrice) || 0);
 
   return (
     <div className="space-y-3 rounded-lg border border-border/60 p-3">
       <div className="flex items-start gap-2">
-        <div className="flex-1">
+        <div className="flex-1 space-y-2">
+          {!isAdhoc ? (
+            <FormField
+              control={control}
+              name={`items.${index}.productId`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <ProductPicker value={field.value || ""} onChange={field.onChange} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : (
+            <div className="grid grid-cols-[1fr,100px] gap-2">
+              <FormField
+                control={control}
+                name={`items.${index}.productName`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input placeholder="Ürün adı" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={control}
+                name={`items.${index}.unit`}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input placeholder="Birim" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
+
           <FormField
             control={control}
-            name={`items.${index}.productId`}
+            name={`items.${index}.isAdhoc`}
             render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs">Ürün</FormLabel>
+              <FormItem className="flex items-center space-x-2 space-y-0">
                 <FormControl>
-                  <ProductPicker value={field.value} onChange={field.onChange} />
+                  <Checkbox checked={field.value} onCheckedChange={(checked) => {
+                      field.onChange(checked);
+                      if (checked) {
+                        setValue(`items.${index}.productId`, "", { shouldValidate: false });
+                        setValue(`items.${index}.unitPrice`, 0, { shouldValidate: false });
+                        autoFilledFor.current = null;
+                      } else {
+                        setValue(`items.${index}.productName`, "", { shouldValidate: false });
+                        setValue(`items.${index}.unit`, "Adet", { shouldValidate: false });
+                      }
+                    }} 
+                  />
                 </FormControl>
-                <FormMessage />
+                <FormLabel className="font-normal cursor-pointer text-xs text-muted-foreground m-0">Katalog dışı serbest ürün ekle</FormLabel>
               </FormItem>
             )}
           />
@@ -511,9 +642,9 @@ function PurchaseOrderItemRow({
                   min={0} 
                   {...field} 
                   value={field.value as number | string} 
-                  readOnly
-                  className="bg-muted/50 cursor-not-allowed"
-                  title="Birim fiyat ürün kataloğundan alınır, sadece Ürün Yönetimi sayfasından değiştirilebilir."
+                  readOnly={!isAdhoc}
+                  className={!isAdhoc ? "bg-muted/50 cursor-not-allowed" : ""}
+                  title={!isAdhoc ? "Birim fiyat ürün kataloğundan alınır, sadece Ürün Yönetimi sayfasından değiştirilebilir." : "Birim fiyatı girin"}
                 />
               </FormControl>
               <FormMessage />

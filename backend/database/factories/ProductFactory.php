@@ -14,6 +14,8 @@ class ProductFactory extends Factory
 {
     public function definition(): array
     {
+        $purchasePrice = fake()->randomFloat(2, 10, 500);
+
         return [
             'id' => 'prd-'.fake()->unique()->numberBetween(1, 999999),
             'name' => fake()->unique()->words(3, true),
@@ -22,8 +24,9 @@ class ProductFactory extends Factory
             'category_id' => Category::factory(),
             'brand' => fake()->company(),
             'unit' => 'adet',
-            'purchase_price' => fake()->randomFloat(2, 10, 500),
-            'sale_price' => fake()->randomFloat(2, 20, 800),
+            'purchase_price' => $purchasePrice,
+            // A plausible retail markup over the purchase price.
+            'sale_price' => round($purchasePrice * fake()->randomFloat(2, 1.15, 1.6), 2),
             'min_stock' => 10,
             'max_stock' => 200,
             'status' => 'aktif',

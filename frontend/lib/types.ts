@@ -1,16 +1,30 @@
 // Domain types for the inventory management system.
 // Mirrors the entities described in project_description.txt.
 
-export type Role = "admin" | "depo_yonetici" | "satinalma_yonetici" | "depo" | "satinalma";
+/**
+ * The 5 built-in role ids still type-check as literals for exhaustive
+ * switches, but roles are no longer a closed set — admin can create custom
+ * ones (see `frontend/lib/api/roles.ts`), so this also accepts any string.
+ */
+export type Role = "admin" | "depo_yonetici" | "satinalma_yonetici" | "depo" | "satinalma" | (string & {});
 
 export interface AppUser {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
   role: Role;
   initials: string;
   mustChangePassword?: boolean;
   deletedAt?: string;
+  stats?: {
+    movementsCount: number;
+    movementsInCount: number;
+    movementsOutCount: number;
+    movementsTransferCount: number;
+    purchaseOrdersCount: number;
+    quoteRequestsCount: number;
+  };
 }
 
 export interface Warehouse {
@@ -33,7 +47,8 @@ export interface Supplier {
   id: string;
   name: string;
   contactName: string;
-  email: string;
+  /** At least 3 addresses — a primary contact plus alternates to send quote requests to. */
+  emails: string[];
   phone: string;
   city: string;
   deletedAt?: string;
@@ -49,8 +64,9 @@ export interface Product {
   categoryId: string;
   brand: string;
   unit: string;
-  purchasePrice: number;
-  salePrice: number;
+  purchasePrice: number | null;
+  /** Only ever shown on the product detail page — never on the Ürün Yönetimi list/form. */
+  salePrice: number | null;
   minStock: number;
   maxStock: number;
   status: ProductStatus;
@@ -106,7 +122,10 @@ export type PurchaseOrderStatus =
   | "cancelled";
 
 export interface PurchaseOrderItem {
-  productId: string;
+  id: number;
+  productId?: string;
+  productName?: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
   receivedQuantity: number;
@@ -115,9 +134,11 @@ export interface PurchaseOrderItem {
 export interface PurchaseOrder {
   id: string;
   code: string;
-  supplierId: string;
-  /** Delivery warehouse — where receiving this order adds stock. */
-  warehouseId: string;
+  supplierId?: string;
+  adhocSupplierName?: string;
+  adhocSupplierEmail?: string;
+  /** Delivery warehouse — optional at creation, required when receiving real products. */
+  warehouseId?: string;
   status: PurchaseOrderStatus;
   priority: "low" | "medium" | "high";
   items: PurchaseOrderItem[];
@@ -136,25 +157,30 @@ export interface PurchaseOrder {
 
 export type QuoteCurrency = "try" | "usd" | "eur" | "gbp";
 
-/** Snapshot of a purchase-order line at the moment a quote request was sent — the source order can change later without altering the document. */
+/** A requested line on a quote — either an existing catalog product, or an ad-hoc name+unit typed in by hand. `unitPrice` is unset until the supplier responds. */
 export interface QuoteRequestItem {
-  purchaseOrderId: string;
-  productId: string;
+  productId: string | null;
+  productName: string;
+  sku?: string | null;
+  unit: string;
   quantity: number;
-  /** Copied from the source order's line at send time so the document's prices never drift. */
-  unitPrice: number;
+  unitPrice: number | null;
 }
 
-/** A "teklif formu" sent to a supplier, bundling one or more of their draft purchase orders into a single priced document. */
+/** A "teklif formu" (RFQ) sent to a supplier — existing or a brand-new one entered by name only — for a hand-picked list of items. Independent of purchase orders; a real order is only placed once the supplier responds with pricing. */
 export interface QuoteRequest {
   id: string;
   code: string; // NET-TKL-20260001
-  supplierId: string;
-  purchaseOrderIds: string[];
+  supplierId: string | null;
+  /** Set instead of `supplierId` when the request targets a not-yet-registered supplier. */
+  adhocSupplierName?: string | null;
+  /** The not-yet-registered supplier's email — set alongside `adhocSupplierName`. */
+  adhocSupplierEmail?: string | null;
   items: QuoteRequestItem[];
   createdAt: string;
   createdBy: string;
   createdById?: string;
+  createdByUser?: AppUser;
   validUntil: string;
   deliveryDate: string;
   deliveryAddress: string;
@@ -166,6 +192,7 @@ export interface QuoteRequest {
   notes?: string;
   status: QuoteRequestStatus;
   approvedBy?: string;
+  approvedByUser?: AppUser;
   approvedAt?: string;
   deletedAt?: string;
 }

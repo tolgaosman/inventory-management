@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   BarChart3,
   Users,
+  ShieldCheck,
   Settings,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth";
@@ -66,6 +67,7 @@ export const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Raporlar", href: "/raporlar", icon: BarChart3, permission: ["reports.stock", "reports.financial"] },
       { label: "Kullanıcılar", href: "/kullanicilar", icon: Users, permission: "users.manage" },
+      { label: "Roller", href: "/kullanicilar/roller", icon: ShieldCheck, permission: "roles.manage" },
     ],
   },
 ];

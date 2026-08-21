@@ -40,6 +40,10 @@ import {
   Inbox,
   Wallet,
   Boxes,
+  Star,
+  Clock,
+  BadgeAlert,
+  Truck,
   type LucideIcon,
 } from "lucide-react";
 import { useAsync } from "@/lib/hooks/use-async";
@@ -57,7 +61,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PurchaseStatusBadge } from "@/components/common/status-badge";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
-import { CHART_GRID, CHART_X_AXIS, ChartSwatch, ChartLegend, ChartTooltip } from "@/components/charts/chart-primitives";
+import { CHART_GRID, CHART_X_AXIS, CHART_Y_AXIS, ChartSwatch, ChartLegend, ChartTooltip, type ChartTooltipRow } from "@/components/charts/chart-primitives";
 import { WarehouseCapacityRadials } from "@/components/reports/warehouse-capacity-radials";
 import { WarehouseValueChart } from "@/components/reports/warehouse-value-chart";
 import { WarehouseMoversChart } from "@/components/reports/warehouse-movers-chart";
@@ -75,6 +79,7 @@ import {
 } from "@/lib/reports/dataset";
 import { getProductsReport, getMovementsReport, type ReportMover } from "@/lib/api/reports";
 import { listMovements } from "@/lib/api/movements";
+import { getSupplierScorecards, type SupplierScorecard } from "@/lib/api/purchase-orders";
 import type { StockMovement } from "@/lib/types";
 import { getDashboardData, MONTHS_BY_RANGE, RANGE_LABELS, type DateRangePreset } from "@/lib/api/dashboard";
 import { formatNumber, formatCurrency, formatDateTime, formatSigned } from "@/lib/format";
@@ -99,6 +104,24 @@ const MOVEMENT_TYPE_COLOR: Record<string, string> = {
 };
 
 const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
+
+// Fixed status → color assignment (keyed off PURCHASE_STATUS_LABELS' declaration
+// order) so the same status always reads as the same color across the pie,
+// the stacked trend bars, and their tooltips/legends.
+const STATUS_COLORS: Record<string, string> = Object.fromEntries(
+  Object.values(PURCHASE_STATUS_LABELS).map((label, i) => [label, CHART_COLORS[i % CHART_COLORS.length]]),
+);
+
+const compactNumberFormat = new Intl.NumberFormat("tr-TR", { notation: "compact", maximumFractionDigits: 1 });
+function compactNumber(value: number): string {
+  return compactNumberFormat.format(value);
+}
+
+function onTimeColor(rate: number): string {
+  if (rate >= 80) return "var(--status-good)";
+  if (rate >= 60) return "var(--chart-3)";
+  return "var(--status-critical)";
+}
 
 const EMPTY_ARRAY: never[] = [];
 
@@ -158,6 +181,9 @@ export function ReportsClient() {
 
   const { data: dashboardData } = useAsync(() => getDashboardData(range), [range]);
   const kpis = dashboardData?.kpis ?? EMPTY_KPIS;
+
+  const { data: scorecards } = useAsync(() => getSupplierScorecards(), []);
+  const supplierScorecards: SupplierScorecard[] = scorecards ?? EMPTY_ARRAY;
 
   const warehouseDetails = useMemo(() => (dataset ? computeWarehouseDetails(dataset) : []), [dataset]);
   const warehouseCategoryShares = useWarehouseCategoryShares(dataset);
@@ -233,7 +259,8 @@ export function ReportsClient() {
   const topSuppliersData = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const po of filteredOrders) {
-      counts[po.supplierId] = (counts[po.supplierId] ?? 0) + po.total;
+      const sId = po.supplierId || "adhoc";
+      counts[sId] = (counts[sId] ?? 0) + po.total;
     }
     return Object.entries(counts)
       .map(([supplierId, total]) => {
@@ -289,6 +316,21 @@ export function ReportsClient() {
     }
     return [...statuses];
   }, [monthlyPurchaseTrend]);
+
+  const purchaseTotalValue = useMemo(
+    () => filteredOrders.reduce((s, o) => s + o.total, 0),
+    [filteredOrders],
+  );
+
+  const onTimeChartData = useMemo(
+    () =>
+      supplierScorecards
+        .filter((s) => s.onTimeRatePercent !== null)
+        .sort((a, b) => (b.onTimeRatePercent ?? 0) - (a.onTimeRatePercent ?? 0))
+        .slice(0, 7)
+        .map((s) => ({ name: s.supplierName, rate: Math.round(s.onTimeRatePercent ?? 0) })),
+    [supplierScorecards],
+  );
 
   const rangeSelector = (
     <Select value={range} onValueChange={(v) => setRange(v as DateRangePreset)}>
@@ -538,7 +580,7 @@ export function ReportsClient() {
                               stroke="var(--card)"
                               strokeWidth={2}
                               maxBarSize={28}
-                              radius={[4, 4, 4, 4]}
+                              radius={0}
                               isAnimationActive={false}
                               {...(i === 0 ? { background: { fill: "var(--muted)", opacity: 0.35, radius: 8 } } : {})}
                             />
@@ -658,127 +700,121 @@ export function ReportsClient() {
 
         {/* ── Satın Alma ──────────────────────────────────────────────────── */}
         <TabsContent value="satin-alma">
-          <Section index={0} className="grid items-start gap-4 lg:grid-cols-[1fr_280px]">
-            <PanelCard
-              title="Satın Alma Siparişleri"
-              meta={`${filteredOrders.length} kayıt`}
-              bodyClassName="pt-0"
-              actions={
-                <Link href="/satin-alma" className="flex items-center gap-1 text-xs text-primary hover:underline">
-                  Siparişler <ChevronRight className="size-3.5" />
-                </Link>
-              }
-            >
-              <div className="w-full overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b border-border/70 hover:bg-transparent">
-                      <TableHead className="px-3">Sipariş No</TableHead>
-                      <TableHead className="px-3">Tedarikçi</TableHead>
-                      <TableHead className="px-3">Durum</TableHead>
-                      <TableHead className="px-3 text-right">Toplam ({symbol})</TableHead>
-                      <TableHead className="px-3 whitespace-nowrap">Tarih</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paginatedOrders.length === 0 ? (
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell colSpan={5} className="p-0">
-                          <EmptyState icon={ShoppingCart} title="Seçili dönemde sipariş yok" />
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      paginatedOrders.map((po) => {
-                        const supplier = suppliers.find((s) => s.id === po.supplierId);
-                        const total = po.total;
-                        return (
-                          <TableRow key={po.id} className="border-b border-border/50 hover:bg-muted/40 transition-colors">
-                            <TableCell className="px-3 font-mono text-xs font-semibold">{po.code}</TableCell>
-                            <TableCell className="px-3 text-xs">{supplier?.name ?? "—"}</TableCell>
-                            <TableCell className="px-3">
-                              <PurchaseStatusBadge status={po.status} />
-                            </TableCell>
-                            <TableCell className="px-3 text-right text-xs font-semibold tabular-nums">
-                              {formatCurrency(total / rate, currency, 1, true)}
-                            </TableCell>
-                            <TableCell className="px-3 whitespace-nowrap text-xs text-muted-foreground">
-                              {formatDateTime(po.createdAt)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              
-              {totalPurchasePages > 1 && (
-                <div className="mt-4 flex items-center justify-start gap-4 border-t border-border/50 pt-4 text-xs">
-                  <span className="text-muted-foreground">
-                    Toplam {filteredOrders.length} kayıttan {(purchasePage - 1) * purchasePageSize + 1}-
-                    {Math.min(purchasePage * purchasePageSize, filteredOrders.length)} arası gösteriliyor
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-8"
-                      disabled={purchasePage === 1}
-                      onClick={() => setPurchasePage(1)}
-                      title="İlk Sayfa"
-                    >
-                      <ChevronsLeft className="size-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-8"
-                      disabled={purchasePage === 1}
-                      onClick={() => setPurchasePage((p) => Math.max(1, p - 1))}
-                      title="Önceki Sayfa"
-                    >
-                      <ChevronLeft className="size-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-8"
-                      disabled={purchasePage === totalPurchasePages}
-                      onClick={() => setPurchasePage((p) => Math.min(totalPurchasePages, p + 1))}
-                      title="Sonraki Sayfa"
-                    >
-                      <ChevronRight className="size-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="size-8"
-                      disabled={purchasePage === totalPurchasePages}
-                      onClick={() => setPurchasePage(totalPurchasePages)}
-                      title="Son Sayfa"
-                    >
-                      <ChevronsRight className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </PanelCard>
+          <SectionStack>
 
-            <div className="flex flex-col gap-4">
-              <PanelCard title="Sipariş Durumları" bodyClassName="flex flex-col items-center justify-start pt-2">
+            {/* Row 1: KPI summary cards */}
+            <Section index={0}>
+              <StatGrid
+                className="grid-cols-2 gap-3 sm:grid-cols-4"
+                items={[
+                  {
+                    icon: ShoppingCart,
+                    tint: "blue",
+                    label: "Toplam Sipariş",
+                    value: formatNumber(filteredOrders.length),
+                  },
+                  {
+                    icon: Wallet,
+                    tint: "green",
+                    label: "Toplam Tutar",
+                    value: formatCurrency(purchaseTotalValue / rate, currency, 0, true),
+                  },
+                  {
+                    icon: AlertTriangle,
+                    tint: "amber",
+                    label: "Açık Sipariş",
+                    value: formatNumber(filteredOrders.filter((o) => o.status === "ordered" || o.status === "partially_received").length),
+                  },
+                  {
+                    icon: Boxes,
+                    tint: "teal",
+                    label: "Tedarikçi Sayısı",
+                    value: formatNumber(new Set(filteredOrders.map((o) => o.supplierId)).size),
+                  },
+                ]}
+              />
+            </Section>
+
+            {/* Row 2: Monthly Trend — the tab's headline chart, hero-styled to
+                match the dashboard's one other hero chart (stock-flow-chart). */}
+            <Section index={1}>
+              <PanelCard variant="hero">
+                {monthlyPurchaseTrend.length === 0 ? (
+                  <EmptyState icon={ShoppingCart} title="Seçili dönemde veri yok" />
+                ) : (
+                  <>
+                    <div className="mb-8 flex flex-col items-start justify-between gap-6 sm:flex-row">
+                      <div className="space-y-1.5">
+                        <h3 className="text-xl font-bold tracking-tight text-muted-foreground">
+                          Aylık Satın Alma Trendi
+                        </h3>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-[42px] font-bold leading-none tracking-tight tabular-nums text-foreground">
+                            {formatCurrency(purchaseTotalValue / rate, currency, 0, true)}
+                          </span>
+                          <span className="text-sm font-medium text-muted-foreground">{RANGE_LABELS[range]}</span>
+                        </div>
+                      </div>
+                      <ChartLegend
+                        items={monthlyTrendStatuses.map((status) => ({ label: status, color: STATUS_COLORS[status] ?? "var(--chart-1)" }))}
+                        className="mt-2"
+                      />
+                    </div>
+
+                    <div className="min-h-[260px] w-full flex-1">
+                      <ResponsiveContainer width="100%" height="100%" minHeight={260}>
+                        <BarChart data={monthlyPurchaseTrend} margin={{ top: 10, right: 0, left: 0, bottom: 20 }}>
+                          <CartesianGrid {...CHART_GRID} />
+                          <XAxis dataKey="name" {...CHART_X_AXIS} />
+                          <YAxis
+                            {...CHART_Y_AXIS}
+                            width={64}
+                            tickFormatter={(v) => `${compactNumber(Number(v))} ${CURRENCY_SYMBOLS[currency]}`}
+                          />
+                          <Tooltip
+                            cursor={{ fill: "var(--muted)", opacity: 0.2 }}
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const d = payload[0]?.payload as Record<string, string | number>;
+                              const rows: ChartTooltipRow[] = monthlyTrendStatuses
+                                .filter((status) => (d[status] as number) > 0)
+                                .map((status) => ({
+                                  label: status,
+                                  color: STATUS_COLORS[status] ?? "var(--chart-1)",
+                                  value: formatCurrency(d[status] as number, currency, 0, true),
+                                }));
+                              rows.push({ label: "Toplam", color: "var(--foreground)", value: formatCurrency(d.total as number, currency, 0, true), divider: true });
+                              return <ChartTooltip title={`${d.name} · ${d.count} sipariş`} rows={rows} />;
+                            }}
+                          />
+                          {monthlyTrendStatuses.map((status) => (
+                            <Bar key={status} dataKey={status} stackId="1" fill={STATUS_COLORS[status] ?? "var(--chart-1)"} radius={0} />
+                          ))}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+              </PanelCard>
+            </Section>
+
+            {/* Row 3: Status breakdown, top suppliers, on-time delivery — three
+                balanced panels beneath the hero chart. */}
+            <Section index={2} className="grid gap-4 lg:grid-cols-3">
+              <PanelCard title="Sipariş Durumları" bodyClassName="flex flex-col items-center pt-2">
                 {orderStatusData.length === 0 ? (
                   <EmptyState icon={ShoppingCart} title="Veri yok" />
                 ) : (
                   <div className="w-full space-y-3">
-                    <div className="min-h-[160px] w-full">
-                      <ResponsiveContainer width="100%" height="100%" minHeight={160}>
+                    <div className="min-h-[180px] w-full">
+                      <ResponsiveContainer width="100%" height="100%" minHeight={180}>
                         <PieChart>
-                          <Pie data={orderStatusData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={4} dataKey="value" cornerRadius={5} stroke="none">
-                            {orderStatusData.map((_, i) => (
-                              <Cell 
-                                key={i} 
-                                fill={CHART_COLORS[i % CHART_COLORS.length]} 
-                                className="transition-all duration-300 ease-out hover:scale-110 hover:drop-shadow-md cursor-pointer outline-none"
+                          <Pie data={orderStatusData} cx="50%" cy="50%" innerRadius={45} outerRadius={75} paddingAngle={4} dataKey="value" cornerRadius={5} stroke="none">
+                            {orderStatusData.map((d) => (
+                              <Cell
+                                key={d.name}
+                                fill={STATUS_COLORS[d.name] ?? "var(--chart-1)"}
+                                className="transition-all duration-300 ease-out hover:scale-110 cursor-pointer outline-none"
                                 style={{ transformOrigin: "50% 50%", transformBox: "fill-box" } as React.CSSProperties}
                               />
                             ))}
@@ -788,149 +824,254 @@ export function ReportsClient() {
                             content={({ active, payload }) => {
                               if (!active || !payload?.length) return null;
                               const d = payload[0].payload as (typeof orderStatusData)[0];
-                              return (
-                                <ChartTooltip
-                                  title={d.name}
-                                  rows={[{ label: "Sipariş", color: CHART_COLORS[0], value: String(d.value) }]}
-                                />
-                              );
+                              return <ChartTooltip title={d.name} rows={[{ label: "Sipariş", color: STATUS_COLORS[d.name] ?? "var(--chart-1)", value: String(d.value) }]} />;
                             }}
                           />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="space-y-1.5 px-1">
-                      {orderStatusData.map((d, i) => (
+                      {orderStatusData.map((d) => (
                         <div key={d.name} className="flex items-center justify-between text-xs">
                           <div className="flex items-center gap-1.5">
-                            <ChartSwatch color={CHART_COLORS[i % CHART_COLORS.length]} />
+                            <ChartSwatch color={STATUS_COLORS[d.name] ?? "var(--chart-1)"} />
                             <span className="text-muted-foreground">{d.name}</span>
                           </div>
                           <span className="font-semibold tabular-nums text-foreground">{d.value}</span>
                         </div>
                       ))}
-                  </div>
-                </div>
-              )}
-            </PanelCard>
-
-              <PanelCard title="En Çok Sipariş" bodyClassName="flex flex-col pt-2">
-                {topSuppliersData.length === 0 ? (
-                  <EmptyState icon={ShoppingCart} title="Veri yok" />
-                ) : (
-                  <div className="w-full space-y-4">
-                    {topSuppliersData.map((d, i) => (
-                      <div key={d.name} className="space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-medium text-foreground truncate max-w-[140px]">{d.name}</span>
-                          <span className="text-muted-foreground tabular-nums">{formatCurrency(d.total, currency, 0, true)}</span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                          <div 
-                            className="h-full rounded-full transition-all duration-500 ease-out" 
-                            style={{ 
-                              width: `${(d.total / topSuppliersData[0].total) * 100}%`,
-                              backgroundColor: CHART_COLORS[i % CHART_COLORS.length] 
-                            }} 
-                          />
-                        </div>
-                      </div>
-                    ))}
+                    </div>
                   </div>
                 )}
               </PanelCard>
 
-              <PanelCard 
-                title="Aylık Satın Alma Trendi" 
-                className="overflow-visible"
-                bodyClassName="flex flex-col pt-2 overflow-visible"
-              >
-                {monthlyPurchaseTrend.length === 0 ? (
-                  <EmptyState icon={ShoppingCart} title="Veri yok" />
+              <PanelCard title="Tedarikçiye Göre Sipariş Tutarı" meta="İlk 5" bodyClassName="pt-2">
+                {topSuppliersData.length === 0 ? (
+                  <EmptyState icon={Truck} title="Veri yok" />
                 ) : (
-                  <div className="w-full space-y-3">
-                    {/* Summary KPIs */}
-                    <div className="grid grid-cols-2 gap-2 px-1">
-                      <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-border/60 bg-muted/30 px-2.5 text-center">
-                        <p className="text-[10px] text-muted-foreground">Toplam Sipariş</p>
-                        <p className="text-sm font-bold tabular-nums text-foreground">
-                          {monthlyPurchaseTrend.reduce((s, r) => s + (r.count as number), 0)}
-                        </p>
-                      </div>
-                      <div className="flex h-14 flex-col items-center justify-center rounded-lg border border-border/60 bg-muted/30 px-1 text-center">
-                        <p className="w-full text-[10px] text-muted-foreground">Toplam Tutar</p>
-                        <p className="w-full whitespace-nowrap text-[10px] font-bold tabular-nums tracking-tighter text-foreground">
-                          {formatCurrency(monthlyPurchaseTrend.reduce((s, r) => s + (r.total as number), 0), currency, 0, true)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Stacked Bar Chart */}
-                    <div className="min-h-[180px] w-full">
-                      <ResponsiveContainer width="100%" height="100%" minHeight={180}>
-                        <BarChart data={monthlyPurchaseTrend} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                          <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="4 4" opacity={0.4} />
-                          <XAxis 
-                            dataKey="name" 
-                            tickLine={false} 
-                            axisLine={false} 
-                            tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} 
-                            dy={8}
-                          />
-                          <Tooltip
-                            cursor={{ fill: "var(--muted)", opacity: 0.2 }}
-                            position={{ x: -240, y: -20 }}
-                            allowEscapeViewBox={{ x: true, y: true }}
-                            content={({ active, payload }) => {
-                              if (!active || !payload?.length) return null;
-                              const d = payload[0]?.payload as Record<string, string | number>;
-                              const rows = monthlyTrendStatuses
-                                .filter((status) => (d[status] as number) > 0)
-                                .map((status, i) => ({
-                                  label: status,
-                                  color: CHART_COLORS[i % CHART_COLORS.length],
-                                  value: formatCurrency(d[status] as number, currency, 0, true),
-                                }));
-                              rows.push({ label: "Toplam", color: "var(--foreground)", value: formatCurrency(d.total as number, currency, 0, true) });
+                  <div className="min-h-[200px] w-full">
+                    <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                      <BarChart data={topSuppliersData} layout="vertical" margin={{ left: 0, right: 50, top: 4, bottom: 4 }} barCategoryGap="28%">
+                        <XAxis type="number" hide />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={110}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={({ x, y, payload }) => (
+                            <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fill="var(--muted-foreground)">
+                              {(payload.value as string).length > 15 ? (payload.value as string).slice(0, 14) + "…" : payload.value}
+                            </text>
+                          )}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "var(--muted)", opacity: 0.35 }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload as (typeof topSuppliersData)[0];
+                            return <ChartTooltip title={d.name} rows={[{ label: "Tutar", color: CHART_COLORS[0], value: formatCurrency(d.total, currency, 0, true) }]} />;
+                          }}
+                        />
+                        <Bar
+                          dataKey="total"
+                          radius={[0, 6, 6, 0]}
+                          maxBarSize={18}
+                          animationDuration={500}
+                          background={{ fill: "var(--muted)", opacity: 0.35, radius: 6 }}
+                        >
+                          {topSuppliersData.map((_, i) => (
+                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                          ))}
+                          <LabelList
+                            dataKey="total"
+                            content={(props: LabelProps) => {
+                              const d = topSuppliersData[Number(props.index ?? 0)];
+                              if (!d) return null;
                               return (
-                                <ChartTooltip
-                                  title={`${d.name} · ${d.count} sipariş`}
-                                  rows={rows}
-                                />
+                                <text
+                                  x={Number(props.x ?? 0) + Number(props.width ?? 0) + 8}
+                                  y={Number(props.y ?? 0) + Number(props.height ?? 0) / 2}
+                                  dy={4}
+                                  fontSize={10}
+                                  fontWeight={700}
+                                  fill="var(--foreground)"
+                                >
+                                  {formatCurrency(d.total, currency, 0, true)}
+                                </text>
                               );
                             }}
                           />
-                          {monthlyTrendStatuses.map((status, i) => (
-                            <Bar 
-                              key={status}
-                              dataKey={status} 
-                              stackId="1"
-                              fill={CHART_COLORS[i % CHART_COLORS.length]} 
-                              radius={
-                                // If it's the last item in the stack, we might want top rounded corners, but in a dynamic stack it's hard to know which is top.
-                                // We can leave radius 0 or just round all bars slightly.
-                                [2, 2, 0, 0]
-                              }
-                            />
-                          ))}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    {/* Legend */}
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 px-1">
-                      {monthlyTrendStatuses.map((status, i) => (
-                        <div key={status} className="flex items-center gap-1.5 text-[10px]">
-                          <ChartSwatch color={CHART_COLORS[i % CHART_COLORS.length]} />
-                          <span className="text-muted-foreground">{status}</span>
-                        </div>
-                      ))}
-                    </div>
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 )}
               </PanelCard>
-            </div>
-          </Section>
+
+              <PanelCard title="Tedarikçi Zamanında Teslimat" meta="% Oran" bodyClassName="pt-2">
+                {onTimeChartData.length === 0 ? (
+                  <EmptyState icon={Clock} title="Veri yok" />
+                ) : (
+                  <div className="min-h-[200px] w-full">
+                    <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                      <BarChart data={onTimeChartData} layout="vertical" margin={{ left: 0, right: 40, top: 4, bottom: 4 }} barCategoryGap="28%">
+                        <XAxis type="number" domain={[0, 100]} hide />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          width={110}
+                          tickLine={false}
+                          axisLine={false}
+                          tick={({ x, y, payload }) => (
+                            <text x={x} y={y} dy={4} textAnchor="end" fontSize={11} fill="var(--muted-foreground)">
+                              {(payload.value as string).length > 15 ? (payload.value as string).slice(0, 14) + "…" : payload.value}
+                            </text>
+                          )}
+                        />
+                        <Tooltip
+                          cursor={{ fill: "var(--muted)", opacity: 0.35 }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const d = payload[0].payload as { name: string; rate: number };
+                            return <ChartTooltip title={d.name} rows={[{ label: "Zamanında Teslimat", color: onTimeColor(d.rate), value: `%${d.rate}` }]} />;
+                          }}
+                        />
+                        <Bar
+                          dataKey="rate"
+                          radius={[0, 6, 6, 0]}
+                          maxBarSize={18}
+                          animationDuration={500}
+                          background={{ fill: "var(--muted)", opacity: 0.35, radius: 6 }}
+                        >
+                          {onTimeChartData.map((d) => (
+                            <Cell key={d.name} fill={onTimeColor(d.rate)} />
+                          ))}
+                          <LabelList
+                            dataKey="rate"
+                            content={(props: LabelProps) => (
+                              <text
+                                x={Number(props.x ?? 0) + Number(props.width ?? 0) + 6}
+                                y={Number(props.y ?? 0) + Number(props.height ?? 0) / 2}
+                                dy={4}
+                                fontSize={10}
+                                fontWeight={700}
+                                fill="var(--foreground)"
+                              >
+                                {`%${props.value}`}
+                              </text>
+                            )}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </PanelCard>
+            </Section>
+
+            {/* Row 4: Supplier Scorecard Table */}
+            <Section index={3}>
+              <PanelCard
+                title="Tedarikçi Karnesi"
+                meta={`${supplierScorecards.length} tedarikçi`}
+                bodyClassName="pt-0"
+                actions={
+                  <Link href="/tedarikciler" className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    Tedarikçiler <ChevronRight className="size-3.5" />
+                  </Link>
+                }
+              >
+                {supplierScorecards.length === 0 ? (
+                  <EmptyState icon={Star} title="Henüz tedarikçi verisi yok" />
+                ) : (
+                  <div className="w-full overflow-x-auto">
+                    <Table className="table-fixed">
+                      <TableHeader>
+                        <TableRow className="border-b border-border/70 hover:bg-transparent">
+                          <TableHead className="w-[22%] px-3">Tedarikçi</TableHead>
+                          <TableHead className="w-[10%] px-3 text-center">Sipariş</TableHead>
+                          <TableHead className="w-[14%] px-3 text-right">Toplam Tutar</TableHead>
+                          <TableHead className="w-[11%] px-3 text-center">Doluluk %</TableHead>
+                          <TableHead className="w-[14%] px-3 text-center">Zamanında %</TableHead>
+                          <TableHead className="w-[11%] px-3 text-center">Ort. Tesl.</TableHead>
+                          <TableHead className="w-[11%] px-3 text-center">Geciken</TableHead>
+                          <TableHead className="w-[11%] px-3 text-center">Risk</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {supplierScorecards
+                          .sort((a, b) => b.totalValue - a.totalValue)
+                          .map((sc) => {
+                            const onTime = sc.onTimeRatePercent;
+                            const fillRate = sc.fillRatePercent;
+                            const riskScore =
+                              (onTime !== null && onTime < 60 ? 2 : onTime !== null && onTime < 80 ? 1 : 0) +
+                              (fillRate < 80 ? 2 : fillRate < 90 ? 1 : 0) +
+                              (sc.overdueCount > 2 ? 2 : sc.overdueCount > 0 ? 1 : 0);
+                            const riskLabel = riskScore >= 4 ? "Yüksek" : riskScore >= 2 ? "Orta" : "Düşük";
+                            const riskColor =
+                              riskScore >= 4
+                                ? "bg-status-critical/15 text-status-critical"
+                                : riskScore >= 2
+                                  ? "bg-status-warning/15 text-status-warning"
+                                  : "bg-status-good/15 text-status-good";
+                            return (
+                              <TableRow key={sc.supplierId} className="border-b border-border/50 hover:bg-muted/40 transition-colors">
+                                <TableCell className="px-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-xs font-semibold text-foreground" title={sc.supplierName}>{sc.supplierName}</p>
+                                    {sc.city && <p className="truncate text-micro text-muted-foreground">{sc.city}</p>}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="px-3 text-center tabular-nums text-xs">{formatNumber(sc.totalOrders)}</TableCell>
+                                <TableCell className="px-3 text-right tabular-nums text-xs font-semibold">{formatCurrency(sc.totalValue / rate, currency, 0, true)}</TableCell>
+                                <TableCell className="px-3 text-center">
+                                  <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+                                    fillRate >= 90 ? "bg-status-good/15 text-status-good" : fillRate >= 80 ? "bg-status-warning/15 text-status-warning" : "bg-status-critical/15 text-status-critical"
+                                  )}>
+                                    %{Math.round(fillRate)}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="px-3 text-center">
+                                  {onTime !== null ? (
+                                    <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+                                      onTime >= 80 ? "bg-status-good/15 text-status-good" : onTime >= 60 ? "bg-status-warning/15 text-status-warning" : "bg-status-critical/15 text-status-critical"
+                                    )}>
+                                      %{Math.round(onTime)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="px-3 text-center text-xs tabular-nums text-muted-foreground">
+                                  {sc.avgLeadDays !== null ? `${Math.round(sc.avgLeadDays)} gün` : "—"}
+                                </TableCell>
+                                <TableCell className="px-3 text-center">
+                                  {sc.overdueCount > 0 ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-critical">
+                                      <BadgeAlert className="size-3" />
+                                      {sc.overdueCount}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="px-3 text-center">
+                                  <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold", riskColor)}>
+                                    {riskLabel}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </PanelCard>
+            </Section>
+          </SectionStack>
         </TabsContent>
       </Tabs>
     </div>

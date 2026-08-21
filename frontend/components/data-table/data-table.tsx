@@ -162,6 +162,7 @@ export function DataTable<T>({
                           ? "Farklı filtreler deneyin veya filtreleri temizleyin."
                           : emptyDescription
                       }
+                      className="border-0 rounded-none bg-transparent"
                     />
                   </TableCell>
                 </TableRow>

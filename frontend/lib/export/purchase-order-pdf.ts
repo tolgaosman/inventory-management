@@ -103,7 +103,7 @@ function drawMetaBlock(
   const lineHeight = 11;
   const rowGap = 5;
 
-  const supplierContact = supplier ? [supplier.email, supplier.phone].filter(Boolean).join("  ·  ") : "";
+  const supplierContact = supplier ? [supplier.emails[0], supplier.phone].filter(Boolean).join("  ·  ") : "";
   const warehouseAddress = warehouse ? `${warehouse.name} — ${warehouse.address}` : order.warehouseName;
 
   const leftRows: [string, string][] = [

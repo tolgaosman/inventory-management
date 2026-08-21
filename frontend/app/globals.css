@@ -191,12 +191,12 @@
   --series-2: var(--brand-navy);
   --series-3: var(--brand-gold);
 
-  /* Five-way categorical, drawn from the tint family so bars match KPI chips. */
-  --chart-1: var(--tint-blue);
-  --chart-2: var(--tint-teal);
-  --chart-3: var(--tint-plum);
-  --chart-4: var(--tint-amber);
-  --chart-5: var(--tint-green);
+  /* Five-way categorical, drawn from the brand and tint family so bars match the site palette. */
+  --chart-1: var(--brand-navy);
+  --chart-2: var(--brand-turquoise);
+  --chart-3: var(--brand-gold);
+  --chart-4: var(--tint-plum);
+  --chart-5: var(--tint-teal);
 }
 
 .dark {

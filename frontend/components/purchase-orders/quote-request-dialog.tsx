@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -10,64 +11,113 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { EmptyState } from "@/components/common/empty-state";
-import { useAsync } from "@/lib/hooks/use-async";
-import { useCurrency } from "@/lib/currency-context";
-import { formatCurrency, formatDateShort } from "@/lib/format";
-import { listDraftOrdersBySupplier, type DraftOrderOption } from "@/lib/api/quotes";
+import { ProductPicker } from "@/components/products/product-picker";
+import { getProduct } from "@/lib/api/products";
 import type { Supplier } from "@/lib/types";
+import type { QuoteItemInput } from "@/lib/api/quotes";
+
+/** A quote line with enough display info to render, alongside the bare `QuoteItemInput` the API wants. */
+type DraftItem = QuoteItemInput & { productName: string; unit: string };
+
+export interface QuoteRequestSelection {
+  supplierId?: string;
+  adhocSupplierName?: string;
+  adhocSupplierEmail?: string;
+  items: QuoteItemInput[];
+}
 
 interface QuoteRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   suppliers: Supplier[];
-  onContinue: (selection: { supplierId: string; purchaseOrderIds: string[] }) => void;
+  onContinue: (selection: QuoteRequestSelection) => void;
 }
 
 export function QuoteRequestDialog({ open, onOpenChange, suppliers, onContinue }: QuoteRequestDialogProps) {
-  const { currency, rates } = useCurrency();
-  const rate = rates?.[currency] || 1;
+  const [supplierId, setSupplierId] = useState("");
+  const [useOtherSupplier, setUseOtherSupplier] = useState(false);
+  const [adhocSupplierName, setAdhocSupplierName] = useState("");
+  const [adhocSupplierEmail, setAdhocSupplierEmail] = useState("");
 
-  const { data: grouped, status } = useAsync(() => listDraftOrdersBySupplier(), [open]);
-  const bySupplier = useMemo(() => grouped ?? {}, [grouped]);
+  const [items, setItems] = useState<DraftItem[]>([]);
+  const [pickerProductId, setPickerProductId] = useState("");
+  const [pickerQuantity, setPickerQuantity] = useState(1);
+  const [addingCatalogItem, setAddingCatalogItem] = useState(false);
 
-  const suppliersWithDrafts = useMemo(
-    () => suppliers.filter((s) => (bySupplier[s.id]?.length ?? 0) > 0),
-    [suppliers, bySupplier],
-  );
+  const [adhocItemOpen, setAdhocItemOpen] = useState(false);
+  const [adhocName, setAdhocName] = useState("");
+  const [adhocUnit, setAdhocUnit] = useState("Adet");
+  const [adhocQuantity, setAdhocQuantity] = useState(1);
 
-  const [supplierId, setSupplierId] = useState<string>("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  function reset() {
+    setSupplierId("");
+    setUseOtherSupplier(false);
+    setAdhocSupplierName("");
+    setAdhocSupplierEmail("");
+    setItems([]);
+    setPickerProductId("");
+    setPickerQuantity(1);
+    setAdhocItemOpen(false);
+    setAdhocName("");
+    setAdhocUnit("Adet");
+    setAdhocQuantity(1);
+  }
 
   function handleOpenChange(next: boolean) {
-    if (!next) {
-      setSupplierId("");
-      setSelected(new Set());
-    }
+    if (!next) reset();
     onOpenChange(next);
   }
 
-  const orders: DraftOrderOption[] = supplierId ? bySupplier[supplierId] ?? [] : [];
-
-  function changeSupplier(id: string) {
-    setSupplierId(id);
-    setSelected(new Set());
+  async function handleAddCatalogItem() {
+    if (!pickerProductId || pickerQuantity < 1) return;
+    setAddingCatalogItem(true);
+    try {
+      const product = await getProduct(pickerProductId);
+      setItems((prev) => [
+        ...prev,
+        { productId: product.id, productName: product.name, unit: product.unit, quantity: pickerQuantity },
+      ]);
+      setPickerProductId("");
+      setPickerQuantity(1);
+    } finally {
+      setAddingCatalogItem(false);
+    }
   }
 
-  function toggle(id: string, checked: boolean) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
+  function handleAddAdhocItem() {
+    if (adhocName.trim() === "" || adhocUnit.trim() === "" || adhocQuantity < 1) return;
+    setItems((prev) => [
+      ...prev,
+      { productName: adhocName.trim(), unit: adhocUnit.trim(), quantity: adhocQuantity },
+    ]);
+    setAdhocName("");
+    setAdhocUnit("Adet");
+    setAdhocQuantity(1);
+    setAdhocItemOpen(false);
   }
+
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  const adhocEmailValid = adhocSupplierEmail.trim().includes("@");
+  const supplierValid = useOtherSupplier
+    ? adhocSupplierName.trim() !== "" && adhocEmailValid
+    : supplierId !== "";
+  const canContinue = supplierValid && items.length > 0;
 
   function handleContinue() {
-    if (!supplierId || selected.size === 0) return;
-    onContinue({ supplierId, purchaseOrderIds: [...selected] });
+    if (!canContinue) return;
+    onContinue({
+      supplierId: useOtherSupplier ? undefined : supplierId,
+      adhocSupplierName: useOtherSupplier ? adhocSupplierName.trim() : undefined,
+      adhocSupplierEmail: useOtherSupplier ? adhocSupplierEmail.trim() : undefined,
+      items: items.map(({ productId, productName, unit, quantity }) => ({ productId, productName, unit, quantity })),
+    });
   }
 
   return (
@@ -76,82 +126,181 @@ export function QuoteRequestDialog({ open, onOpenChange, suppliers, onContinue }
         <DialogHeader>
           <DialogTitle>Teklif Formu Oluştur</DialogTitle>
           <DialogDescription>
-            Bir tedarikçi seçin, ardından teklif isteğine dahil edilecek taslak veya onay bekleyen siparişleri işaretleyin.
+            Bir tedarikçi ve teklif istenecek kalemleri seçin. Henüz bir sipariş oluşturmanız gerekmez.
           </DialogDescription>
         </DialogHeader>
 
-        {status !== "loading" && suppliersWithDrafts.length === 0 ? (
-          <EmptyState
-            title="Uygun sipariş yok"
-            description="Teklif formu oluşturulabilecek taslak veya onay bekleyen sipariş yok. Önce bir sipariş oluşturun."
-          />
-        ) : (
-          <div className="space-y-4 px-4 pb-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Tedarikçi</label>
-              <Select value={supplierId} onValueChange={(v) => changeSupplier(v ?? "")}>
+        <div className="min-w-0 space-y-5 px-4 pb-2">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Tedarikçi</Label>
+            {!useOtherSupplier && (
+              <Select value={supplierId} onValueChange={(v) => setSupplierId(v ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue>
-                    {supplierId
-                      ? suppliers.find((s) => s.id === supplierId)?.name
-                      : "Tedarikçi seçin"}
+                    {supplierId ? suppliers.find((s) => s.id === supplierId)?.name : "Tedarikçi seçin"}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {suppliersWithDrafts.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name} ({bySupplier[s.id]?.length ?? 0} uygun sipariş)
-                    </SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            )}
+
+            <div className="flex items-start space-x-3 pt-1">
+              <Checkbox
+                id="use-other-supplier"
+                checked={useOtherSupplier}
+                onCheckedChange={(checked) => {
+                  setUseOtherSupplier(!!checked);
+                  setSupplierId("");
+                }}
+                className="mt-0.5"
+              />
+              <Label htmlFor="use-other-supplier" className="font-normal cursor-pointer text-sm">
+                Başka bir tedarikçi seçmek istiyorum
+              </Label>
             </div>
 
-            {supplierId && (
+            {useOtherSupplier && (
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Taslak / Onay Bekleyen Siparişler</label>
-                <div className="space-y-2">
-                  {orders.map((o) => (
-                    <label
-                      key={o.id}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 px-3 py-2.5 hover:bg-muted/40"
-                    >
-                      <Checkbox
-                        checked={selected.has(o.id)}
-                        onCheckedChange={(checked) => toggle(o.id, Boolean(checked))}
-                      />
-                      <div className="flex flex-1 items-center justify-between gap-2 text-sm">
-                        <span className="font-mono text-xs font-semibold">{o.code}</span>
-                        <span
-                          className={
-                            o.status === "pending_approval"
-                              ? "rounded px-1.5 py-0.5 text-[0.65rem] font-medium bg-tint-amber/12 text-tint-amber"
-                              : "rounded px-1.5 py-0.5 text-[0.65rem] font-medium bg-muted text-muted-foreground"
-                          }
-                        >
-                          {o.status === "pending_approval" ? "Onay Bekliyor" : "Taslak"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{o.itemCount} kalem</span>
-                        <span className="text-xs font-medium tabular-nums">
-                          {formatCurrency(o.total / rate, currency, 1, true)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          Beklenen: {formatDateShort(o.expectedAt)}
-                        </span>
-                      </div>
-                    </label>
-                  ))}
-                </div>
+                <Input
+                  placeholder="Tedarikçi adı"
+                  value={adhocSupplierName}
+                  onChange={(e) => setAdhocSupplierName(e.target.value)}
+                />
+                <Input
+                  type="email"
+                  placeholder="Tedarikçi e-postası"
+                  value={adhocSupplierEmail}
+                  onChange={(e) => setAdhocSupplierEmail(e.target.value)}
+                  aria-invalid={adhocSupplierEmail.trim() !== "" && !adhocEmailValid}
+                />
               </div>
             )}
           </div>
-        )}
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Kalemler</Label>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 min-w-0">
+                <ProductPicker value={pickerProductId} onChange={setPickerProductId} />
+              </div>
+              <Input
+                type="number"
+                min={1}
+                className="w-20 shrink-0"
+                value={pickerQuantity}
+                onChange={(e) => setPickerQuantity(Number(e.target.value) || 1)}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+                disabled={!pickerProductId || addingCatalogItem}
+                onClick={handleAddCatalogItem}
+              >
+                <Plus className="size-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-start space-x-3 pt-1">
+              <Checkbox
+                id="add-adhoc-item"
+                checked={adhocItemOpen}
+                onCheckedChange={(checked) => setAdhocItemOpen(!!checked)}
+                className="mt-0.5"
+              />
+              <Label htmlFor="add-adhoc-item" className="font-normal cursor-pointer text-sm">
+                Yeni ürün girmek istiyorum
+              </Label>
+            </div>
+
+            {adhocItemOpen && (
+              <div className="space-y-2 rounded-lg border border-border/60 p-3">
+                <Input
+                  placeholder="Ürün adı"
+                  value={adhocName}
+                  onChange={(e) => setAdhocName(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Select value={adhocUnit} onValueChange={(v) => setAdhocUnit(v ?? "")}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Birim seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Adet">Adet</SelectItem>
+                      <SelectItem value="Lisans">Lisans</SelectItem>
+                      <SelectItem value="Kg">Kg</SelectItem>
+                      <SelectItem value="Litre">Litre</SelectItem>
+                      <SelectItem value="Metre">Metre</SelectItem>
+                      <SelectItem value="Kutu">Kutu</SelectItem>
+                      <SelectItem value="Paket">Paket</SelectItem>
+                      <SelectItem value="Ay">Ay</SelectItem>
+                      <SelectItem value="Yıl">Yıl</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-24 shrink-0"
+                    value={adhocQuantity}
+                    onChange={(e) => setAdhocQuantity(Number(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={adhocName.trim() === "" || adhocUnit.trim() === ""}
+                    onClick={handleAddAdhocItem}
+                  >
+                    <Plus className="size-4" />
+                    Kalemi Ekle
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {items.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {items.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="truncate font-medium">{item.productName}</span>
+                      {!item.productId && (
+                        <span className="ml-2 rounded px-1.5 py-0.5 text-[0.65rem] font-medium bg-tint-amber/12 text-tint-amber">
+                          Yeni ürün
+                        </span>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {item.quantity} {item.unit}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(i)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
             Vazgeç
           </Button>
-          <Button type="button" onClick={handleContinue} disabled={!supplierId || selected.size === 0}>
+          <Button type="button" onClick={handleContinue} disabled={!canContinue}>
             Devam
           </Button>
         </DialogFooter>

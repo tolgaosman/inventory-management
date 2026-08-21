@@ -14,6 +14,10 @@ export async function listAppUsers(): Promise<AppUser[]> {
   return cachedFetch("users:list", () => apiFetch<AppUser[]>("/users"), 30_000);
 }
 
+export async function getAppUser(id: string): Promise<AppUser> {
+  return apiFetch<AppUser>(`/users/${id}`);
+}
+
 function invalidateUsers() {
   invalidateCache("users:");
 }

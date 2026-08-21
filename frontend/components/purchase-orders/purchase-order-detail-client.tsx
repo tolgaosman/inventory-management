@@ -79,6 +79,7 @@ import {
   approvePurchaseOrder,
   rejectPurchaseOrderApproval,
   cancelPurchaseOrder,
+  downloadPurchaseOrderInvoice,
 } from "@/lib/api/purchase-orders";
 import { ApiError, BASE_URL } from "@/lib/api/client";
 import { buildPurchaseOrderPdf } from "@/lib/export/purchase-order-pdf";
@@ -104,6 +105,8 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
   const [isRejecting, setIsRejecting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
 
   const { status, data, staleData, error, refetch } = useAsync(() => getPurchaseOrder(id), [id]);
   const view = data ?? staleData;
@@ -115,13 +118,7 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
   const suppliers = refData?.[0]?.rows ?? [];
   const warehouses = refData?.[1] ?? [];
 
-  async function handleSaved(values: {
-    supplierId: string;
-    warehouseId: string;
-    expectedAt: string;
-    notes?: string;
-    items: { productId: string; quantity: number; unitPrice: number }[];
-  }) {
+  async function handleSaved(values: any) {
     try {
       await updatePurchaseOrder(id, values);
       refetch();
@@ -220,6 +217,20 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
       });
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleDownloadInvoice() {
+    if (!view) return;
+    setDownloadingInvoice(true);
+    try {
+      const blob = await downloadPurchaseOrderInvoice(view.id);
+      const extension = view.invoiceFilePath?.split(".").pop() || "pdf";
+      downloadBlob(blob, `fatura-${slugify(view.code)}.${extension}`);
+    } catch {
+      toast.error("Fatura indirilemedi");
+    } finally {
+      setDownloadingInvoice(false);
     }
   }
 
@@ -471,11 +482,26 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
                 {invoiceUrl && (
                   <div className="flex items-center justify-between gap-3 py-2 text-sm">
                     <dt className="shrink-0 text-muted-foreground">Fatura Belgesi</dt>
-                    <dd className="min-w-0 truncate text-right font-medium text-foreground">
-                      <a href={invoiceUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 justify-end">
+                    <dd className="min-w-0 truncate text-right font-medium text-foreground flex items-center gap-4 justify-end">
+                      <button 
+                        onClick={() => setInvoicePreviewOpen(true)}
+                        className="text-primary hover:underline flex items-center gap-1"
+                      >
                         <Receipt className="size-3.5" />
                         Görüntüle
-                      </a>
+                      </button>
+                      <button
+                        onClick={handleDownloadInvoice}
+                        disabled={downloadingInvoice}
+                        className="text-primary hover:underline flex items-center gap-1 disabled:opacity-60"
+                      >
+                        {downloadingInvoice ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Download className="size-3.5" />
+                        )}
+                        İndir
+                      </button>
                     </dd>
                   </div>
                 )}
@@ -552,7 +578,6 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
         onOpenChange={setFormOpen}
         order={view}
         suppliers={suppliers}
-        warehouses={warehouses}
         onSaved={handleSaved}
       />
 
@@ -560,9 +585,26 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
         open={receiveOpen}
         onOpenChange={setReceiveOpen}
         order={view}
-        warehouseName={view.warehouseName}
+        warehouses={warehouses}
         onDone={refetch}
       />
+
+      {invoiceUrl && (
+        <Dialog open={invoicePreviewOpen} onOpenChange={setInvoicePreviewOpen}>
+          <DialogContent className="max-w-4xl p-0 overflow-hidden bg-muted/20 border-border">
+            <div className="flex h-12 items-center justify-between border-b px-4 bg-background">
+              <DialogTitle className="text-sm font-medium">Fatura Belgesi</DialogTitle>
+            </div>
+            <div className="p-4 flex justify-center items-center h-[80vh] overflow-auto">
+              {invoiceUrl.toLowerCase().endsWith('.pdf') ? (
+                <iframe src={invoiceUrl} className="w-full h-full rounded-md border bg-background" />
+              ) : (
+                <img src={invoiceUrl} alt="Fatura" className="w-full h-full object-contain rounded-md" />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog open={cancelDialog} onOpenChange={setCancelDialog}>
         <DialogContent>

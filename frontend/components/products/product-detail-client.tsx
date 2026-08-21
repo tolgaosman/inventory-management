@@ -118,7 +118,7 @@ export function ProductDetailClient({ id }: { id: string }) {
   const suppliers = suppliersResult.rows;
   const supplierName = suppliers.find((s) => s.id === product.supplierId)?.name ?? "-";
   const level = stockLevel(product.totalStock, product.minStock, product.critical);
-  const stockValue = product.totalStock * product.purchasePrice;
+  const stockValue = product.purchasePrice != null ? product.totalStock * product.purchasePrice : null;
 
   const openOrders = purchaseOrdersResult.rows
     .filter((po) => po.status === "ordered" || po.status === "partially_received")
@@ -138,8 +138,14 @@ export function ProductDetailClient({ id }: { id: string }) {
     { label: "Birim", value: product.unit },
     { label: "Tedarikçi", value: supplierName },
     ...(can("financial.view") ? [
-      { label: "Alış Fiyatı", value: formatCurrency(product.purchasePrice, currency, rates?.[currency] || 1, showKurus) },
-      { label: "Satış Fiyatı", value: formatCurrency(product.salePrice, currency, rates?.[currency] || 1, showKurus) },
+      {
+        label: "Son Satın Alış Fiyatı",
+        value: product.purchasePrice != null ? formatCurrency(product.purchasePrice, currency, rates?.[currency] || 1, showKurus) : "-",
+      },
+      {
+        label: "Satış Fiyatı",
+        value: product.salePrice != null ? formatCurrency(product.salePrice, currency, rates?.[currency] || 1, showKurus) : "-",
+      },
     ] : []),
     { label: "Minimum Stok", value: formatNumber(product.minStock) },
     { label: "Maksimum Stok", value: formatNumber(product.maxStock) },
@@ -259,7 +265,9 @@ export function ProductDetailClient({ id }: { id: string }) {
                 </div>
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">Stok Değeri</p>
-                  <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus)}</p>
+                  <p className="truncate text-lg font-semibold tabular-nums text-foreground">
+                    {stockValue != null ? formatCurrency(stockValue, currency, rates?.[currency] || 1, showKurus) : "-"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -428,7 +436,7 @@ export function ProductDetailClient({ id }: { id: string }) {
         </div>
       </div>
 
-      <ProductFormSheet open={formOpen} onOpenChange={setFormOpen} product={product} onSaved={handleSaved} categories={categories} suppliers={suppliers} />
+      <ProductFormSheet open={formOpen} onOpenChange={setFormOpen} product={product} onSaved={handleSaved} categories={categories} suppliers={suppliers} showSalePrice />
 
       <StockMovementSheet
         open={movementMode != null}

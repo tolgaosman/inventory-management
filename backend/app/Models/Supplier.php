@@ -18,7 +18,9 @@ use HasFactory;
 
     protected $keyType = 'string';
 
-    protected $fillable = ['id', 'name', 'contact_name', 'email', 'phone', 'city'];
+    protected $fillable = ['id', 'name', 'contact_name', 'emails', 'phone', 'city'];
+
+    protected $casts = ['emails' => 'array'];
 
     public function products()
     {

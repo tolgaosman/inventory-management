@@ -21,6 +21,7 @@ class UserFactory extends Factory
             'id' => 'usr-'.fake()->unique()->numberBetween(1, 999999),
             'name' => $name,
             'email' => fake()->unique()->safeEmail(),
+            'phone' => fake()->phoneNumber(),
             'role' => 'yonetici',
             'initials' => mb_strtoupper(mb_substr($name, 0, 2)),
             'password' => static::$password ??= Hash::make('password'),

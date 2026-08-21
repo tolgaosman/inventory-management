@@ -422,7 +422,7 @@ export function AppHeader() {
             ) : (
               <>
                 <span className="block font-medium">{name}</span>
-                <span className="block text-xs text-muted-foreground">{ROLE_LABELS[role]}</span>
+                <span className="block text-xs text-muted-foreground">{ROLE_LABELS[role] ?? role}</span>
               </>
             )}
           </span>

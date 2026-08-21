@@ -76,7 +76,7 @@ class ProductController extends Controller
             'low' => count(array_filter($rows, fn ($p) => ! $p['critical'] && $p['totalStock'] > 0 && $p['totalStock'] < $p['minStock'] * $mult)),
             'overstock' => count(array_filter($rows, fn ($p) => $p['totalStock'] > $p['maxStock'])),
             'passive' => count(array_filter($rows, fn ($p) => $p['status'] === 'pasif')),
-            'stockValue' => array_sum(array_map(fn ($p) => ($p['warehouseStock'] ?? $p['totalStock']) * $p['purchasePrice'], $rows)),
+            'stockValue' => array_sum(array_map(fn ($p) => ($p['warehouseStock'] ?? $p['totalStock']) * ($p['purchasePrice'] ?? 0), $rows)),
         ];
     }
 
@@ -98,10 +98,10 @@ class ProductController extends Controller
             $query->where('status', $status);
         }
         if ($request->filled('minPrice')) {
-            $query->where('sale_price', '>=', (float) $request->query('minPrice'));
+            $query->where('purchase_price', '>=', (float) $request->query('minPrice'));
         }
         if ($request->filled('maxPrice')) {
-            $query->where('sale_price', '<=', (float) $request->query('maxPrice'));
+            $query->where('purchase_price', '<=', (float) $request->query('maxPrice'));
         }
 
         $rows = $query->get()->map(fn ($p) => $this->toRow($p, $categoryNames, $totals))->all();
@@ -165,6 +165,10 @@ class ProductController extends Controller
                 }
 
                 return TextTools::compare((string) $av, (string) $bv) * $dir;
+            });
+        } else {
+            usort($rows, function ($a, $b) {
+                return strcmp($b['id'], $a['id']);
             });
         }
 
@@ -238,8 +242,8 @@ class ProductController extends Controller
             'categoryId' => ['required', 'string', 'exists:categories,id'],
             'brand' => ['required', 'string'],
             'unit' => ['required', 'string'],
-            'purchasePrice' => ['required', 'numeric', 'min:0'],
-            'salePrice' => ['required', 'numeric', 'min:0'],
+            'purchasePrice' => ['nullable', 'numeric', 'min:0'],
+            'salePrice' => ['nullable', 'numeric', 'min:0'],
             'minStock' => ['required', 'integer', 'min:0'],
             'maxStock' => ['required', 'integer', 'min:0'],
             'supplierId' => ['required', 'string', 'exists:suppliers,id'],
@@ -253,8 +257,8 @@ class ProductController extends Controller
             'category_id' => $data['categoryId'],
             'brand' => $data['brand'],
             'unit' => $data['unit'],
-            'purchase_price' => $data['purchasePrice'],
-            'sale_price' => $data['salePrice'],
+            'purchase_price' => $data['purchasePrice'] ?? null,
+            'sale_price' => $data['salePrice'] ?? null,
             'min_stock' => $data['minStock'],
             'max_stock' => $data['maxStock'],
             'supplier_id' => $data['supplierId'],
@@ -397,8 +401,7 @@ class ProductController extends Controller
             'inputs.*.categoryId' => ['required', 'string'],
             'inputs.*.brand' => ['required', 'string'],
             'inputs.*.unit' => ['required', 'string'],
-            'inputs.*.purchasePrice' => ['required', 'numeric', 'min:0'],
-            'inputs.*.salePrice' => ['required', 'numeric', 'min:0'],
+            'inputs.*.purchasePrice' => ['nullable', 'numeric', 'min:0'],
             'inputs.*.minStock' => ['required', 'integer', 'min:0'],
             'inputs.*.maxStock' => ['required', 'integer', 'min:0'],
             'inputs.*.supplierId' => ['required', 'string'],
@@ -439,8 +442,7 @@ class ProductController extends Controller
                     'category_id' => $input['categoryId'],
                     'brand' => $input['brand'],
                     'unit' => $input['unit'],
-                    'purchase_price' => $input['purchasePrice'],
-                    'sale_price' => $input['salePrice'],
+                    'purchase_price' => $input['purchasePrice'] ?? null,
                     'min_stock' => $input['minStock'],
                     'max_stock' => $input['maxStock'],
                     'supplier_id' => $input['supplierId'],

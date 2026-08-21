@@ -9,7 +9,7 @@ class QuoteRequestItem extends Model
     /** The table is a plain snapshot of quote lines — it has no timestamp columns. */
     public $timestamps = false;
 
-    protected $fillable = ['quote_request_id', 'purchase_order_id', 'product_id', 'quantity', 'unit_price'];
+    protected $fillable = ['quote_request_id', 'purchase_order_id', 'product_id', 'product_name', 'unit', 'quantity', 'unit_price'];
 
     protected $casts = [
         'quantity' => 'integer',

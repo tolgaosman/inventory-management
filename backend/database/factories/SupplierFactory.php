@@ -16,7 +16,7 @@ class SupplierFactory extends Factory
             'id' => 'sup-'.fake()->unique()->numberBetween(1, 999999),
             'name' => fake()->unique()->company(),
             'contact_name' => fake()->name(),
-            'email' => fake()->unique()->companyEmail(),
+            'emails' => [fake()->unique()->companyEmail(), fake()->unique()->companyEmail(), fake()->unique()->companyEmail()],
             'phone' => fake()->phoneNumber(),
             'city' => fake()->city(),
         ];

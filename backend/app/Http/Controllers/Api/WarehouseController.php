@@ -68,7 +68,7 @@ class WarehouseController extends Controller
             ->groupBy('stock_levels.warehouse_id')
             ->select([
                 'stock_levels.warehouse_id',
-                DB::raw('COALESCE(SUM(stock_levels.quantity * products.purchase_price), 0) as total_value'),
+                DB::raw('COALESCE(SUM(stock_levels.quantity * COALESCE(products.purchase_price, 0)), 0) as total_value'),
             ])
             ->pluck('total_value', 'warehouse_id');
 

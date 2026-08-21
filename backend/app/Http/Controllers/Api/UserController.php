@@ -11,6 +11,7 @@ use App\Support\Present;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 /**
  * frontend/components/users/users-client.tsx used to manage users purely in
@@ -33,6 +34,37 @@ class UserController extends Controller
         return response()->json($query->get()->map(fn ($u) => Present::user($u))->all());
     }
 
+    public function show(Request $request, string $id)
+    {
+        $user = User::query()->withTrashed()->find($id);
+        if (! $user) {
+            throw ApiException::notFound('Kullanıcı bulunamadı.');
+        }
+
+        $authUser = request()->user();
+        if ($authUser->role === 'depo_yonetici' && !in_array($user->role, ['depo', 'depo_yonetici'])) {
+            throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları görüntüleyebilirsiniz.');
+        }
+        if ($authUser->role === 'satinalma_yonetici' && !in_array($user->role, ['satinalma', 'satinalma_yonetici'])) {
+            throw ApiException::forbidden('Sadece kendi departmanınızdaki kullanıcıları görüntüleyebilirsiniz.');
+        }
+
+        $presented = Present::user($user);
+
+        // Add extra statistics for the profile page
+        $movementsQuery = StockMovement::query()->where('user_id', $id);
+        $presented['stats'] = [
+            'movementsCount'          => (clone $movementsQuery)->count(),
+            'movementsInCount'        => (clone $movementsQuery)->where('type', 'giris')->count(),
+            'movementsOutCount'       => (clone $movementsQuery)->where('type', 'cikis')->count(),
+            'movementsTransferCount'  => (clone $movementsQuery)->where('type', 'transfer')->count(),
+            'purchaseOrdersCount'     => \App\Models\PurchaseOrder::query()->where('created_by', $id)->whereNotIn('status', ['draft'])->count(),
+            'quoteRequestsCount'      => \App\Models\QuoteRequest::query()->where('created_by', $id)->count(),
+        ];
+
+        return response()->json($presented);
+    }
+
     private function initialsFor(string $name): string
     {
         $initials = collect(explode(' ', trim($name)))
@@ -49,7 +81,8 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string'],
             'email' => ['required', 'string'],
-            'role' => ['required', 'in:admin,depo_yonetici,satinalma_yonetici,depo,satinalma'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'role' => ['required', 'string', Rule::exists('roles', 'id')],
         ]);
 
         $authUser = request()->user();
@@ -80,6 +113,7 @@ class UserController extends Controller
                 'id' => (string) (10000 + (int) User::query()->count() + random_int(1, 89000)),
                 'name' => trim($data['name']),
                 'email' => trim($data['email']),
+                'phone' => isset($data['phone']) ? trim($data['phone']) : null,
                 'role' => $data['role'],
                 'initials' => $this->initialsFor($data['name']),
                 'password' => config('inventory.demo_password'),
@@ -97,7 +131,8 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string'],
             'email' => ['sometimes', 'string'],
-            'role' => ['sometimes', 'in:admin,depo_yonetici,satinalma_yonetici,depo,satinalma'],
+            'phone' => ['nullable', 'string', 'max:20'],
+            'role' => ['sometimes', 'string', Rule::exists('roles', 'id')],
         ]);
 
         $user = DB::transaction(function () use ($data, $id) {
@@ -144,9 +179,9 @@ class UserController extends Controller
                 }
             }
 
-            foreach (['name', 'email', 'role'] as $field) {
+            foreach (['name', 'email', 'phone', 'role'] as $field) {
                 if (array_key_exists($field, $data)) {
-                    $user->{$field} = trim($data[$field]);
+                    $user->{$field} = $data[$field] !== null ? trim($data[$field]) : null;
                 }
             }
             if (array_key_exists('name', $data)) {

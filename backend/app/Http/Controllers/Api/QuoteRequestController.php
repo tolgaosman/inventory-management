@@ -7,7 +7,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\QuoteRequest;
-use App\Models\Warehouse;
 use App\Services\PurchaseOrderService;
 use App\Support\IdGenerator;
 use App\Support\Present;
@@ -17,18 +16,13 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Teklif İstekleri (RFQ) — bundles one or more of a supplier's not-yet-sent
- * purchase orders into a single quote-request document. Port of
- * frontend/lib/api/quotes.ts.
- *
- * Line prices are snapshotted at creation time, so editing the source order
- * afterwards never rewrites a quote that has already gone out.
+ * Teklif İstekleri (RFQ) — a quote request sent to a supplier (existing or a
+ * brand-new one, name-only) for a hand-picked list of items. Independent of
+ * purchase orders: the buyer only places a real order once the supplier
+ * responds with pricing. Port of frontend/lib/api/quotes.ts.
  */
 class QuoteRequestController extends Controller
 {
-    /** Statuses a purchase order must be in to be quotable. */
-    private const QUOTABLE = ['draft', 'pending_approval'];
-
     public function __construct(private PurchaseOrderService $orders)
     {
     }
@@ -36,21 +30,23 @@ class QuoteRequestController extends Controller
     private function toRow(QuoteRequest $q): array
     {
         return Present::quoteRequest($q) + [
-            'supplierName' => $q->supplier->name ?? '-',
-            'orderCount' => $q->items->pluck('purchase_order_id')->unique()->count(),
+            'supplierName' => $q->supplier->name ?? $q->adhoc_supplier_name ?? '-',
             'itemCount' => $q->items->count(),
-            'total' => (float) $q->items->sum(fn ($i) => (int) $i->quantity * (float) $i->unit_price),
+            'total' => (float) $q->items->sum(fn ($i) => (int) $i->quantity * (float) ($i->unit_price ?? 0)),
         ];
     }
 
     public function index(Request $request)
     {
         $rows = QuoteRequest::query()->when($request->query('trashed') === '1', fn($q) => $q->onlyTrashed())
-            ->with(['items', 'supplier', 'createdByUser'])
+            ->with(['items', 'supplier', 'createdByUser', 'approvedByUser'])
             ->when($request->query('supplierId'), fn ($q, $id) => $q->where('supplier_id', $id))
+            ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
+            ->when($request->query('excludeStatus'), fn ($q, $s) => $q->where('status', '!=', $s))
+            ->when($request->query('created_by'), fn ($q, $c) => $q->where('created_by', $c))
             ->orderByDesc('created_at')
             ->get()
-            ->filter(fn ($q) => TextTools::matches([$q->code, $q->supplier->name ?? null], $request->query('search')))
+            ->filter(fn ($q) => TextTools::matches([$q->code, $q->supplier->name ?? $q->adhoc_supplier_name ?? null], $request->query('search')))
             ->map(fn ($q) => $this->toRow($q))
             ->values()
             ->all();
@@ -64,51 +60,39 @@ class QuoteRequestController extends Controller
 
     public function show(string $id)
     {
-        $quote = QuoteRequest::query()->with(['items', 'supplier', 'createdByUser'])->find($id);
+        $quote = QuoteRequest::query()->with(['items', 'supplier', 'createdByUser', 'approvedByUser'])->find($id);
         if (! $quote) {
             throw ApiException::notFound('Teklif isteği bulunamadı.');
         }
-        if (! $quote->supplier) {
-            throw ApiException::notFound('Tedarikçi bulunamadı.');
-        }
 
-        $orderIds = $quote->items->pluck('purchase_order_id')->unique();
-        $ordersById = PurchaseOrder::query()->whereIn('id', $orderIds)->get()->keyBy('id');
-        $warehouseNames = Warehouse::query()->pluck('name', 'id');
-        $productsById = Product::query()->whereIn('id', $quote->items->pluck('product_id'))->get()->keyBy('id');
+        $productsById = Product::query()->whereIn('id', $quote->items->pluck('product_id')->filter())->get()->keyBy('id');
 
-        $orders = $orderIds->map(function ($poId) use ($ordersById, $warehouseNames, $productsById, $quote) {
-            $po = $ordersById->get($poId);
-            if (! $po) {
-                throw ApiException::notFound('Kaynak sipariş bulunamadı.');
-            }
+        $items = $quote->items->map(fn ($i) => [
+            'productId' => $i->product_id,
+            'productName' => $i->product_name,
+            'sku' => ($p = $productsById->get($i->product_id)) ? $p->sku : null,
+            'unit' => $i->unit,
+            'quantity' => (int) $i->quantity,
+            'unitPrice' => $i->unit_price !== null ? (float) $i->unit_price : null,
+        ])->values()->all();
 
-            return [
-                'id' => $po->id,
-                'code' => $po->code,
-                'expectedAt' => Present::date($po->expected_at),
-                'warehouseName' => $warehouseNames[$po->warehouse_id] ?? '-',
-                'items' => $quote->items
-                    ->where('purchase_order_id', $po->id)
-                    ->map(fn ($i) => [
-                        'productId' => $i->product_id,
-                        'quantity' => (int) $i->quantity,
-                        'unitPrice' => (float) $i->unit_price,
-                        'product' => ($p = $productsById->get($i->product_id)) ? Present::product($p) : null,
-                    ])
-                    ->values()
-                    ->all(),
-            ];
-        })->values()->all();
-
-        return response()->json($this->toRow($quote) + ['supplier' => Present::supplier($quote->supplier), 'orders' => $orders]);
+        return response()->json($this->toRow($quote) + [
+            'supplier' => $quote->supplier ? Present::supplier($quote->supplier) : null,
+            'items' => $items,
+        ]);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'purchaseOrderIds' => ['required', 'array'],
-            'purchaseOrderIds.*' => ['string'],
+            'supplierId' => ['nullable', 'string', 'exists:suppliers,id'],
+            'adhocSupplierName' => ['nullable', 'string'],
+            'adhocSupplierEmail' => ['nullable', 'string', 'email'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.productId' => ['nullable', 'string'],
+            'items.*.productName' => ['nullable', 'string'],
+            'items.*.unit' => ['nullable', 'string'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
             'validUntil' => ['required', 'string'],
             'deliveryDate' => ['required', 'string'],
             'deliveryAddress' => ['required', 'string'],
@@ -120,32 +104,33 @@ class QuoteRequestController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        if (count($data['purchaseOrderIds']) === 0) {
-            throw ApiException::validation('En az bir sipariş seçin.');
+        $supplierId = $data['supplierId'] ?? null;
+        $adhocSupplierName = trim($data['adhocSupplierName'] ?? '');
+        $adhocSupplierEmail = trim($data['adhocSupplierEmail'] ?? '');
+        if (! $supplierId && $adhocSupplierName === '') {
+            throw ApiException::validation('Bir tedarikçi seçin veya yeni tedarikçi adı girin.');
+        }
+        if (! $supplierId && $adhocSupplierEmail === '') {
+            throw ApiException::validation('Yeni tedarikçi için e-posta adresi girin.');
         }
         if (trim($data['deliveryAddress']) === '') {
             throw ApiException::validation('Teslim adresi gereklidir.');
         }
 
-        $quote = DB::transaction(function () use ($data, $request) {
-            $orders = PurchaseOrder::query()
-                ->with('items')
-                ->lockForUpdate()
-                ->whereIn('id', $data['purchaseOrderIds'])
-                ->get();
-
-            if ($orders->count() !== count(array_unique($data['purchaseOrderIds']))) {
-                throw ApiException::validation('Sipariş bulunamadı.');
+        $productIds = collect($data['items'])->pluck('productId')->filter()->unique()->values();
+        $productsById = Product::query()->whereIn('id', $productIds)->get()->keyBy('id');
+        if ($productsById->count() !== $productIds->count()) {
+            throw ApiException::validation('Ürün bulunamadı.');
+        }
+        foreach ($data['items'] as $item) {
+            $hasProduct = ! empty($item['productId']);
+            $hasAdhoc = ! empty($item['productName']) && ! empty($item['unit']);
+            if (! $hasProduct && ! $hasAdhoc) {
+                throw ApiException::validation('Her kalem için bir ürün seçin veya ürün adı ve birim girin.');
             }
-            if ($orders->contains(fn ($po) => ! in_array($po->status, self::QUOTABLE, true))) {
-                throw ApiException::validation('Yalnızca taslak veya onay bekleyen siparişler için teklif formu oluşturulabilir.');
-            }
+        }
 
-            $supplierId = $orders->first()->supplier_id;
-            if ($orders->contains(fn ($po) => $po->supplier_id !== $supplierId)) {
-                throw ApiException::validation('Seçilen siparişler aynı tedarikçiye ait olmalı.');
-            }
-
+        $quote = DB::transaction(function () use ($data, $request, $supplierId, $adhocSupplierName, $adhocSupplierEmail, $productsById) {
             $user = $request->user();
             // Same rule as purchase orders: approvers' own quotes go out immediately,
             // everyone else's waits for an approver to sign off.
@@ -155,6 +140,8 @@ class QuoteRequestController extends Controller
                 'id' => IdGenerator::nextId('quote_requests', 'id', 'qr', 4),
                 'code' => IdGenerator::nextCode('quote_requests', 'code', 'NET-TKL-'),
                 'supplier_id' => $supplierId,
+                'adhoc_supplier_name' => $supplierId ? null : $adhocSupplierName,
+                'adhoc_supplier_email' => $supplierId ? null : $adhocSupplierEmail,
                 'created_at' => Carbon::now(),
                 'created_by' => $user->getKey(),
                 'valid_until' => $data['validUntil'],
@@ -171,15 +158,15 @@ class QuoteRequestController extends Controller
                 'approved_at' => $isApprover ? Carbon::now() : null,
             ]);
 
-            foreach ($orders as $po) {
-                foreach ($po->items as $item) {
-                    $quote->items()->create([
-                        'purchase_order_id' => $po->id,
-                        'product_id' => $item->product_id,
-                        'quantity' => (int) $item->quantity,
-                        'unit_price' => (float) $item->unit_price,
-                    ]);
-                }
+            foreach ($data['items'] as $item) {
+                $product = ! empty($item['productId']) ? $productsById->get($item['productId']) : null;
+                $quote->items()->create([
+                    'product_id' => $product?->id,
+                    'product_name' => $product?->name ?? trim($item['productName'] ?? ''),
+                    'unit' => $product?->unit ?? trim($item['unit'] ?? ''),
+                    'quantity' => (int) $item['quantity'],
+                    'unit_price' => null,
+                ]);
             }
 
             return $quote;
@@ -215,29 +202,26 @@ class QuoteRequestController extends Controller
         return $this->transitionApproval($request, $id, 'approved', 'Yalnızca onay bekleyen teklifler onaylanabilir.');
     }
 
+    /**
+     * A rejected quote isn't kept around in "rejected" state — it's simply
+     * removed, since the whole point of the ad-hoc quote flow is that nothing
+     * is committed until the supplier responds with acceptable pricing.
+     */
     public function reject(Request $request, string $id)
     {
-        return $this->transitionApproval($request, $id, 'rejected', 'Yalnızca onay bekleyen teklifler reddedilebilir.');
-    }
+        DB::transaction(function () use ($request, $id) {
+            $quote = QuoteRequest::query()->lockForUpdate()->find($id);
+            if (! $quote) {
+                throw ApiException::notFound('Teklif isteği bulunamadı.');
+            }
+            if ($quote->status !== 'pending_approval') {
+                throw ApiException::conflict('Yalnızca onay bekleyen teklifler reddedilebilir.');
+            }
 
-    /** Quotable orders grouped by supplier, for the supplier-selection dialog. */
-    public function quotableGrouped()
-    {
-        $grouped = [];
+            $quote->deleteAs($request->user()->getKey());
+        });
 
-        foreach (PurchaseOrder::query()->with('items')->whereIn('status', self::QUOTABLE)->get() as $po) {
-            $grouped[$po->supplier_id][] = [
-                'id' => $po->id,
-                'code' => $po->code,
-                'supplierId' => $po->supplier_id,
-                'status' => $po->status,
-                'itemCount' => $po->items->count(),
-                'total' => PurchaseOrderService::total($po),
-                'expectedAt' => Present::date($po->expected_at),
-            ];
-        }
-
-        return response()->json((object) $grouped);
+        return response()->json(['deleted' => true]);
     }
 
     /**
@@ -254,7 +238,7 @@ class QuoteRequestController extends Controller
             ->with(['items', 'supplier', 'createdByUser'])
             ->when($supplierId, fn ($q, $id) => $q->where('supplier_id', $id))
             ->get()
-            ->filter(fn ($q) => TextTools::matches([$q->code, $q->supplier->name ?? null], $search))
+            ->filter(fn ($q) => TextTools::matches([$q->code, $q->supplier->name ?? $q->adhoc_supplier_name ?? null], $search))
             ->map(fn ($q) => $this->toRow($q) + ['type' => 'quote']);
 
         $invoices = PurchaseOrder::query()

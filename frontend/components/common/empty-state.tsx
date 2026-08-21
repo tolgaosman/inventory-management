@@ -9,18 +9,21 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  className,
 }: {
   icon?: LucideIcon;
   title: string;
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  className?: string;
 }) {
   return (
     <StatePanel
       icon={Icon}
       title={title}
       description={description}
+      className={className}
       action={
         actionLabel && onAction ? (
           <Button size="sm" onClick={onAction}>

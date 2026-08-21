@@ -25,7 +25,12 @@ import { useAuth } from "@/lib/auth";
 import { createStockIn, createStockOut } from "@/lib/api/movements";
 import { getProduct } from "@/lib/api/products";
 import { getProductStockMatrix } from "@/lib/api/warehouses";
-import { getPendingReceiptOrders, receivePurchaseOrder, type PendingReceiptOrder } from "@/lib/api/purchase-orders";
+import {
+  getPendingReceiptOrders,
+  receivePurchaseOrder,
+  uploadPurchaseOrderInvoice,
+  type PendingReceiptOrder,
+} from "@/lib/api/purchase-orders";
 import { ApiError } from "@/lib/api/client";
 import { MOVEMENT_REASON_LABELS } from "@/lib/constants";
 import { formatNumber } from "@/lib/format";
@@ -81,6 +86,7 @@ export function StockEntryForm({
   const [linkToPurchase, setLinkToPurchase] = useState(false);
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [receivedQty, setReceivedQty] = useState<Partial<Record<PendingLineKey, number>>>({});
+  const [uploadingInvoiceForId, setUploadingInvoiceForId] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const deepLinkOrderId = mode === "giris" ? searchParams.get("purchaseOrderId") : null;
@@ -122,10 +128,25 @@ export function StockEntryForm({
   // Depo, siparişin kendi teslimat deposundan (PurchaseOrder.warehouseId)
   // geldiği için bu modda ayrıca seçtirilmiyor — bekleyen tüm siparişler,
   // hangi depoya gideceği kartta gösterilerek tek listede sunulur.
-  const { data: pendingOrders } = useAsync(
+  const { data: pendingOrders, refetch: refetchPendingOrders } = useAsync(
     () => (mode === "giris" && linkToPurchase ? getPendingReceiptOrders() : Promise.resolve<PendingReceiptOrder[]>([])),
     [mode, linkToPurchase],
   );
+
+  async function handleInvoiceUpload(order: PendingReceiptOrder, file: File) {
+    setUploadingInvoiceForId(order.id);
+    try {
+      await uploadPurchaseOrderInvoice(order.id, file);
+      toast.success("Fatura yüklendi.", { description: order.code });
+      refetchPendingOrders();
+    } catch (err) {
+      toast.error("Fatura yüklenemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    } finally {
+      setUploadingInvoiceForId(null);
+    }
+  }
 
   // Bildirim zilindeki "Satın Alınanlar" sekmesinden gelen derin bağlantı:
   // ?purchaseOrderId=... geldiğinde checkbox'ı otomatik işaretle, siparişi
@@ -359,15 +380,9 @@ export function StockEntryForm({
                     const percent = receivePercent(order.receivedTotal, order.orderedTotal);
                     return (
                       <div key={order.id} className="rounded-lg border border-border/60 p-3 space-y-2">
-                        <label
-                          className={cn(
-                            "flex items-start gap-2.5",
-                            order.hasInvoice ? "cursor-pointer" : "cursor-not-allowed opacity-70",
-                          )}
-                        >
+                        <label className="flex items-start gap-2.5 cursor-pointer">
                           <Checkbox
                             checked={checked}
-                            disabled={!order.hasInvoice}
                             onCheckedChange={(c) => toggleOrder(order, Boolean(c))}
                           />
                           <div className="min-w-0 flex-1 space-y-1.5">
@@ -390,13 +405,33 @@ export function StockEntryForm({
                                 %{percent} teslim alındı
                               </span>
                             </div>
-                            {!order.hasInvoice && (
-                              <p className="text-xs font-medium text-destructive">
-                                Bu siparişe henüz fatura yüklenmemiş — teslim almadan önce Satın Alma sayfasından fatura yükleyin.
-                              </p>
-                            )}
                           </div>
                         </label>
+                        <div className="pl-6">
+                          {order.hasInvoice ? (
+                            <p className="text-[11px] text-muted-foreground">Fatura yüklendi.</p>
+                          ) : (
+                            <label
+                              className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span className="shrink-0">
+                                {uploadingInvoiceForId === order.id ? "Fatura yükleniyor…" : "Fatura yükle (opsiyonel):"}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/*,application/pdf"
+                                disabled={uploadingInvoiceForId === order.id}
+                                className="min-w-0 flex-1 text-[11px] file:mr-2 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-[11px]"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) void handleInvoiceUpload(order, file);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
                         {checked && (
                           <div className="space-y-2 pl-6">
                             {order.items.map((item) => (

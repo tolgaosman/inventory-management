@@ -7,7 +7,7 @@ import { CURRENCY_SYMBOLS } from "./export/report-data";
 // kuruş görünürlüğü) into them without threading props everywhere.
 const config: { timeZone?: string; tryDecimals: boolean } = { timeZone: undefined, tryDecimals: false };
 
-let trDate = buildDateFormatter({ day: "2-digit", month: "long" });
+let trDate = buildDateFormatter({ day: "2-digit", month: "2-digit", year: "numeric" });
 let trDateShort = buildDateFormatter({ day: "2-digit", month: "2-digit", year: "numeric" });
 let trDateTime = buildDateFormatter({
   day: "2-digit",
@@ -18,7 +18,7 @@ let trDateTime = buildDateFormatter({
 });
 
 function buildDateFormatter(opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat("tr-TR", { ...opts, timeZone: config.timeZone });
+  return new Intl.DateTimeFormat("en-US", { ...opts, timeZone: config.timeZone });
 }
 
 /**
@@ -29,7 +29,7 @@ function buildDateFormatter(opts: Intl.DateTimeFormatOptions): Intl.DateTimeForm
 export function configureFormatting(opts: { timeZone?: string; tryDecimals?: boolean }): void {
   if ("timeZone" in opts) config.timeZone = opts.timeZone;
   if (opts.tryDecimals !== undefined) config.tryDecimals = opts.tryDecimals;
-  trDate = buildDateFormatter({ day: "2-digit", month: "long" });
+  trDate = buildDateFormatter({ day: "2-digit", month: "2-digit", year: "numeric" });
   trDateShort = buildDateFormatter({ day: "2-digit", month: "2-digit", year: "numeric" });
   trDateTime = buildDateFormatter({
     day: "2-digit",

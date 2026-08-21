@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubmitButton } from "@/components/common/submit-button";
 import { EmptyState } from "@/components/common/empty-state";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
@@ -26,11 +27,16 @@ import type { getPurchaseOrder } from "@/lib/api/purchase-orders";
 
 type PurchaseOrderDetail = Awaited<ReturnType<typeof getPurchaseOrder>>;
 
+interface WarehouseOption {
+  id: string;
+  name: string;
+}
+
 interface PurchaseOrderReceiveSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order?: PurchaseOrderDetail;
-  warehouseName?: string;
+  warehouses: WarehouseOption[];
   /** Called after a successful receipt, to close the sheet's caller state and refetch. */
   onDone: () => void;
 }
@@ -39,12 +45,13 @@ export function PurchaseOrderReceiveSheet({
   open,
   onOpenChange,
   order,
-  warehouseName,
+  warehouses,
   onDone,
 }: PurchaseOrderReceiveSheetProps) {
   const { userId } = useAuth();
   const { pending, guard } = useSubmitGuard();
   const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [warehouseId, setWarehouseId] = useState<string>("");
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
 
   const pendingItems = (order?.items ?? []).filter((item) => item.receivedQuantity < item.quantity);
@@ -52,17 +59,18 @@ export function PurchaseOrderReceiveSheet({
   // Reset the entered quantities whenever the sheet (re)opens for an order.
   if (useChangedSince(open ? (order?.id ?? "opening") : "closed")) {
     setQuantities({});
+    setWarehouseId("");
     setInvoiceFile(null);
   }
 
-  function setQuantity(productId: string, remaining: number, raw: string) {
+  function setQuantity(itemId: string | number, remaining: number, raw: string) {
     const n = Math.max(0, Math.min(remaining, Math.floor(Number(raw) || 0)));
-    setQuantities((prev) => ({ ...prev, [productId]: n }));
+    setQuantities((prev) => ({ ...prev, [String(itemId)]: n }));
   }
 
   function receiveAll() {
     const next: Record<string, number> = {};
-    for (const item of pendingItems) next[item.productId] = item.quantity - item.receivedQuantity;
+    for (const item of pendingItems) next[String(item.id)] = item.quantity - item.receivedQuantity;
     setQuantities(next);
   }
 
@@ -71,19 +79,18 @@ export function PurchaseOrderReceiveSheet({
     if (!order) return;
     const total = Object.values(quantities).reduce((sum, n) => sum + n, 0);
     if (total <= 0) return;
+    if (!warehouseId) {
+      toast.error("Teslimat deposu seçilmelidir.");
+      return;
+    }
 
     await guard(async (idempotencyKey) => {
       try {
-        if (!order.invoiceFilePath && !invoiceFile) {
-          toast.error("Fatura eksik", { description: "Teslim alma işlemi için fatura (PDF veya resim) yüklemelisiniz." });
-          return;
-        }
-
         if (invoiceFile) {
           await uploadPurchaseOrderInvoice(order.id, invoiceFile);
         }
 
-        await receivePurchaseOrder(order.id, quantities, { userId, idempotencyKey });
+        await receivePurchaseOrder(order.id, quantities, { userId, idempotencyKey, warehouseId });
         toast.success("Teslimat kaydedildi.", {
           description: `${formatNumber(total)} adet teslim alındı, stok güncellendi.`,
         });
@@ -105,8 +112,7 @@ export function PurchaseOrderReceiveSheet({
         <SheetHeader>
           <SheetTitle>Teslim Al{order ? ` — ${order.code}` : ""}</SheetTitle>
           <SheetDescription>
-            {warehouseName ? `Teslimat deposu: ${warehouseName}. ` : ""}
-            Her kalem için şimdi teslim alınan miktarı girin; stok bu depoya işlenir.
+            Her kalem için şimdi teslim alınan miktarı girin ve teslim alınacak depoyu seçin.
           </SheetDescription>
         </SheetHeader>
 
@@ -115,6 +121,22 @@ export function PurchaseOrderReceiveSheet({
             <EmptyState icon={PackageCheck} title="Bekleyen kalem yok" description="Bu siparişin tüm kalemleri teslim alınmış." />
           ) : (
             <>
+              <div className="space-y-2 mb-4">
+                <Label htmlFor="warehouse-select">Teslim Deposu <span className="text-destructive">*</span></Label>
+                <Select value={warehouseId} onValueChange={(v) => setWarehouseId(v ?? "")}>
+                  <SelectTrigger id="warehouse-select" className="w-full">
+                    <SelectValue placeholder="Depo seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex justify-end">
                 <Button type="button" variant="outline" size="sm" onClick={receiveAll}>
                   Tümünü Teslim Al
@@ -124,27 +146,30 @@ export function PurchaseOrderReceiveSheet({
               <div className="space-y-3">
                 {pendingItems.map((item) => {
                   const remaining = item.quantity - item.receivedQuantity;
+                  const name = item.product?.name || item.productName || "İsimsiz Ürün";
+                  const unit = item.product?.unit || item.unit || "Birim";
+                  
                   return (
-                    <div key={item.productId} className="rounded-lg border border-border/60 p-3">
+                    <div key={item.id} className="rounded-lg border border-border/60 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-foreground">{item.product.name}</p>
+                          <p className="truncate text-sm font-medium text-foreground">{name}</p>
                           <p className="text-xs text-muted-foreground">
                             Sipariş: {formatNumber(item.quantity)} · Önceden teslim alınan: {formatNumber(item.receivedQuantity)} ·
-                            Kalan: {formatNumber(remaining)} {item.product.unit}
+                            Kalan: {formatNumber(remaining)} {unit}
                           </p>
                         </div>
                         <div className="w-24 shrink-0 space-y-1">
-                          <Label htmlFor={`recv-${item.productId}`} className="sr-only">
+                          <Label htmlFor={`recv-${item.id}`} className="sr-only">
                             Şimdi teslim al
                           </Label>
                           <Input
-                            id={`recv-${item.productId}`}
+                            id={`recv-${item.id}`}
                             type="number"
                             min={0}
                             max={remaining}
-                            value={quantities[item.productId] ?? 0}
-                            onChange={(e) => setQuantity(item.productId, remaining, e.target.value)}
+                            value={quantities[item.id] ?? 0}
+                            onChange={(e) => setQuantity(item.id, remaining, e.target.value)}
                           />
                         </div>
                       </div>
@@ -159,29 +184,20 @@ export function PurchaseOrderReceiveSheet({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="invoice-file" className="font-semibold">Fatura Belgesi (Zorunlu) {order?.invoiceFilePath ? "- Yüklendi" : ""}</Label>
-                {!order?.invoiceFilePath && (
-                  <Input
-                    id="invoice-file"
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
-                    required
-                  />
-                )}
+                <Label htmlFor="invoice-file" className="font-semibold">
+                  Fatura Belgesi (İsteğe bağlı) {order?.invoiceFilePath ? "- Yüklendi" : ""}
+                </Label>
                 {order?.invoiceFilePath && (
                   <div className="text-sm text-muted-foreground">
-                    Bu siparişe daha önce bir fatura yüklenmiş. Yeni bir fatura yüklemek isterseniz aşağıdan seçebilirsiniz (İsteğe bağlı).
+                    Bu siparişe daha önce bir fatura yüklenmiş. Yeni bir fatura yüklemek isterseniz aşağıdan seçebilirsiniz.
                   </div>
                 )}
-                {order?.invoiceFilePath && (
-                  <Input
-                    id="invoice-file-optional"
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
-                  />
-                )}
+                <Input
+                  id="invoice-file"
+                  type="file"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+                />
               </div>
             </>
           )}

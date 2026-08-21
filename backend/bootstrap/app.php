@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\ApiException;
+use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsurePermission;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -26,6 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
         $middleware->alias([
             'perm' => EnsurePermission::class,
+            'admin' => EnsureAdmin::class,
         ]);
         // Needed so request->secure()/URL::forceScheme() read the real scheme
         // from X-Forwarded-Proto when the app sits behind a reverse proxy/LB.

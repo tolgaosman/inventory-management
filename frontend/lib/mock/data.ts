@@ -68,21 +68,21 @@ export const leafCategories = categories.filter((c) =>
 // Near East Technology - Tedarikçiler
 // ---------------------------------------------------------------------------
 export const suppliers: Supplier[] = [
-  { id: "sup-1", name: "Cisco Systems Türkiye", contactName: "Ahmet Yılmaz", email: "ahmet@cisco.com", phone: "0533 111 22 33", city: "İstanbul" },
-  { id: "sup-2", name: "Dell Technologies Enterprise", contactName: "Deniz Kaya", email: "deniz@dell.com", phone: "0542 222 33 44", city: "Lefkoşa" },
-  { id: "sup-3", name: "HPE & Aruba Networks", contactName: "Selin Aydın", email: "selin@hpe.com", phone: "0555 333 44 55", city: "Ankara" },
-  { id: "sup-4", name: "Lenovo Enterprise Solutions", contactName: "Murat Demir", email: "murat@lenovo.com", phone: "0532 444 55 66", city: "İstanbul" },
-  { id: "sup-5", name: "Microsoft Türkiye Lisanslama", contactName: "Ece Şahin", email: "ece@microsoft.com", phone: "0533 555 66 77", city: "İstanbul" },
-  { id: "sup-6", name: "Fortinet Cyprus Distribution", contactName: "Kerem Öz", email: "kerem@fortinet.com", phone: "0541 666 77 88", city: "Lefkoşa" },
-  { id: "sup-7", name: "Palo Alto Networks", contactName: "İrem Çelik", email: "irem@paloaltonetworks.com", phone: "0552 777 88 99", city: "Girne" },
-  { id: "sup-8", name: "NetApp Storage Solutions", contactName: "Baran Koç", email: "baran@netapp.com", phone: "0534 888 99 00", city: "Lefkoşa" },
-  { id: "sup-9", name: "Schneider Electric (APC)", contactName: "Zeynep Arslan", email: "zeynep@se.com", phone: "0536 999 00 11", city: "Bursa" },
-  { id: "sup-10", name: "Yakın Doğu IT Dağıtım", contactName: "Onur Polat", email: "onur@sirket.com", phone: "0538 000 11 22", city: "Lefkoşa" },
-  { id: "sup-11", name: "Juniper Networks Distribution", contactName: "Hakan Er", email: "hakan@juniper.com", phone: "0532 101 22 33", city: "Ankara" },
-  { id: "sup-12", name: "MikroTik Bölge Distribütörü", contactName: "Pınar Uçar", email: "pinar@mikrotik.com", phone: "0543 202 33 44", city: "İzmir" },
-  { id: "sup-13", name: "Synology Türkiye", contactName: "Burak Toprak", email: "burak@synology.com", phone: "0535 303 44 55", city: "İstanbul" },
-  { id: "sup-14", name: "Hikvision Cyprus", contactName: "Melis Kaan", email: "melis@hikvision.com", phone: "0544 404 55 66", city: "Girne" },
-  { id: "sup-15", name: "Apple Enterprise Reseller", contactName: "Tarkan Sezer", email: "tarkan@applereseller.com", phone: "0533 505 66 77", city: "İstanbul" },
+  { id: "sup-1", name: "Cisco Systems Türkiye", contactName: "Ahmet Yılmaz", emails: ["ahmet@cisco.com", "satinalma@cisco.com", "info@cisco.com"], phone: "0533 111 22 33", city: "İstanbul" },
+  { id: "sup-2", name: "Dell Technologies Enterprise", contactName: "Deniz Kaya", emails: ["deniz@dell.com", "satinalma@dell.com", "info@dell.com"], phone: "0542 222 33 44", city: "Lefkoşa" },
+  { id: "sup-3", name: "HPE & Aruba Networks", contactName: "Selin Aydın", emails: ["selin@hpe.com", "satinalma@hpe.com", "info@hpe.com"], phone: "0555 333 44 55", city: "Ankara" },
+  { id: "sup-4", name: "Lenovo Enterprise Solutions", contactName: "Murat Demir", emails: ["murat@lenovo.com", "satinalma@lenovo.com", "info@lenovo.com"], phone: "0532 444 55 66", city: "İstanbul" },
+  { id: "sup-5", name: "Microsoft Türkiye Lisanslama", contactName: "Ece Şahin", emails: ["ece@microsoft.com", "satinalma@microsoft.com", "info@microsoft.com"], phone: "0533 555 66 77", city: "İstanbul" },
+  { id: "sup-6", name: "Fortinet Cyprus Distribution", contactName: "Kerem Öz", emails: ["kerem@fortinet.com", "satinalma@fortinet.com", "info@fortinet.com"], phone: "0541 666 77 88", city: "Lefkoşa" },
+  { id: "sup-7", name: "Palo Alto Networks", contactName: "İrem Çelik", emails: ["irem@paloaltonetworks.com", "satinalma@paloaltonetworks.com", "info@paloaltonetworks.com"], phone: "0552 777 88 99", city: "Girne" },
+  { id: "sup-8", name: "NetApp Storage Solutions", contactName: "Baran Koç", emails: ["baran@netapp.com", "satinalma@netapp.com", "info@netapp.com"], phone: "0534 888 99 00", city: "Lefkoşa" },
+  { id: "sup-9", name: "Schneider Electric (APC)", contactName: "Zeynep Arslan", emails: ["zeynep@se.com", "satinalma@se.com", "info@se.com"], phone: "0536 999 00 11", city: "Bursa" },
+  { id: "sup-10", name: "Yakın Doğu IT Dağıtım", contactName: "Onur Polat", emails: ["onur@sirket.com", "satinalma@sirket.com", "info@sirket.com"], phone: "0538 000 11 22", city: "Lefkoşa" },
+  { id: "sup-11", name: "Juniper Networks Distribution", contactName: "Hakan Er", emails: ["hakan@juniper.com", "satinalma@juniper.com", "info@juniper.com"], phone: "0532 101 22 33", city: "Ankara" },
+  { id: "sup-12", name: "MikroTik Bölge Distribütörü", contactName: "Pınar Uçar", emails: ["pinar@mikrotik.com", "satinalma@mikrotik.com", "info@mikrotik.com"], phone: "0543 202 33 44", city: "İzmir" },
+  { id: "sup-13", name: "Synology Türkiye", contactName: "Burak Toprak", emails: ["burak@synology.com", "satinalma@synology.com", "info@synology.com"], phone: "0535 303 44 55", city: "İstanbul" },
+  { id: "sup-14", name: "Hikvision Cyprus", contactName: "Melis Kaan", emails: ["melis@hikvision.com", "satinalma@hikvision.com", "info@hikvision.com"], phone: "0544 404 55 66", city: "Girne" },
+  { id: "sup-15", name: "Apple Enterprise Reseller", contactName: "Tarkan Sezer", emails: ["tarkan@applereseller.com", "satinalma@applereseller.com", "info@applereseller.com"], phone: "0533 505 66 77", city: "İstanbul" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -228,8 +228,6 @@ function buildProducts(): Product[] {
       for (const baseName of names) {
         const brand = pick(rand, brands);
         const purchasePrice = int(rand, minP, maxP);
-        const margin = 1.18 + rand() * 0.25;
-        const salePrice = Math.round(purchasePrice * margin);
         const minStock = int(rand, 3, 12);
         const maxStock = minStock + int(rand, 15, 60);
         const supplierId = pick(rand, suppliers).id;
@@ -248,7 +246,7 @@ function buildProducts(): Product[] {
           brand,
           unit,
           purchasePrice,
-          salePrice,
+          salePrice: Math.round(purchasePrice * (1.15 + rand() * 0.45) * 100) / 100,
           minStock,
           maxStock,
           status: rand() > 0.05 ? "aktif" : "pasif",
@@ -391,15 +389,16 @@ function buildPurchaseOrders(): PurchaseOrder[] {
   for (let n = 1; n <= 80; n++) {
     const supplier = pick(rand, suppliers);
     const itemCount = int(rand, 1, 4);
-    const items = Array.from({ length: itemCount }, () => {
+    const items = Array.from({ length: itemCount }, (_, i) => {
       const product = pick(rand, products.filter((p) => p.supplierId === supplier.id));
       const fallback = pick(rand, products);
       const chosen = product ?? fallback;
       const quantity = int(rand, 2, 25);
       return {
+        id: i + 1,
         productId: chosen.id,
         quantity,
-        unitPrice: chosen.purchasePrice,
+        unitPrice: chosen.purchasePrice ?? 0,
         receivedQuantity: 0,
       };
     });

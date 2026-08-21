@@ -29,7 +29,7 @@ class SupplierController extends Controller
         $search = $request->query('search');
         $rows = array_values(array_filter(
             $rows,
-            fn ($s) => TextTools::matches([$s['name'], $s['contactName'], $s['email'], $s['city']], $search)
+            fn ($s) => TextTools::matches([$s['name'], $s['contactName'], ...$s['emails'], $s['city']], $search)
         ));
 
         $page = (int) $request->query('page', 1);
@@ -59,9 +59,7 @@ class SupplierController extends Controller
         if (trim($data['contactName']) === '') {
             throw ApiException::validation('Yetkili adı gereklidir.');
         }
-        if (! str_contains(trim($data['email']), '@')) {
-            throw ApiException::validation('Geçerli bir e-posta gereklidir.');
-        }
+        $this->cleanEmails($data['emails'] ?? []);
         if (trim($data['phone']) === '') {
             throw ApiException::validation('Telefon gereklidir.');
         }
@@ -70,12 +68,29 @@ class SupplierController extends Controller
         }
     }
 
+    /** Trims/dedupes the incoming list and enforces the 3-email minimum. */
+    private function cleanEmails(array $emails): array
+    {
+        $emails = array_values(array_unique(array_filter(array_map('trim', $emails), fn ($e) => $e !== '')));
+        if (count($emails) < 3) {
+            throw ApiException::validation('En az 3 e-posta adresi gereklidir.');
+        }
+        foreach ($emails as $email) {
+            if (! str_contains($email, '@')) {
+                throw ApiException::validation('Geçerli e-posta adresleri gereklidir.');
+            }
+        }
+
+        return $emails;
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
             'name' => ['required', 'string'],
             'contactName' => ['required', 'string'],
-            'email' => ['required', 'string'],
+            'emails' => ['required', 'array'],
+            'emails.*' => ['string'],
             'phone' => ['required', 'string'],
             'city' => ['required', 'string'],
         ]);
@@ -86,7 +101,7 @@ class SupplierController extends Controller
             'id' => IdGenerator::nextId('suppliers', 'id', 'sup'),
             'name' => trim($data['name']),
             'contact_name' => trim($data['contactName']),
-            'email' => trim($data['email']),
+            'emails' => $this->cleanEmails($data['emails']),
             'phone' => trim($data['phone']),
             'city' => trim($data['city']),
         ]));
@@ -99,7 +114,8 @@ class SupplierController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string'],
             'contactName' => ['sometimes', 'string'],
-            'email' => ['sometimes', 'string'],
+            'emails' => ['sometimes', 'array'],
+            'emails.*' => ['string'],
             'phone' => ['sometimes', 'string'],
             'city' => ['sometimes', 'string'],
         ]);
@@ -110,10 +126,13 @@ class SupplierController extends Controller
                 throw ApiException::notFound('Tedarikçi bulunamadı.');
             }
 
+            if (array_key_exists('emails', $data)) {
+                $supplier->emails = $this->cleanEmails($data['emails']);
+            }
+
             $columns = [
                 'name' => 'name',
                 'contactName' => 'contact_name',
-                'email' => 'email',
                 'phone' => 'phone',
                 'city' => 'city',
             ];

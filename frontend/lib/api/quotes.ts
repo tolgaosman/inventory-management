@@ -1,18 +1,20 @@
-// Teklif İstekleri (RFQ) — bundles one or more of a supplier's not-yet-sent
-// purchase orders into a single quote-request document. Mirrors the shape and
-// conventions of lib/api/purchase-orders.ts.
-import type { PagedQuery, PagedResult, Product, QuoteCurrency, QuoteRequest, Supplier } from "@/lib/types";
+// Teklif İstekleri (RFQ) — a quote request sent to a supplier (existing or a
+// brand-new one, name-only) for a hand-picked list of items. Independent of
+// purchase orders. Mirrors the shape and conventions of lib/api/purchase-orders.ts.
+import type { PagedQuery, PagedResult, QuoteCurrency, QuoteRequest, QuoteRequestStatus, Supplier } from "@/lib/types";
 import { apiFetch } from "./client";
 
 export type QuoteRequestRow = QuoteRequest & {
   supplierName: string;
-  orderCount: number;
   itemCount: number;
   total: number;
 };
 
 export type QuoteRequestQuery = PagedQuery & {
   supplierId?: string;
+  status?: QuoteRequestStatus;
+  excludeStatus?: QuoteRequestStatus;
+  createdBy?: string;
 };
 
 export async function listQuoteRequests(
@@ -21,6 +23,9 @@ export async function listQuoteRequests(
   return apiFetch<PagedResult<QuoteRequestRow>>("/quote-requests", {
     query: {
       supplierId: query.supplierId,
+      status: query.status,
+      excludeStatus: query.excludeStatus,
+      created_by: query.createdBy,
       search: query.search,
       page: query.page,
       pageSize: query.pageSize,
@@ -29,22 +34,28 @@ export async function listQuoteRequests(
 }
 
 export type QuoteRequestDetail = QuoteRequestRow & {
-  supplier: Supplier;
-  orders: {
-    id: string;
-    code: string;
-    expectedAt: string;
-    warehouseName: string;
-    items: { productId: string; quantity: number; unitPrice: number; product: Product }[];
-  }[];
+  supplier: Supplier | null;
 };
 
 export async function getQuoteRequest(id: string): Promise<QuoteRequestDetail> {
   return apiFetch<QuoteRequestDetail>(`/quote-requests/${id}`);
 }
 
+/** One requested line — an existing catalog product, or an ad-hoc product name + unit typed in by hand. */
+export interface QuoteItemInput {
+  productId?: string;
+  productName?: string;
+  unit?: string;
+  quantity: number;
+}
+
 export interface CreateQuoteRequestInput {
-  purchaseOrderIds: string[];
+  /** Exactly one of `supplierId` / `adhocSupplierName` must be set. */
+  supplierId?: string;
+  adhocSupplierName?: string;
+  /** Required alongside `adhocSupplierName`. */
+  adhocSupplierEmail?: string;
+  items: QuoteItemInput[];
   validUntil: string;
   deliveryDate: string;
   deliveryAddress: string;
@@ -77,21 +88,6 @@ export async function deleteQuoteRequest(id: string): Promise<boolean> {
 
 export async function restoreQuoteRequest(id: string): Promise<void> {
   await apiFetch<void>(`/quote-requests/${id}/restore`, { method: "POST" });
-}
-
-/** For the supplier-selection dialog: quotable (draft or pending-approval) orders grouped by supplier, with totals for display. */
-export interface DraftOrderOption {
-  id: string;
-  code: string;
-  supplierId: string;
-  status: "draft" | "pending_approval";
-  itemCount: number;
-  total: number;
-  expectedAt: string;
-}
-
-export async function listDraftOrdersBySupplier(): Promise<Record<string, DraftOrderOption[]>> {
-  return apiFetch<Record<string, DraftOrderOption[]>>("/purchase-orders/quotable-grouped");
 }
 
 export type QuoteOrInvoiceRow =

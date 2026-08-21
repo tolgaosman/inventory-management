@@ -18,7 +18,7 @@ public $incrementing = false;
     public $timestamps = false;
 
     protected $fillable = [
-        'id', 'code', 'supplier_id', 'created_at', 'created_by',
+        'id', 'code', 'supplier_id', 'adhoc_supplier_name', 'adhoc_supplier_email', 'created_at', 'created_by',
         'valid_until', 'delivery_date', 'delivery_address', 'payment_terms',
         'requested_currency', 'contact_name', 'contact_email', 'contact_phone', 'notes',
         'status', 'approved_by', 'approved_at',

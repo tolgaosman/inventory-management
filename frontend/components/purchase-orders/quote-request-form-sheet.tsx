@@ -13,16 +13,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubmitButton } from "@/components/common/submit-button";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
-import { useAsync } from "@/lib/hooks/use-async";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings-context";
 import { useCurrency, type CurrencyCode } from "@/lib/currency-context";
 import { CURRENCY_SYMBOLS } from "@/lib/export/report-data";
-import { getPurchaseOrder } from "@/lib/api/purchase-orders";
-import { createQuoteRequest } from "@/lib/api/quotes";
+import { createQuoteRequest, type QuoteItemInput } from "@/lib/api/quotes";
 
 import { ApiError } from "@/lib/api/client";
-import type { Supplier } from "@/lib/types";
 
 const CURRENCIES = ["try", "usd", "eur", "gbp"] as const;
 
@@ -50,37 +47,36 @@ function addDays(days: number): string {
 interface QuoteRequestFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  supplier?: Supplier;
-  purchaseOrderIds: string[];
+  supplierName?: string;
+  supplierId?: string;
+  adhocSupplierName?: string;
+  adhocSupplierEmail?: string;
+  items: QuoteItemInput[];
   onCreated: () => void;
 }
 
 export function QuoteRequestFormSheet({
   open,
   onOpenChange,
-  supplier,
-  purchaseOrderIds,
+  supplierName,
+  supplierId,
+  adhocSupplierName,
+  adhocSupplierEmail,
+  items,
   onCreated,
 }: QuoteRequestFormSheetProps) {
   const { pending, guard } = useSubmitGuard();
-  const { name } = useAuth();
+  const { name, can } = useAuth();
   const { company, userProfile } = useSettings();
   const { currency } = useCurrency();
 
-  const { data: orders } = useAsync(
-    () => Promise.all(purchaseOrderIds.map((id) => getPurchaseOrder(id))),
-    [open, purchaseOrderIds.join(",")],
+  const summary = useMemo(
+    () => ({
+      itemCount: items.length,
+      qtyCount: items.reduce((sum, i) => sum + i.quantity, 0),
+    }),
+    [items],
   );
-
-  const summary = useMemo(() => {
-    const rows = orders ?? [];
-    return {
-      codes: rows.map((r) => r.code),
-      itemCount: rows.reduce((sum, r) => sum + r.items.length, 0),
-      qtyCount: rows.reduce((sum, r) => sum + r.items.reduce((s, i) => s + i.quantity, 0), 0),
-      latestExpected: rows.reduce((max, r) => (r.expectedAt > max ? r.expectedAt : max), rows[0]?.expectedAt ?? ""),
-    };
-  }, [orders]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -101,7 +97,7 @@ export function QuoteRequestFormSheet({
     if (!open) return;
     form.reset({
       validUntil: addDays(14),
-      deliveryDate: summary.latestExpected ? summary.latestExpected.slice(0, 10) : "",
+      deliveryDate: "",
       deliveryAddress: `${company.address}`,
       paymentTerms: "30 gün vadeli",
       requestedCurrency: currency as CurrencyCode,
@@ -111,13 +107,16 @@ export function QuoteRequestFormSheet({
       notes: "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, summary.latestExpected]);
+  }, [open]);
 
   async function onSubmit(values: FormValues) {
     await guard(async () => {
       try {
-        const created = await createQuoteRequest({
-          purchaseOrderIds,
+        await createQuoteRequest({
+          supplierId,
+          adhocSupplierName,
+          adhocSupplierEmail,
+          items,
           validUntil: new Date(values.validUntil).toISOString(),
           deliveryDate: new Date(values.deliveryDate).toISOString(),
           deliveryAddress: values.deliveryAddress,
@@ -129,7 +128,7 @@ export function QuoteRequestFormSheet({
           notes: values.notes,
           createdBy: name,
         });
-        toast.success("Teklif formu başarıyla oluşturuldu.");
+        toast.success(can("purchase.approve") ? "Teklif formu başarıyla oluşturuldu." : "Teklif formu onaya gönderildi.");
         onOpenChange(false);
         onCreated();
       } catch (err) {
@@ -140,13 +139,15 @@ export function QuoteRequestFormSheet({
     });
   }
 
+  const today = new Date().toISOString().split("T")[0];
+
   return (
     <Form {...form}>
       <SteppedFormDialog
         open={open}
         onOpenChange={onOpenChange}
         title="Teklif İstek Formu"
-        description={supplier ? `${supplier.name} için teklif isteği hazırlayın.` : "Teklif isteği detaylarını girin."}
+        description={supplierName ? `${supplierName} için teklif isteği hazırlayın.` : "Teklif isteği detaylarını girin."}
         submitLabel="Teklif Formu Oluştur"
         isSubmitting={pending}
         onSubmit={form.handleSubmit(onSubmit)}
@@ -157,11 +158,11 @@ export function QuoteRequestFormSheet({
             onValidate: () => form.trigger(["validUntil", "deliveryDate", "deliveryAddress", "paymentTerms", "requestedCurrency"]),
             content: (
               <div className="space-y-4">
-                {summary.codes.length > 0 && (
+                {summary.itemCount > 0 && (
                   <div className="mb-4 rounded-lg bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground border border-border/50">
-                    <span className="font-medium text-foreground">{summary.codes.join(", ")}</span>
+                    <span className="font-medium text-foreground">{summary.itemCount} kalem</span>
                     {" · "}
-                    {summary.itemCount} kalem · {summary.qtyCount} adet
+                    {summary.qtyCount} adet
                   </div>
                 )}
                 
@@ -173,7 +174,7 @@ export function QuoteRequestFormSheet({
                       <FormItem>
                         <FormLabel>Teklif Geçerlilik Tarihi</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" min={today} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -186,7 +187,7 @@ export function QuoteRequestFormSheet({
                       <FormItem>
                         <FormLabel>İstenen Teslim Tarihi</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input type="date" min={today} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   Users,
@@ -59,6 +60,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/common/empty-state";
 import { createAppUser, deleteAppUser, listAppUsers, updateAppUser } from "@/lib/api/users";
+import { listRoles } from "@/lib/api/roles";
 import { ApiError } from "@/lib/api/client";
 import { useAsync } from "@/lib/hooks/use-async";
 import { useAuth } from "@/lib/auth";
@@ -67,21 +69,23 @@ import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AppUser, Role } from "@/lib/types";
 
-const ROLE_STYLE: Record<Role, { bg: string; text: string; icon: React.ElementType }> = {
+const ROLE_STYLE: Partial<Record<Role, { bg: string; text: string; icon: React.ElementType }>> = {
   admin: { bg: "bg-tint-plum/15", text: "text-tint-plum", icon: ShieldCheck },
   depo_yonetici: { bg: "bg-tint-blue/15", text: "text-tint-blue", icon: ShieldCheck },
   satinalma_yonetici: { bg: "bg-tint-blue/15", text: "text-tint-blue", icon: ShieldCheck },
   depo: { bg: "bg-tint-teal/15", text: "text-tint-teal", icon: Warehouse },
   satinalma: { bg: "bg-tint-amber/15", text: "text-tint-amber", icon: ShoppingCart },
 };
+/** Any role outside the 5 built-ins (a custom role created on the Roller page) gets this. */
+const ROLE_STYLE_DEFAULT = { bg: "bg-muted", text: "text-muted-foreground", icon: ShieldCheck };
 
-function RoleBadge({ role }: { role: Role }) {
-  const style = ROLE_STYLE[role];
+function RoleBadge({ role, label }: { role: Role; label: string }) {
+  const style = ROLE_STYLE[role] ?? ROLE_STYLE_DEFAULT;
   const Icon = style.icon;
   return (
     <Badge variant="outline" className={cn("gap-1 border-0 font-semibold text-xs", style.bg, style.text)}>
       <Icon className="size-3" />
-      {ROLE_LABELS[role]}
+      {label}
     </Badge>
   );
 }
@@ -92,13 +96,21 @@ export function UsersClient() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const { data, staleData, status, refetch } = useAsync(() => listAppUsers(), []);
   const userList = data ?? staleData ?? [];
+
+  // Only admin can see/assign custom roles — see backend/app/Http/Middleware/EnsureAdmin.php.
+  const { data: rolesData } = useAsync(
+    () => (currentUserRole === "admin" ? listRoles() : Promise.resolve([])),
+    [currentUserRole],
+  );
+  const roles = rolesData ?? [];
+  const roleLabel = (role: Role) => roles.find((r) => r.id === role)?.name ?? ROLE_LABELS[role] ?? role;
   const [saving, setSaving] = useState(false);
   const [sortByRole, setSortByRole] = useState(false);
 
   // Form dialog state
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AppUser | undefined>(undefined);
-  const [formValues, setFormValues] = useState({ name: "", email: "", role: "depo" as Role });
+  const [formValues, setFormValues] = useState({ name: "", email: "", phone: "", role: "depo" as Role });
 
   // Delete dialog state
   const [deleting, setDeleting] = useState<AppUser | undefined>(undefined);
@@ -131,13 +143,13 @@ export function UsersClient() {
 
   function openCreate() {
     setEditing(undefined);
-    setFormValues({ name: "", email: "", role: currentUserRole === "satinalma_yonetici" ? "satinalma" : "depo" });
+    setFormValues({ name: "", email: "", phone: "", role: currentUserRole === "satinalma_yonetici" ? "satinalma" : "depo" });
     setFormOpen(true);
   }
 
   function openEdit(user: AppUser) {
     setEditing(user);
-    setFormValues({ name: user.name, email: user.email, role: user.role });
+    setFormValues({ name: user.name, email: user.email, phone: user.phone ?? "", role: user.role });
     setFormOpen(true);
   }
 
@@ -150,6 +162,7 @@ export function UsersClient() {
     const payload = {
       name: formValues.name.trim(),
       email: formValues.email.trim(),
+      phone: formValues.phone.trim() || null,
       role: formValues.role,
     };
 
@@ -187,7 +200,7 @@ export function UsersClient() {
     const newRole = user.role === "depo" ? "depo_yonetici" : "satinalma_yonetici";
     try {
       await updateAppUser(user.id, { role: newRole });
-      toast.success("Kullanıcı terfi ettirildi.", { description: `${user.name} artık ${ROLE_LABELS[newRole]}.` });
+      toast.success("Kullanıcı terfi ettirildi.", { description: `${user.name} artık ${roleLabel(newRole)}.` });
       refetch();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Kullanıcı güncellenemedi.");
@@ -198,7 +211,7 @@ export function UsersClient() {
     const newRole = user.role === "depo_yonetici" ? "depo" : "satinalma";
     try {
       await updateAppUser(user.id, { role: newRole });
-      toast.success("Kullanıcı yetkisi alındı.", { description: `${user.name} artık ${ROLE_LABELS[newRole]}.` });
+      toast.success("Kullanıcı yetkisi alındı.", { description: `${user.name} artık ${roleLabel(newRole)}.` });
       refetch();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : "Kullanıcı güncellenemedi.");
@@ -209,13 +222,15 @@ export function UsersClient() {
 
   const roleOptions = useMemo(() => {
     if (currentUserRole === "admin") {
-      return [
-        { label: "Admin", value: "admin" },
-        { label: "Depo Müdürü", value: "depo_yonetici" },
-        { label: "Satın Alma Müdürü", value: "satinalma_yonetici" },
-        { label: "Depo Personeli", value: "depo" },
-        { label: "Satın Alma Personeli", value: "satinalma" },
-      ];
+      return roles.length > 0
+        ? roles.map((r) => ({ label: r.name, value: r.id }))
+        : [
+            { label: "Admin", value: "admin" },
+            { label: "Depo Müdürü", value: "depo_yonetici" },
+            { label: "Satın Alma Müdürü", value: "satinalma_yonetici" },
+            { label: "Depo Personeli", value: "depo" },
+            { label: "Satın Alma Personeli", value: "satinalma" },
+          ];
     }
     if (currentUserRole === "depo_yonetici") {
       return [
@@ -230,7 +245,7 @@ export function UsersClient() {
       ];
     }
     return [];
-  }, [currentUserRole]);
+  }, [currentUserRole, roles]);
 
   return (
     <Can permission="users.manage" fallback={<Forbidden />}>
@@ -349,16 +364,16 @@ export function UsersClient() {
                             <div
                               className={cn(
                                 "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                                ROLE_STYLE[user.role].bg,
-                                ROLE_STYLE[user.role].text,
+                                (ROLE_STYLE[user.role] ?? ROLE_STYLE_DEFAULT).bg,
+                                (ROLE_STYLE[user.role] ?? ROLE_STYLE_DEFAULT).text,
                               )}
                             >
                               {user.initials}
                             </div>
                             <div className="min-w-0">
-                              <span className="block truncate text-sm font-semibold text-foreground">
+                              <Link href={`/kullanicilar/${user.id}`} className="block truncate text-sm font-semibold text-foreground hover:underline hover:text-primary transition-colors">
                                 {user.name}
-                              </span>
+                              </Link>
                             </div>
                           </div>
                         </TableCell>
@@ -373,7 +388,7 @@ export function UsersClient() {
                         </TableCell>
                         <TableCell className="py-3 text-center">
                           <div className="flex justify-center">
-                            <RoleBadge role={user.role} />
+                            <RoleBadge role={user.role} label={roleLabel(user.role)} />
                           </div>
                         </TableCell>
                         <TableCell className="w-16 pr-5 py-3 text-right">
@@ -454,6 +469,16 @@ export function UsersClient() {
                   placeholder="ahmet@sirket.com"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="user-phone">Telefon Numarası</Label>
+                <Input
+                  id="user-phone"
+                  type="tel"
+                  value={formValues.phone}
+                  onChange={(e) => setFormValues((v) => ({ ...v, phone: e.target.value }))}
+                  placeholder="05XX XXX XX XX"
+                />
+              </div>
               {currentUserRole === "admin" ? (
                 <div className="space-y-2">
                   <Label htmlFor="user-role">Rol</Label>
@@ -462,39 +487,21 @@ export function UsersClient() {
                     onValueChange={(v) => setFormValues((prev) => ({ ...prev, role: v as Role }))}
                   >
                     <SelectTrigger id="user-role" className="w-full">
-                      <SelectValue>{ROLE_LABELS[formValues.role]}</SelectValue>
+                      <SelectValue>{roleLabel(formValues.role)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="admin">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="size-3.5 text-tint-plum" />
-                          Admin
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="depo_yonetici">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="size-3.5 text-tint-blue" />
-                          Depo Müdürü
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="depo">
-                        <div className="flex items-center gap-2">
-                          <Warehouse className="size-3.5 text-tint-teal" />
-                          Depo Personeli
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="satinalma_yonetici">
-                        <div className="flex items-center gap-2">
-                          <ShieldCheck className="size-3.5 text-tint-blue" />
-                          Satın Alma Müdürü
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="satinalma">
-                        <div className="flex items-center gap-2">
-                          <ShoppingCart className="size-3.5 text-tint-amber" />
-                          Satın Alma Personeli
-                        </div>
-                      </SelectItem>
+                      {roles.map((r) => {
+                        const style = ROLE_STYLE[r.id] ?? ROLE_STYLE_DEFAULT;
+                        const Icon = style.icon;
+                        return (
+                          <SelectItem key={r.id} value={r.id}>
+                            <div className="flex items-center gap-2">
+                              <Icon className={cn("size-3.5", style.text)} />
+                              {r.name}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -503,7 +510,7 @@ export function UsersClient() {
                   <Label htmlFor="user-role">Rol</Label>
                   <Select value={formValues.role} disabled>
                     <SelectTrigger id="user-role" className="w-full">
-                      <SelectValue>{ROLE_LABELS[formValues.role]}</SelectValue>
+                      <SelectValue>{roleLabel(formValues.role)}</SelectValue>
                     </SelectTrigger>
                   </Select>
                   <p className="text-[0.8rem] text-muted-foreground mt-1">Rol değiştirme işlemi sadece Admin tarafından yapılabilir.</p>

@@ -67,15 +67,20 @@ class PurchaseOrderService
         return $po;
     }
 
-    private function validateItems(array $items): void
+    private function validateItems(array $items, bool $isDraft = false): void
     {
-        if (count($items) === 0) {
+        if (count($items) === 0 && !$isDraft) {
             throw ApiException::validation('En az bir kalem eklemelisiniz.');
         }
         $productIds = Product::query()->pluck('id')->flip();
         $seen = [];
         foreach ($items as $item) {
-            if (! $productIds->has($item['productId'])) {
+            $hasProduct = ! empty($item['productId']);
+            $hasAdhoc = ! empty($item['productName']) && ! empty($item['unit']);
+            if (! $hasProduct && ! $hasAdhoc) {
+                throw ApiException::validation('Her kalem için bir ürün seçin veya ürün adı ve birim girin.');
+            }
+            if ($hasProduct && ! $productIds->has($item['productId'])) {
                 throw ApiException::validation('Seçilen ürünlerden biri bulunamadı.');
             }
             if ($item['quantity'] <= 0) {
@@ -84,19 +89,27 @@ class PurchaseOrderService
             if ($item['unitPrice'] < 0) {
                 throw ApiException::validation('Birim fiyat negatif olamaz.');
             }
-            if (isset($seen[$item['productId']])) {
-                throw ApiException::validation('Aynı ürün birden fazla kez eklenemez.');
+            if ($hasProduct) {
+                if (isset($seen[$item['productId']])) {
+                    throw ApiException::validation('Aynı ürün birden fazla kez eklenemez.');
+                }
+                $seen[$item['productId']] = true;
             }
-            $seen[$item['productId']] = true;
         }
     }
 
     private function syncItems(PurchaseOrder $po, array $items): void
     {
         $po->items()->delete();
+        $productIds = collect($items)->pluck('productId')->filter()->unique()->values();
+        $productsById = Product::query()->whereIn('id', $productIds)->get()->keyBy('id');
+
         foreach ($items as $item) {
+            $product = ! empty($item['productId']) ? $productsById->get($item['productId']) : null;
             $po->items()->create([
-                'product_id' => $item['productId'],
+                'product_id' => $product?->id,
+                'product_name' => $product?->name ?? trim($item['productName'] ?? ''),
+                'unit' => $product?->unit ?? trim($item['unit'] ?? ''),
                 'quantity' => (int) $item['quantity'],
                 'unit_price' => $item['unitPrice'],
                 'received_quantity' => 0,
@@ -106,16 +119,20 @@ class PurchaseOrderService
 
     public function create(array $input, User $user): array
     {
-        if (! Supplier::query()->whereKey($input['supplierId'])->exists()) {
+        if (! empty($input['supplierId']) && ! Supplier::query()->whereKey($input['supplierId'])->exists()) {
             throw ApiException::validation('Tedarikçi bulunamadı.');
         }
-        if (! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
+        if (empty($input['supplierId']) && empty($input['adhocSupplierName'])) {
+            throw ApiException::validation('Bir tedarikçi seçin veya adını girin.');
+        }
+        if (! empty($input['warehouseId']) && ! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
             throw ApiException::validation('Depo bulunamadı.');
         }
         if (empty($input['expectedAt'])) {
             throw ApiException::validation('Beklenen teslim tarihi gereklidir.');
         }
-        $this->validateItems($input['items']);
+        $isDraft = !empty($input['isDraft']);
+        $this->validateItems($input['items'], $isDraft);
 
         // If specifically requested as a draft, save it as a draft. Otherwise, 
         // approvers open orders as drafts they can send straight through; everyone
@@ -126,8 +143,10 @@ class PurchaseOrderService
             $po = PurchaseOrder::query()->create([
                 'id' => IdGenerator::nextId('purchase_orders', 'id', 'po', 4),
                 'code' => IdGenerator::nextCode('purchase_orders', 'code', 'NET-PO-'),
-                'supplier_id' => $input['supplierId'],
-                'warehouse_id' => $input['warehouseId'],
+                'supplier_id' => $input['supplierId'] ?? null,
+                'adhoc_supplier_name' => empty($input['supplierId']) ? ($input['adhocSupplierName'] ?? null) : null,
+                'adhoc_supplier_email' => empty($input['supplierId']) ? ($input['adhocSupplierEmail'] ?? null) : null,
+                'warehouse_id' => $input['warehouseId'] ?? null,
                 'status' => $initialStatus,
                 'priority' => $input['priority'] ?? 'medium',
                 'created_at' => Carbon::now(),
@@ -164,17 +183,25 @@ class PurchaseOrderService
                 throw ApiException::conflict('Kısmen de olsa teslim alınmış bir sipariş düzenlenemez.');
             }
 
-            if (array_key_exists('supplierId', $input)) {
-                if (! Supplier::query()->whereKey($input['supplierId'])->exists()) {
-                    throw ApiException::validation('Tedarikçi bulunamadı.');
+            if (array_key_exists('supplierId', $input) || array_key_exists('adhocSupplierName', $input)) {
+                if (! empty($input['supplierId'])) {
+                    if (! Supplier::query()->whereKey($input['supplierId'])->exists()) {
+                        throw ApiException::validation('Tedarikçi bulunamadı.');
+                    }
+                    $po->supplier_id = $input['supplierId'];
+                    $po->adhoc_supplier_name = null;
+                    $po->adhoc_supplier_email = null;
+                } else {
+                    $po->supplier_id = null;
+                    $po->adhoc_supplier_name = $input['adhocSupplierName'] ?? null;
+                    $po->adhoc_supplier_email = $input['adhocSupplierEmail'] ?? null;
                 }
-                $po->supplier_id = $input['supplierId'];
             }
             if (array_key_exists('warehouseId', $input)) {
-                if (! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
+                if (! empty($input['warehouseId']) && ! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
                     throw ApiException::validation('Depo bulunamadı.');
                 }
-                $po->warehouse_id = $input['warehouseId'];
+                $po->warehouse_id = $input['warehouseId'] ?? null;
             }
             if (array_key_exists('expectedAt', $input)) {
                 $po->expected_at = $input['expectedAt'];
@@ -279,11 +306,11 @@ class PurchaseOrderService
     }
 
     /**
-     * @param  array<string,int>  $receivedQuantities  productId => qty being received now
+     * @param  array<string,int>  $receivedQuantities  itemId => qty being received now
      */
-    public function receive(string $id, array $receivedQuantities, string $userId, ?string $idempotencyKey): array
+    public function receive(string $id, array $receivedQuantities, ?string $warehouseId, string $userId, ?string $idempotencyKey): array
     {
-        $po = DB::transaction(function () use ($id, $receivedQuantities, $userId, $idempotencyKey) {
+        $po = DB::transaction(function () use ($id, $receivedQuantities, $warehouseId, $userId, $idempotencyKey) {
             $po = $this->findOrFail($id, lock: true);
             if ($po->status === 'cancelled') {
                 throw ApiException::conflict('İptal edilmiş sipariş teslim alınamaz.');
@@ -291,12 +318,13 @@ class PurchaseOrderService
             if ($po->status === 'received') {
                 throw ApiException::conflict('Sipariş zaten tamamen teslim alınmış.');
             }
-            if (empty($po->invoice_file_path)) {
-                throw ApiException::validation('Teslim almak için fatura yüklenmesi zorunludur.');
-            }
+
+            $effectiveWarehouseId = $warehouseId ?? $po->warehouse_id;
 
             foreach ($po->items as $item) {
-                $add = $receivedQuantities[$item->product_id] ?? 0;
+                // Front-end now sends received quantities keyed by $item->id.
+                // We fallback to product_id for compatibility if needed.
+                $add = $receivedQuantities[$item->id] ?? ($receivedQuantities[$item->product_id] ?? 0);
                 if ($add <= 0) {
                     continue;
                 }
@@ -306,17 +334,22 @@ class PurchaseOrderService
                     continue;
                 }
 
-                $this->stock->stockIn([
-                    'productId' => $item->product_id,
-                    'warehouseId' => $po->warehouse_id,
-                    'quantity' => $capped,
-                    'supplierId' => $po->supplier_id,
-                    'purchaseOrderId' => $po->id,
-                    'note' => "{$po->code} teslim alındı",
-                    'userId' => $userId,
-                    // Per-line key so a replayed receive is idempotent line by line.
-                    'idempotencyKey' => $idempotencyKey ? "{$idempotencyKey}-{$item->product_id}" : null,
-                ]);
+                if ($item->product_id) {
+                    if (!$effectiveWarehouseId) {
+                        throw ApiException::validation("Stoklara eklenecek ürünler için bir depo seçilmelidir.");
+                    }
+                    $this->stock->stockIn([
+                        'productId' => $item->product_id,
+                        'warehouseId' => $effectiveWarehouseId,
+                        'quantity' => $capped,
+                        'supplierId' => $po->supplier_id,
+                        'purchaseOrderId' => $po->id,
+                        'note' => "{$po->code} teslim alındı",
+                        'userId' => $userId,
+                        // Per-line key so a replayed receive is idempotent line by line.
+                        'idempotencyKey' => $idempotencyKey ? "{$idempotencyKey}-{$item->id}" : null,
+                    ]);
+                }
 
                 $item->received_quantity = (int) $item->received_quantity + $capped;
                 $item->save();

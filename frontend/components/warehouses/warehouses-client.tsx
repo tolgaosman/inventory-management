@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
@@ -89,6 +90,8 @@ import type { Warehouse } from "@/lib/types";
 import { PAGE_SIZE } from "@/lib/constants";
 
 export function WarehousesClient() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { currency, rates } = useCurrency();
   const { showKurus } = useSettings();
   const { name, role, can } = useAuth();
@@ -96,9 +99,20 @@ export function WarehousesClient() {
   // State
   const [search, setSearch] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("all");
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("all");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(searchParams.get("categoryId") ?? "all");
   const [capacityFilter, setCapacityFilter] = useState<"all" | "critical" | "idle">("all");
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (selectedCategoryId !== "all") {
+      params.set("categoryId", selectedCategoryId);
+    } else {
+      params.delete("categoryId");
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/depolar?${qs}` : "/depolar", { scroll: false });
+  }, [selectedCategoryId, router, searchParams]);
 
   // Modals state
   const [detailProduct, setDetailProduct] = useState<ProductStockMatrixRow | null>(null);
@@ -513,8 +527,8 @@ export function WarehousesClient() {
           <Table className="table-fixed w-full text-xs">
             <TableHeader>
               <TableRow className="border-y border-border/60 bg-muted/40 hover:bg-muted/40">
-                <TableHead style={{ width: "22%" }} className="text-left">Ürün &amp; Kod (SKU)</TableHead>
-                <TableHead style={{ width: "7%" }} className="text-center">
+                <TableHead style={{ width: "24%" }} className="text-left">Ürün &amp; Kod (SKU)</TableHead>
+                <TableHead style={{ width: "12%" }} className="text-center">
                   <div className="flex justify-center items-center gap-1">
                     Kategori
                     <DataTableColumnFilter
@@ -530,7 +544,7 @@ export function WarehousesClient() {
                   return (
                     <TableHead
                       key={w.id}
-                      style={{ width: `${42 / Math.max(warehouses.length, 1)}%` }}
+                      style={{ width: `${36 / Math.max(warehouses.length, 1)}%` }}
                       title={w.name}
                       className={cn(
                         "text-center transition-colors",
@@ -546,7 +560,7 @@ export function WarehousesClient() {
                 </TableHead>
                 <TableHead style={{ width: "10%" }} className="text-center">Stok Değeri</TableHead>
                 {can("stock.transfer") && (
-                  <TableHead style={{ width: "9%" }} className="pr-5 text-center">İşlem</TableHead>
+                  <TableHead style={{ width: "8%" }} className="pr-5 text-center">İşlem</TableHead>
                 )}
               </TableRow>
             </TableHeader>

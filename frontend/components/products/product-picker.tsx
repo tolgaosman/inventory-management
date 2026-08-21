@@ -62,11 +62,11 @@ export function ProductPicker({
           <Button
             type="button"
             variant="outline"
-            className="w-full justify-between font-normal"
+            className="w-full justify-between font-normal overflow-hidden min-w-0 shrink"
           />
         }
       >
-        <span className={cn("truncate", !selected && "text-muted-foreground")}>
+        <span className={cn("truncate min-w-0 flex-1 text-left", !selected && "text-muted-foreground")}>
           {selected ? `${selected.name} (${selected.sku})` : placeholder}
         </span>
         <ChevronsUpDown className="size-4 shrink-0 opacity-50" />

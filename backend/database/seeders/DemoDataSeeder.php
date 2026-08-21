@@ -141,22 +141,27 @@ class DemoDataSeeder extends Seeder
     private function suppliers(): array
     {
         $rows = [
-            ['id' => 'sup-1', 'name' => 'Cisco Systems Türkiye', 'contact_name' => 'Ahmet Yılmaz', 'email' => 'ahmet@cisco.com', 'phone' => '0533 111 22 33', 'city' => 'İstanbul'],
-            ['id' => 'sup-2', 'name' => 'Dell Technologies Enterprise', 'contact_name' => 'Deniz Kaya', 'email' => 'deniz@dell.com', 'phone' => '0542 222 33 44', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-3', 'name' => 'HPE & Aruba Networks', 'contact_name' => 'Selin Aydın', 'email' => 'selin@hpe.com', 'phone' => '0555 333 44 55', 'city' => 'Ankara'],
-            ['id' => 'sup-4', 'name' => 'Lenovo Enterprise Solutions', 'contact_name' => 'Murat Demir', 'email' => 'murat@lenovo.com', 'phone' => '0532 444 55 66', 'city' => 'İstanbul'],
-            ['id' => 'sup-5', 'name' => 'Microsoft Türkiye Lisanslama', 'contact_name' => 'Ece Şahin', 'email' => 'ece@microsoft.com', 'phone' => '0533 555 66 77', 'city' => 'İstanbul'],
-            ['id' => 'sup-6', 'name' => 'Fortinet Cyprus Distribution', 'contact_name' => 'Kerem Öz', 'email' => 'kerem@fortinet.com', 'phone' => '0541 666 77 88', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-7', 'name' => 'Palo Alto Networks', 'contact_name' => 'İrem Çelik', 'email' => 'irem@paloaltonetworks.com', 'phone' => '0552 777 88 99', 'city' => 'Girne'],
-            ['id' => 'sup-8', 'name' => 'NetApp Storage Solutions', 'contact_name' => 'Baran Koç', 'email' => 'baran@netapp.com', 'phone' => '0534 888 99 00', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-9', 'name' => 'Schneider Electric (APC)', 'contact_name' => 'Zeynep Arslan', 'email' => 'zeynep@se.com', 'phone' => '0536 999 00 11', 'city' => 'Bursa'],
-            ['id' => 'sup-10', 'name' => 'Yakın Doğu IT Dağıtım', 'contact_name' => 'Onur Polat', 'email' => 'onur@sirket.com', 'phone' => '0538 000 11 22', 'city' => 'Lefkoşa'],
-            ['id' => 'sup-11', 'name' => 'Juniper Networks Distribution', 'contact_name' => 'Hakan Er', 'email' => 'hakan@juniper.com', 'phone' => '0532 101 22 33', 'city' => 'Ankara'],
-            ['id' => 'sup-12', 'name' => 'MikroTik Bölge Distribütörü', 'contact_name' => 'Pınar Uçar', 'email' => 'pinar@mikrotik.com', 'phone' => '0543 202 33 44', 'city' => 'İzmir'],
-            ['id' => 'sup-13', 'name' => 'Synology Türkiye', 'contact_name' => 'Burak Toprak', 'email' => 'burak@synology.com', 'phone' => '0535 303 44 55', 'city' => 'İstanbul'],
-            ['id' => 'sup-14', 'name' => 'Hikvision Cyprus', 'contact_name' => 'Melis Kaan', 'email' => 'melis@hikvision.com', 'phone' => '0544 404 55 66', 'city' => 'Girne'],
-            ['id' => 'sup-15', 'name' => 'Apple Enterprise Reseller', 'contact_name' => 'Tarkan Sezer', 'email' => 'tarkan@applereseller.com', 'phone' => '0533 505 66 77', 'city' => 'İstanbul'],
+            ['id' => 'sup-1', 'name' => 'Cisco Systems Türkiye', 'contact_name' => 'Ahmet Yılmaz', 'emails' => ['ahmet@cisco.com', 'satinalma@cisco.com', 'info@cisco.com'], 'phone' => '0533 111 22 33', 'city' => 'İstanbul'],
+            ['id' => 'sup-2', 'name' => 'Dell Technologies Enterprise', 'contact_name' => 'Deniz Kaya', 'emails' => ['deniz@dell.com', 'satinalma@dell.com', 'info@dell.com'], 'phone' => '0542 222 33 44', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-3', 'name' => 'HPE & Aruba Networks', 'contact_name' => 'Selin Aydın', 'emails' => ['selin@hpe.com', 'satinalma@hpe.com', 'info@hpe.com'], 'phone' => '0555 333 44 55', 'city' => 'Ankara'],
+            ['id' => 'sup-4', 'name' => 'Lenovo Enterprise Solutions', 'contact_name' => 'Murat Demir', 'emails' => ['murat@lenovo.com', 'satinalma@lenovo.com', 'info@lenovo.com'], 'phone' => '0532 444 55 66', 'city' => 'İstanbul'],
+            ['id' => 'sup-5', 'name' => 'Microsoft Türkiye Lisanslama', 'contact_name' => 'Ece Şahin', 'emails' => ['ece@microsoft.com', 'satinalma@microsoft.com', 'info@microsoft.com'], 'phone' => '0533 555 66 77', 'city' => 'İstanbul'],
+            ['id' => 'sup-6', 'name' => 'Fortinet Cyprus Distribution', 'contact_name' => 'Kerem Öz', 'emails' => ['kerem@fortinet.com', 'satinalma@fortinet.com', 'info@fortinet.com'], 'phone' => '0541 666 77 88', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-7', 'name' => 'Palo Alto Networks', 'contact_name' => 'İrem Çelik', 'emails' => ['irem@paloaltonetworks.com', 'satinalma@paloaltonetworks.com', 'info@paloaltonetworks.com'], 'phone' => '0552 777 88 99', 'city' => 'Girne'],
+            ['id' => 'sup-8', 'name' => 'NetApp Storage Solutions', 'contact_name' => 'Baran Koç', 'emails' => ['baran@netapp.com', 'satinalma@netapp.com', 'info@netapp.com'], 'phone' => '0534 888 99 00', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-9', 'name' => 'Schneider Electric (APC)', 'contact_name' => 'Zeynep Arslan', 'emails' => ['zeynep@se.com', 'satinalma@se.com', 'info@se.com'], 'phone' => '0536 999 00 11', 'city' => 'Bursa'],
+            ['id' => 'sup-10', 'name' => 'Yakın Doğu IT Dağıtım', 'contact_name' => 'Onur Polat', 'emails' => ['onur@sirket.com', 'satinalma@sirket.com', 'info@sirket.com'], 'phone' => '0538 000 11 22', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-11', 'name' => 'Juniper Networks Distribution', 'contact_name' => 'Hakan Er', 'emails' => ['hakan@juniper.com', 'satinalma@juniper.com', 'info@juniper.com'], 'phone' => '0532 101 22 33', 'city' => 'Ankara'],
+            ['id' => 'sup-12', 'name' => 'MikroTik Bölge Distribütörü', 'contact_name' => 'Pınar Uçar', 'emails' => ['pinar@mikrotik.com', 'satinalma@mikrotik.com', 'info@mikrotik.com'], 'phone' => '0543 202 33 44', 'city' => 'İzmir'],
+            ['id' => 'sup-13', 'name' => 'Synology Türkiye', 'contact_name' => 'Burak Toprak', 'emails' => ['burak@synology.com', 'satinalma@synology.com', 'info@synology.com'], 'phone' => '0535 303 44 55', 'city' => 'İstanbul'],
+            ['id' => 'sup-14', 'name' => 'Hikvision Cyprus', 'contact_name' => 'Melis Kaan', 'emails' => ['melis@hikvision.com', 'satinalma@hikvision.com', 'info@hikvision.com'], 'phone' => '0544 404 55 66', 'city' => 'Girne'],
+            ['id' => 'sup-15', 'name' => 'Apple Enterprise Reseller', 'contact_name' => 'Tarkan Sezer', 'emails' => ['tarkan@applereseller.com', 'satinalma@applereseller.com', 'info@applereseller.com'], 'phone' => '0533 505 66 77', 'city' => 'İstanbul'],
         ];
+
+        foreach ($rows as &$row) {
+            $row['emails'] = json_encode($row['emails']);
+        }
+        unset($row);
 
         return $this->withTimestamps($rows);
     }
@@ -257,8 +262,7 @@ class DemoDataSeeder extends Seeder
                 foreach ($names as $baseName) {
                     $brand = $rand->pick($brands);
                     $purchasePrice = $rand->int($minP, $maxP);
-                    $margin = 1.18 + $rand->next() * 0.25;
-                    $salePrice = (int) round($purchasePrice * $margin);
+                    $salePrice = round($purchasePrice * (1.15 + $rand->next() * 0.45), 2);
                     $minStock = $rand->int(3, 12);
                     $maxStock = $minStock + $rand->int(15, 60);
                     $supplierId = $rand->pick($suppliers)['id'];

@@ -29,6 +29,7 @@ import {
   FileSpreadsheet,
   FileText,
   CheckCircle2,
+  Warehouse,
 } from "lucide-react";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
@@ -330,13 +331,13 @@ export function ProductsClient() {
           sections: [
             {
               title: reportTitle,
-              columns: ["Ürün Adı", "SKU", "Barkod", "Kategori", "Marka", "Birim", "Alış Fiyatı", "Satış Fiyatı", "Mevcut Stok", "Durum"],
-              numericColumns: [6, 7, 8],
-              currencyColumns: [6, 7],
+              columns: ["Ürün Adı", "SKU", "Barkod", "Kategori", "Marka", "Birim", "Son Satın Alış Fiyatı", "Mevcut Stok", "Durum"],
+              numericColumns: [6, 7],
+              currencyColumns: [6],
               emptyMessage: "Ürün bulunamadı.",
               rows: exportRows.map((p) => [
                 p.name, p.sku, p.barcode, p.categoryName, p.brand, p.unit,
-                p.purchasePrice / (rates?.[currency] || 1), p.salePrice / (rates?.[currency] || 1), p.totalStock, PRODUCT_STATUS_LABELS[p.status]
+                p.purchasePrice != null ? p.purchasePrice / (rates?.[currency] || 1) : "-", p.totalStock, PRODUCT_STATUS_LABELS[p.status]
               ])
             }
           ]
@@ -418,21 +419,12 @@ export function ProductsClient() {
               >
                 {row.original.name}
               </span>
-              <span className="block truncate text-xs text-muted-foreground">{row.original.brand}</span>
+              <span className="block truncate font-mono text-xs text-muted-foreground">{row.original.sku}</span>
+              <span className="block truncate text-micro text-muted-foreground">
+                {row.original.brand || "Markasız"} / {row.original.barcode || "Barkodsuz"}
+              </span>
             </div>
           </Link>
-        ),
-      },
-      {
-        id: "sku",
-        accessorKey: "sku",
-        header: "SKU / Barkod",
-        meta: { className: "w-[13%] text-center" },
-        cell: ({ row }) => (
-          <div className="min-w-0">
-            <span className="block truncate font-mono text-xs">{row.original.sku}</span>
-            <p className="truncate font-mono text-micro text-muted-foreground">{row.original.barcode}</p>
-          </div>
         ),
       },
       {
@@ -451,10 +443,29 @@ export function ProductsClient() {
           )
         },
         cell: ({ row }) => (
-          <span className="block truncate text-center" title={row.original.categoryName}>
+          <span className="block line-clamp-2 text-center" title={row.original.categoryName}>
             {row.original.categoryName}
           </span>
         ),
+      },
+      {
+        id: "warehouses",
+        header: "Depolar",
+        meta: { className: "w-[13%] text-center" },
+        cell: ({ row }) => {
+          const category = categories.find(c => c.id === row.original.categoryId);
+          const count = category?.productCount ?? 0;
+          return (
+            <Link
+              href={`/depolar?categoryId=${row.original.categoryId}`}
+              className="inline-flex items-center gap-1.5 rounded-full bg-secondary/50 px-2.5 py-1 text-xs font-medium text-secondary-foreground hover:bg-secondary transition-colors"
+              title={`${row.original.categoryName} kategorisindeki ürünleri depolar sayfasında gör`}
+            >
+              <Warehouse className="size-3.5" />
+              {count} Ürün
+            </Link>
+          );
+        }
       },
       {
         id: "totalStock",
@@ -513,16 +524,18 @@ export function ProductsClient() {
         ),
       },
       {
-        id: "salePrice",
-        accessorKey: "salePrice",
-        header: "Fiyat",
+        id: "purchasePrice",
+        accessorKey: "purchasePrice",
+        header: "Son Satın Alış Fiyatı",
         meta: { className: "w-[14%] text-center" },
         cell: ({ row }) => {
           const rate = rates?.[currency] || 1;
+          const price = row.original.purchasePrice;
           return (
             <div className="tabular-nums text-center">
-              <span className="font-medium text-foreground">{formatCurrency(row.original.salePrice, currency, rate, showKurus)}</span>
-              <p className="text-xs text-muted-foreground">Alış {formatCurrency(row.original.purchasePrice, currency, rate, showKurus)}</p>
+              <span className="font-medium text-foreground">
+                {price != null ? formatCurrency(price, currency, rate, showKurus) : "-"}
+              </span>
             </div>
           );
         },
@@ -629,7 +642,7 @@ export function ProductsClient() {
     ],
     [currency, rates, warehouses, warehouseId, selectedIds, view, handleToggleStatus, can],
   ).filter((col) => {
-    if (col.id === "salePrice" && !can("financial.view")) return false;
+    if (col.id === "purchasePrice" && !can("financial.view")) return false;
     return true;
   });
 

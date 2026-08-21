@@ -93,7 +93,17 @@ export function SupplierDetailClient({ id }: { id: string }) {
 
   const fields: { icon: typeof User; label: string; value: React.ReactNode }[] = [
     { icon: User, label: "Yetkili", value: supplier.contactName },
-    { icon: Mail, label: "E-posta", value: supplier.email },
+    {
+      icon: Mail,
+      label: "E-posta",
+      value: (
+        <div className="flex flex-col items-end gap-0.5">
+          {supplier.emails.map((email) => (
+            <span key={email}>{email}</span>
+          ))}
+        </div>
+      ),
+    },
     { icon: Phone, label: "Telefon", value: supplier.phone },
     { icon: MapPin, label: "Şehir", value: supplier.city },
   ];
@@ -178,7 +188,7 @@ export function SupplierDetailClient({ id }: { id: string }) {
                 {fields.map((f) => (
                   <div key={f.label} className="flex items-center justify-between gap-3 py-2 text-sm">
                     <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
-                    <dd className="min-w-0 truncate text-right font-medium text-foreground" title={typeof f.value === "string" ? f.value : undefined}>
+                    <dd className="min-w-0 break-words text-right font-medium text-foreground" title={typeof f.value === "string" ? f.value : undefined}>
                       {f.value}
                     </dd>
                   </div>

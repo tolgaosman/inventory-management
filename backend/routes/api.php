@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\PurchaseOrderController;
 use App\Http\Controllers\Api\QuoteRequestController;
 
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\SupplierScorecardController;
@@ -82,7 +83,6 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
 
     // Purchase orders
     Route::get('/purchase-orders/stats', [PurchaseOrderController::class, 'stats'])->middleware('perm:purchase.view');
-    Route::get('/purchase-orders/quotable-grouped', [QuoteRequestController::class, 'quotableGrouped'])->middleware('perm:purchase.view');
     Route::get('/purchase-orders/pending-receipt', [PurchaseOrderController::class, 'pendingReceipt'])->middleware('perm:purchase.manage|purchase.receive');
     Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->middleware('perm:purchase.view');
     Route::get('/purchase-orders/{id}', [PurchaseOrderController::class, 'show'])->middleware('perm:purchase.view');
@@ -97,6 +97,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/purchase-orders/{id}/reject', [PurchaseOrderController::class, 'reject'])->middleware(['perm:purchase.approve', 'throttle:writes']);
     Route::post('/purchase-orders/{id}/receive', [PurchaseOrderController::class, 'receive'])->middleware(['perm:purchase.manage|purchase.receive', 'throttle:bulk']);
     Route::post('/purchase-orders/{id}/invoice', [PurchaseOrderController::class, 'uploadInvoice'])->middleware(['perm:purchase.manage|purchase.receive', 'throttle:bulk']);
+    Route::get('/purchase-orders/{id}/invoice/download', [PurchaseOrderController::class, 'downloadInvoice'])->middleware('perm:purchase.view');
     Route::post('/purchase-orders/{id}/cancel', [PurchaseOrderController::class, 'cancel'])->middleware(['perm:purchase.manage', 'throttle:writes']);
     Route::post('/purchase-orders/bulk-order', [PurchaseOrderController::class, 'bulkOrder'])->middleware(['perm:purchase.approve', 'throttle:bulk']);
     Route::post('/purchase-orders/bulk-cancel', [PurchaseOrderController::class, 'bulkCancel'])->middleware(['perm:purchase.manage', 'throttle:bulk']);
@@ -129,10 +130,17 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
 
     // Users
     Route::get('/users', [UserController::class, 'index']);
+    Route::get('/users/{id}', [UserController::class, 'show']);
     Route::post('/users', [UserController::class, 'store'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::put('/users/{id}', [UserController::class, 'update'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::delete('/users/{id}', [UserController::class, 'destroy'])->middleware(['perm:users.manage', 'throttle:writes']);
     Route::post('/users/{id}/restore', [UserController::class, 'restore'])->middleware(['perm:users.manage', 'throttle:writes']);
+
+    // Roles — admin-only (see App\Http\Middleware\EnsureAdmin).
+    Route::get('/roles', [RoleController::class, 'index'])->middleware('admin');
+    Route::post('/roles', [RoleController::class, 'store'])->middleware(['admin', 'throttle:writes']);
+    Route::put('/roles/{id}', [RoleController::class, 'update'])->middleware(['admin', 'throttle:writes']);
+    Route::delete('/roles/{id}', [RoleController::class, 'destroy'])->middleware(['admin', 'throttle:writes']);
 
     // Settings — every authenticated role may read/update (company profile, own notification prefs).
     Route::get('/settings', [SettingsController::class, 'show']);

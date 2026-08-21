@@ -221,11 +221,14 @@ export function SuppliersClient() {
       },
       {
         id: "email",
-        accessorKey: "email",
+        accessorKey: "emails",
         header: "E-posta",
         meta: { className: "w-[15%] text-center" },
         cell: ({ row }) => (
-          <span className="block truncate text-center" title={row.original.email}>{row.original.email}</span>
+          <span className="block truncate text-center" title={row.original.emails.join(", ")}>
+            {row.original.emails[0]}
+            {row.original.emails.length > 1 && <span className="text-muted-foreground"> +{row.original.emails.length - 1}</span>}
+          </span>
         ),
       },
       {

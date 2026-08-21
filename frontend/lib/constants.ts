@@ -1,6 +1,7 @@
 import type { MovementReason, MovementType, ProductStatus, PurchaseOrderStatus, Role } from "./types";
 
-export const ROLE_LABELS: Record<Role, string> = {
+/** The 5 built-ins only — a custom role's display name comes from the roles API (frontend/lib/api/roles.ts), fall back to the raw id when unknown. */
+export const ROLE_LABELS: Partial<Record<Role, string>> = {
   admin: "Admin",
   depo_yonetici: "Depo Müdürü",
   satinalma_yonetici: "Satın Alma Müdürü",

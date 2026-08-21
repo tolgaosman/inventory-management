@@ -9,6 +9,10 @@ import { useAuth } from "@/lib/auth";
 import { NAV_SECTIONS, type NavItem } from "./nav-config";
 
 export function isActive(pathname: string, href: string) {
+  // Exception: Roller page should not light up Kullanıcılar
+  if (href === "/kullanicilar" && pathname.startsWith("/kullanicilar/roller")) {
+    return false;
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

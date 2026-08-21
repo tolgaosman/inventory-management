@@ -41,8 +41,14 @@ const schema = z
     categoryId: z.string().min(1, "Kategori seçin."),
     brand: z.string().min(1, "Marka zorunlu."),
     unit: z.string().min(1, "Birim zorunlu."),
-    purchasePrice: z.coerce.number().positive("Alış fiyatı 0'dan büyük olmalı."),
-    salePrice: z.coerce.number().positive("Satış fiyatı 0'dan büyük olmalı."),
+    purchasePrice: z.preprocess(
+      (v) => (v === "" || v === undefined || v === null ? undefined : v),
+      z.coerce.number().min(0, "Alış fiyatı negatif olamaz.").optional(),
+    ),
+    salePrice: z.preprocess(
+      (v) => (v === "" || v === undefined || v === null ? undefined : v),
+      z.coerce.number().min(0, "Satış fiyatı negatif olamaz.").optional(),
+    ),
     minStock: z.coerce.number().int().min(0, "Minimum stok negatif olamaz."),
     maxStock: z.coerce.number().int().min(1, "Maksimum stok en az 1 olmalı."),
     supplierId: z.string().min(1, "Tedarikçi seçin."),
@@ -55,14 +61,18 @@ const schema = z
 
 type FormInput = z.input<typeof schema>;
 type FormValues = z.output<typeof schema>;
+/** What actually gets submitted — `purchasePrice`/`salePrice` resolved to `number | null` (never left `undefined`) and rate-converted back to the base currency. */
+type ProductSubmission = Omit<FormValues, "purchasePrice" | "salePrice"> & { purchasePrice: number | null; salePrice: number | null };
 
 interface ProductFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product?: Product;
-  onSaved: (values: FormValues) => Promise<void>;
+  onSaved: (values: ProductSubmission) => Promise<void>;
   categories: Category[];
   suppliers: Supplier[];
+  /** Sale price only belongs on the product detail page's edit flow — the Ürün Yönetimi list/form never shows it. */
+  showSalePrice?: boolean;
 }
 
 export function ProductFormSheet({
@@ -72,6 +82,7 @@ export function ProductFormSheet({
   onSaved,
   categories,
   suppliers,
+  showSalePrice = false,
 }: ProductFormSheetProps) {
   const { pending, guard } = useSubmitGuard();
   const { currency, rates } = useCurrency();
@@ -86,8 +97,8 @@ export function ProductFormSheet({
       categoryId: "",
       brand: "",
       unit: "Adet",
-      purchasePrice: 0,
-      salePrice: 0,
+      purchasePrice: undefined,
+      salePrice: undefined,
       minStock: 5,
       maxStock: 50,
       supplierId: "",
@@ -105,8 +116,8 @@ export function ProductFormSheet({
               categoryId: product.categoryId,
               brand: product.brand,
               unit: product.unit,
-              purchasePrice: product.purchasePrice / rate,
-              salePrice: product.salePrice / rate,
+              purchasePrice: product.purchasePrice != null ? product.purchasePrice / rate : undefined,
+              salePrice: product.salePrice != null ? product.salePrice / rate : undefined,
               minStock: product.minStock,
               maxStock: product.maxStock,
               supplierId: product.supplierId,
@@ -119,8 +130,8 @@ export function ProductFormSheet({
               categoryId: "",
               brand: "",
               unit: "Adet",
-              purchasePrice: 0,
-              salePrice: 0,
+              purchasePrice: undefined,
+              salePrice: undefined,
               minStock: 5,
               maxStock: 50,
               supplierId: "",
@@ -135,8 +146,8 @@ export function ProductFormSheet({
     await guard(async () => {
       const submission = {
         ...values,
-        purchasePrice: values.purchasePrice * rate,
-        salePrice: values.salePrice * rate,
+        purchasePrice: values.purchasePrice != null ? values.purchasePrice * rate : null,
+        salePrice: values.salePrice != null ? values.salePrice * rate : null,
       };
       await onSaved(submission);
       toast.success(product ? "Ürün güncellendi." : "Ürün oluşturuldu.");
@@ -313,34 +324,47 @@ export function ProductFormSheet({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="purchasePrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Alış Fiyatı ({CURRENCY_SYMBOLS[currency]})</FormLabel>
-                    <FormControl>
-                      <Input type="number" step="0.01" {...field} value={field.value as number | string} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="purchasePrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Son Satın Alış Fiyatı ({CURRENCY_SYMBOLS[currency]}) (opsiyonel)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="Boş bırakılabilir"
+                      {...field}
+                      value={(field.value as number | undefined) ?? ""}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {showSalePrice && (
               <FormField
                 control={form.control}
                 name="salePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Satış Fiyatı ({CURRENCY_SYMBOLS[currency]})</FormLabel>
+                    <FormLabel>Satış Fiyatı ({CURRENCY_SYMBOLS[currency]}) (opsiyonel)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} value={field.value as number | string} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Boş bırakılabilir"
+                        {...field}
+                        value={(field.value as number | undefined) ?? ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <FormField

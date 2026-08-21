@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ import {
   Trash2,
   X,
   Download,
+  UploadCloud,
   FileSpreadsheet,
   FileText,
   FileSignature,
@@ -83,7 +84,7 @@ import { PurchaseOrderReceiveSheet } from "@/components/purchase-orders/purchase
 import { PurchaseCommandHero } from "@/components/purchase-orders/purchase-command-hero";
 
 import { SupplierScorecardPanel } from "@/components/purchase-orders/supplier-scorecard-panel";
-import { QuoteRequestDialog } from "@/components/purchase-orders/quote-request-dialog";
+import { QuoteRequestDialog, type QuoteRequestSelection } from "@/components/purchase-orders/quote-request-dialog";
 import { QuoteRequestFormSheet } from "@/components/purchase-orders/quote-request-form-sheet";
 import { QuotesAndOrdersPanel } from "@/components/purchase-orders/quote-requests-panel";
 import { ShareDraftDialog } from "./share-draft-dialog";
@@ -111,10 +112,12 @@ import {
   bulkMarkPurchaseOrdersOrdered,
   bulkCancelPurchaseOrders,
   bulkDeletePurchaseOrders,
+  uploadPurchaseOrderInvoice,
   type PurchaseOrderQuery,
   type BulkOperationResult,
 } from "@/lib/api/purchase-orders";
 import { listSuppliers, listWarehouses } from "@/lib/api/catalog";
+import { listQuoteRequests } from "@/lib/api/quotes";
 import { getProduct } from "@/lib/api/products";
 import { ApiError } from "@/lib/api/client";
 import { formatNumber, formatCurrency, formatDate, formatDateShort } from "@/lib/format";
@@ -127,7 +130,7 @@ import type { PurchaseOrderStatus } from "@/lib/types";
 
 type PurchaseOrderRow = Awaited<ReturnType<typeof listPurchaseOrders>>["rows"][number];
 type PurchaseOrderDetail = Awaited<ReturnType<typeof getPurchaseOrder>>;
-type CommandTab = "orders" | "pending_approvals" | "my_drafts" | "scorecard" | "quotes";
+type CommandTab = "orders" | "pending_approvals" | "my_drafts" | "scorecard";
 
 const STATUS_OPTIONS: PurchaseOrderStatus[] = [
   "draft",
@@ -171,6 +174,9 @@ export function PurchaseOrdersClient() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [bulkAction, setBulkAction] = useState<"cancel" | "delete" | null>(null);
+  
+  const [uploadingInvoiceId, setUploadingInvoiceId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [rejectingPo, setRejectingPo] = useState<PurchaseOrderRow | undefined>(undefined);
   const [rejectReason, setRejectReason] = useState("");
@@ -189,9 +195,7 @@ export function PurchaseOrdersClient() {
 
   const [quoteDialogOpen, setQuoteDialogOpen] = useState(false);
   const [quoteFormOpen, setQuoteFormOpen] = useState(false);
-  const [quoteSelection, setQuoteSelection] = useState<{ supplierId: string; purchaseOrderIds: string[] } | undefined>(
-    undefined,
-  );
+  const [quoteSelection, setQuoteSelection] = useState<QuoteRequestSelection | undefined>(undefined);
   const [quoteRefreshKey, setQuoteRefreshKey] = useState(0);
 
   const exportGuard = useSubmitGuard();
@@ -240,14 +244,15 @@ export function PurchaseOrdersClient() {
   // cached by lib/api-cache.ts, so re-running this on every filter change is
   // cheap for those — only the order list itself is genuinely re-fetched.
   const { status: fetchStatus, data, staleData, error, refetch } = useAsync(async () => {
-    const [orders, suppliersResult, warehousesResult, stats, scorecards] = await Promise.all([
+    const [orders, suppliersResult, warehousesResult, stats, scorecards, pendingQuotes] = await Promise.all([
       listPurchaseOrders(query),
       listSuppliers({ pageSize: 1000 }),
       listWarehouses(),
       getPurchaseOrderStats(),
       getSupplierScorecards(),
+      listQuoteRequests({ status: "pending_approval", pageSize: 1 }),
     ]);
-    return { orders, suppliers: suppliersResult.rows, warehouses: warehousesResult, stats, scorecards };
+    return { orders, suppliers: suppliersResult.rows, warehouses: warehousesResult, stats, scorecards, pendingQuoteTotal: pendingQuotes.total };
   }, [JSON.stringify(query)]);
 
   const view = (data ?? staleData)?.orders;
@@ -255,6 +260,7 @@ export function PurchaseOrdersClient() {
   const warehouses = (data ?? staleData)?.warehouses ?? [];
   const stats = (data ?? staleData)?.stats;
   const scorecards = (data ?? staleData)?.scorecards ?? [];
+  const pendingQuoteTotal = (data ?? staleData)?.pendingQuoteTotal ?? 0;
 
   function refetchAll() {
     refetch();
@@ -287,7 +293,7 @@ export function PurchaseOrdersClient() {
         resolved.map((p) => ({
           productId: p.id,
           quantity: Math.max(1, p.minStock - p.totalStock),
-          unitPrice: p.purchasePrice,
+          unitPrice: p.purchasePrice ?? 0,
         })),
       );
       setEditingOrder(undefined);
@@ -339,13 +345,7 @@ export function PurchaseOrdersClient() {
     }
   }
 
-  async function handleSaved(values: {
-    supplierId: string;
-    warehouseId: string;
-    expectedAt: string;
-    notes?: string;
-    items: { productId: string; quantity: number; unitPrice: number }[];
-  }) {
+  async function handleSaved(values: any) {
     try {
       if (editingOrder) {
         await updatePurchaseOrder(editingOrder.id, values);
@@ -504,6 +504,29 @@ export function PurchaseOrdersClient() {
     }
   }
 
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !uploadingInvoiceId) return;
+
+    try {
+      await uploadPurchaseOrderInvoice(uploadingInvoiceId, file);
+      toast.success("Fatura yüklendi.");
+      refetchAll();
+    } catch (err) {
+      toast.error("Fatura yüklenemedi", {
+        description: err instanceof ApiError ? err.message : "Beklenmedik bir hata oluştu.",
+      });
+    } finally {
+      setUploadingInvoiceId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function triggerInvoiceUpload(id: string) {
+    setUploadingInvoiceId(id);
+    fileInputRef.current?.click();
+  }
+
   async function handleExport(format: "excel" | "pdf", onlySelected?: boolean) {
     await exportGuard.guard(async () => {
       try {
@@ -513,6 +536,9 @@ export function PurchaseOrdersClient() {
         if (hasSelection) {
           rows = rows.filter((r) => selectedIds.has(r.id));
         }
+        
+        // Taslakları dışa aktarımdan kesin olarak çıkar
+        rows = rows.filter((r) => r.status !== "draft");
 
         const reportTitle = hasSelection ? `Seçili Siparişler (${rows.length} Adet)` : "Satın Alma Siparişleri";
         const report: ReportData = {
@@ -772,6 +798,18 @@ export function PurchaseOrdersClient() {
         },
       },
       {
+        id: "createdBy",
+        accessorKey: "createdBy",
+        header: "Oluşturan",
+        enableSorting: false,
+        meta: { className: "w-[10%] text-center" },
+        cell: ({ row }) => (
+          <span className="block truncate text-muted-foreground text-xs text-center" title={row.original.createdBy}>
+            {row.original.createdBy ?? "-"}
+          </span>
+        ),
+      },
+      {
         id: "actions",
         header: "",
         enableSorting: false,
@@ -843,6 +881,10 @@ export function PurchaseOrdersClient() {
                 )}
                 <Can permission="purchase.manage">
                   <>
+                    <DropdownMenuItem onClick={() => triggerInvoiceUpload(po.id)}>
+                      <UploadCloud className="size-4" />
+                      Fatura Yükle
+                    </DropdownMenuItem>
                     {actions.canEdit && (
                       <DropdownMenuItem onClick={() => openEdit(po)}>
                         <Pencil className="size-4" />
@@ -896,6 +938,7 @@ export function PurchaseOrdersClient() {
   return (
     <Can permission="purchase.view" fallback={<Forbidden />}>
       <div className="space-y-6">
+        <input type="file" ref={fileInputRef} className="hidden" accept=".pdf,.png,.jpg,.jpeg" onChange={handleFileUpload} />
         <PageHeader
           title="Satın Alma"
           description="Siparişleri, ikmal ihtiyacını ve tedarikçi performansını tek yerden yönetin."
@@ -920,11 +963,7 @@ export function PurchaseOrdersClient() {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Can permission="purchase.manage">
-                <Button
-                  size="sm"
-                  disabled={(stats?.draftCount ?? 0) + (stats?.pendingApprovalCount ?? 0) === 0}
-                  onClick={() => setQuoteDialogOpen(true)}
-                >
+                <Button size="sm" onClick={() => setQuoteDialogOpen(true)}>
                   <FileSignature className="size-4" />
                   Teklif Formu
                 </Button>
@@ -959,7 +998,7 @@ export function PurchaseOrdersClient() {
           <TabsList variant="line" className="w-full justify-start overflow-x-auto custom-scrollbar sm:w-fit">
             <TabsTrigger value="orders">
               <ShoppingCart className="size-4" />
-              Siparişler
+              Siparişler & Teklifler
             </TabsTrigger>
             {user?.role === "satinalma" && (
               <TabsTrigger value="my_drafts">
@@ -971,9 +1010,9 @@ export function PurchaseOrdersClient() {
               <TabsTrigger value="pending_approvals">
                 <BadgeCheck className="size-4" />
                 Onay Bekleyenler
-                {stats?.pendingApprovalCount ? (
+                {(stats?.pendingApprovalCount ?? 0) + pendingQuoteTotal ? (
                   <Badge variant="secondary" className="ml-1 px-1.5 text-micro">
-                    {stats.pendingApprovalCount}
+                    {(stats?.pendingApprovalCount ?? 0) + pendingQuoteTotal}
                   </Badge>
                 ) : null}
               </TabsTrigger>
@@ -982,12 +1021,6 @@ export function PurchaseOrdersClient() {
               <Truck className="size-4" />
               Tedarikçi Karnesi
             </TabsTrigger>
-            {can("purchase.manage") && (
-              <TabsTrigger value="quotes">
-                <FileSignature className="size-4" />
-                Teklifler
-              </TabsTrigger>
-            )}
           </TabsList>
 
           <TabsContent value="orders">
@@ -1108,6 +1141,15 @@ export function PurchaseOrdersClient() {
                   emptyDescription="Sisteme henüz bir satın alma siparişi eklenmemiş."
                 />
               </Section>
+
+              {can("purchase.manage") && (
+                <Section index={3}>
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">Teklif Formları</h2>
+                  <div className="mt-3">
+                    <QuotesAndOrdersPanel statusFilter="decided" refreshKey={quoteRefreshKey} />
+                  </div>
+                </Section>
+              )}
             </SectionStack>
           </TabsContent>
 
@@ -1131,6 +1173,13 @@ export function PurchaseOrdersClient() {
                     emptyTitle="Onay bekleyen sipariş yok"
                     emptyDescription="Şu anda onayınızı bekleyen herhangi bir satın alma siparişi bulunmuyor."
                   />
+                </Section>
+
+                <Section index={1}>
+                  <h2 className="text-base font-semibold tracking-tight text-foreground">Bekleyen Teklif Formları</h2>
+                  <div className="mt-3">
+                    <QuotesAndOrdersPanel statusFilter="pending_approval" refreshKey={quoteRefreshKey} />
+                  </div>
                 </Section>
               </SectionStack>
             </TabsContent>
@@ -1170,11 +1219,6 @@ export function PurchaseOrdersClient() {
             />
           </TabsContent>
 
-          {can("purchase.manage") && (
-            <TabsContent value="quotes">
-              <QuotesAndOrdersPanel refreshKey={quoteRefreshKey} />
-            </TabsContent>
-          )}
         </Tabs>
 
         <PurchaseOrderFormSheet
@@ -1186,7 +1230,6 @@ export function PurchaseOrdersClient() {
           order={editingOrder}
           initialItems={initialItems}
           suppliers={suppliers}
-          warehouses={warehouses}
           onSaved={handleSaved}
         />
 
@@ -1194,7 +1237,7 @@ export function PurchaseOrdersClient() {
           open={Boolean(receivingOrder)}
           onOpenChange={(open) => !open && setReceivingOrder(undefined)}
           order={receivingOrder}
-          warehouseName={receivingOrder ? warehouses.find((w) => w.id === receivingOrder.warehouseId)?.name : undefined}
+          warehouses={warehouses}
           onDone={refetchAll}
         />
 
@@ -1222,8 +1265,15 @@ export function PurchaseOrdersClient() {
         <QuoteRequestFormSheet
           open={quoteFormOpen}
           onOpenChange={setQuoteFormOpen}
-          supplier={suppliers.find((s) => s.id === quoteSelection?.supplierId)}
-          purchaseOrderIds={quoteSelection?.purchaseOrderIds ?? []}
+          supplierName={
+            quoteSelection?.supplierId
+              ? suppliers.find((s) => s.id === quoteSelection.supplierId)?.name
+              : quoteSelection?.adhocSupplierName
+          }
+          supplierId={quoteSelection?.supplierId}
+          adhocSupplierName={quoteSelection?.adhocSupplierName}
+          adhocSupplierEmail={quoteSelection?.adhocSupplierEmail}
+          items={quoteSelection?.items ?? []}
           onCreated={() => {
             refetchAll();
             setQuoteRefreshKey((k) => k + 1);

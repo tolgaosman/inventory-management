@@ -21,7 +21,7 @@ use HasApiTokens, HasFactory, Notifiable;
     protected $keyType = 'string';
 
     protected $fillable = [
-        'id', 'name', 'email', 'role', 'initials', 'password', 'must_change_password',
+        'id', 'name', 'email', 'phone', 'role', 'initials', 'password', 'must_change_password',
     ];
 
     protected $hidden = [
@@ -41,7 +41,7 @@ use HasApiTokens, HasFactory, Notifiable;
     /** @return string[] */
     public function permissions(): array
     {
-        return config("permissions.role_permissions.{$this->role}", []);
+        return \App\Models\RolePermission::query()->where('role_id', $this->role)->pluck('permission')->all();
     }
 
     public function can($abilities, $arguments = []): bool

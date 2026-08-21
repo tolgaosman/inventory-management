@@ -34,7 +34,7 @@ import { ProductImageThumbnail } from "@/components/common/product-image-thumbna
 const OPTIONAL_COLUMNS = [
   { id: "supplier", label: "Tedarikçi" },
   { id: "category", label: "Kategori" },
-  { id: "price", label: "Alış Fiyatı" },
+  { id: "price", label: "Son Satın Alış Fiyatı" },
   { id: "value", label: "Stok Değeri" },
 ] as const;
 
@@ -217,7 +217,7 @@ export function CriticalStockList({
                   <TableHead>Ürün</TableHead>
                   {shows("supplier") && <TableHead className="text-center">Tedarikçi</TableHead>}
                   {shows("category") && <TableHead className="text-center">Kategori</TableHead>}
-                  {shows("price") && <TableHead className="text-center">Alış Fiyatı</TableHead>}
+                  {shows("price") && <TableHead className="text-center">Son Satın Alış Fiyatı</TableHead>}
                   <TableHead className="text-center">Mevcut / Min</TableHead>
                   {shows("value") && <TableHead className="text-center">Stok Değeri</TableHead>}
                   <TableHead className="text-center">Durum</TableHead>
@@ -254,7 +254,7 @@ export function CriticalStockList({
                     {shows("price") && (
                       <TableCell className="px-4 py-3 text-center">
                         <span className="text-xs tabular-nums text-foreground">
-                          {formatCurrency(p.purchasePrice, currency, rates?.[currency] || 1, showKurus)}
+                          {formatCurrency(p.purchasePrice ?? 0, currency, rates?.[currency] || 1, showKurus)}
                         </span>
                       </TableCell>
                     )}
@@ -266,7 +266,7 @@ export function CriticalStockList({
                     {shows("value") && (
                       <TableCell className="px-4 py-3 text-center">
                         <span className="text-xs tabular-nums text-foreground">
-                          {formatCurrency(p.totalStock * p.purchasePrice, currency, rates?.[currency] || 1, showKurus)}
+                          {formatCurrency(p.totalStock * (p.purchasePrice ?? 0), currency, rates?.[currency] || 1, showKurus)}
                         </span>
                       </TableCell>
                     )}
