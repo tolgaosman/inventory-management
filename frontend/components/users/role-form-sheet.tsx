@@ -20,24 +20,57 @@ import { useChangedSince } from "@/lib/hooks/use-reset-on-change";
 import { createRole, updateRole, type RoleRow } from "@/lib/api/roles";
 import { ApiError } from "@/lib/api/client";
 import type { Permission } from "@/lib/api/auth";
+import { cn } from "@/lib/utils";
 
-/** Every assignable permission, grouped for a readable checkbox grid. Keep in sync with backend/config/permissions.php's flat list. */
-const PERMISSION_GROUPS: { label: string; items: { value: Permission; label: string }[] }[] = [
+/**
+ * Every assignable permission, grouped for a readable checkbox grid. Keep in sync with
+ * backend/config/permissions.php's flat list.
+ *
+ * A group may declare a `master` permission: the "view this page" switch (e.g.
+ * dashboard.view, products.view). Turning it off disables and clears the group's items,
+ * since those items are actions/sub-sections that only make sense once the page itself
+ * is visible. Groups without a master (e.g. Stok İşlemleri, Raporlar) are pages whose
+ * access is the OR of several independent, equally-weighted permissions — there is no
+ * single "view" permission to promote, so all items stay independent checkboxes.
+ */
+const PERMISSION_GROUPS: {
+  label: string;
+  master?: { value: Permission; label: string };
+  items: { value: Permission; label: string }[];
+}[] = [
   {
-    label: "Ürünler",
+    label: "Gösterge Paneli",
+    master: { value: "dashboard.view", label: "Gösterge panelini görebilsin" },
     items: [
-      { value: "products.view", label: "Ürünleri görüntüle" },
-      { value: "products.manage", label: "Ürünleri yönet" },
+      { value: "dashboard.kpis", label: "Özet kartları" },
+      { value: "dashboard.meta", label: "Ek özet çubuğu" },
+      { value: "dashboard.purchase_summary", label: "Satın Alma Özeti" },
+      { value: "dashboard.category_chart", label: "Stok Dağılımı" },
+      { value: "dashboard.recent_movements", label: "Son Stok Hareketleri" },
+      { value: "dashboard.stock_flow", label: "Stok Sağlığı" },
+      { value: "dashboard.warehouse_stock", label: "Depo Bazında Stok" },
+      { value: "dashboard.top_movers", label: "En Çok Hareket Gören Ürünler" },
+      { value: "dashboard.critical_stock", label: "Stok İhtiyaçları" },
     ],
   },
   {
+    label: "Ürünler",
+    master: { value: "products.view", label: "Ürünler sayfasını görüntüleyebilsin" },
+    items: [{ value: "products.manage", label: "Ürünleri yönet" }],
+  },
+  {
     label: "Depolar",
+    master: { value: "warehouses.view", label: "Depolar sayfasını görüntüleyebilsin" },
     items: [{ value: "warehouses.manage", label: "Depoları yönet" }],
   },
   {
-    label: "Stok",
+    label: "Stok Hareketleri",
+    master: { value: "stock.view", label: "Hareket geçmişi sayfasını görüntüleyebilsin" },
+    items: [],
+  },
+  {
+    label: "Stok İşlemleri",
     items: [
-      { value: "stock.view", label: "Stok hareketlerini görüntüle" },
       { value: "stock.in", label: "Stok girişi yap" },
       { value: "stock.out", label: "Stok çıkışı yap" },
       { value: "stock.transfer", label: "Depolar arası transfer yap" },
@@ -45,8 +78,8 @@ const PERMISSION_GROUPS: { label: string; items: { value: Permission; label: str
   },
   {
     label: "Satın Alma",
+    master: { value: "purchase.view", label: "Satın Alma sayfasını görüntüleyebilsin" },
     items: [
-      { value: "purchase.view", label: "Siparişleri görüntüle" },
       { value: "purchase.manage", label: "Sipariş oluştur / düzenle" },
       { value: "purchase.approve", label: "Siparişleri onayla" },
       { value: "purchase.receive", label: "Sipariş teslim al" },
@@ -54,10 +87,8 @@ const PERMISSION_GROUPS: { label: string; items: { value: Permission; label: str
   },
   {
     label: "Tedarikçiler",
-    items: [
-      { value: "suppliers.view", label: "Tedarikçileri görüntüle" },
-      { value: "suppliers.manage", label: "Tedarikçileri yönet" },
-    ],
+    master: { value: "suppliers.view", label: "Tedarikçiler sayfasını görüntüleyebilsin" },
+    items: [{ value: "suppliers.manage", label: "Tedarikçileri yönet" }],
   },
   {
     label: "Raporlar ve Finans",
@@ -102,6 +133,23 @@ export function RoleFormSheet({ open, onOpenChange, role, onSaved }: RoleFormShe
     });
   }
 
+  /** Ticking the master grants the whole group; clearing it revokes the group too. */
+  function toggleMaster(group: (typeof PERMISSION_GROUPS)[number], checked: boolean) {
+    const master = group.master;
+    if (!master) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(master.value);
+        for (const item of group.items) next.add(item.value);
+      } else {
+        next.delete(master.value);
+        for (const item of group.items) next.delete(item.value);
+      }
+      return next;
+    });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) {
@@ -135,7 +183,7 @@ export function RoleFormSheet({ open, onOpenChange, role, onSaved }: RoleFormShe
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg overflow-y-auto max-h-[90vh]">
+      <SheetContent className="sm:max-w-lg overflow-y-auto max-h-[90vh] custom-scrollbar">
         <SheetHeader>
           <SheetTitle>{role ? "Rolü Düzenle" : "Yeni Rol"}</SheetTitle>
           <SheetDescription>
@@ -162,25 +210,55 @@ export function RoleFormSheet({ open, onOpenChange, role, onSaved }: RoleFormShe
 
           <div className="space-y-4">
             <Label>İzinler</Label>
-            {PERMISSION_GROUPS.map((group) => (
-              <div key={group.label} className="space-y-2 rounded-lg border border-border/60 p-3">
-                <p className="text-xs font-semibold text-muted-foreground">{group.label}</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {group.items.map((item) => (
-                    <label key={item.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <Checkbox
-                        checked={selected.has(item.value)}
-                        onCheckedChange={(c) => toggle(item.value, Boolean(c))}
-                      />
-                      {item.label}
-                    </label>
-                  ))}
+            {PERMISSION_GROUPS.map((group) => {
+              const groupOff = group.master != null && !selected.has(group.master.value);
+              return (
+                <div key={group.label} className="space-y-2 rounded-lg border border-border/60 p-3">
+                  <p className="text-xs font-semibold text-muted-foreground">{group.label}</p>
+                  {group.master && (
+                    <>
+                      <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                        <Checkbox
+                          checked={selected.has(group.master.value)}
+                          onCheckedChange={(c) => toggleMaster(group, Boolean(c))}
+                        />
+                        {group.master.label}
+                      </label>
+                      {group.items.length > 0 && <div className="border-t border-border/60 pt-2" />}
+                    </>
+                  )}
+                  {group.items.length > 0 && (
+                    <div
+                      className={cn(
+                        "grid grid-cols-1 gap-2 sm:grid-cols-2",
+                        group.master && "pl-6",
+                        groupOff && "opacity-50",
+                      )}
+                    >
+                      {group.items.map((item) => (
+                        <label
+                          key={item.value}
+                          className={cn(
+                            "flex items-center gap-2 text-sm",
+                            groupOff ? "cursor-not-allowed" : "cursor-pointer",
+                          )}
+                        >
+                          <Checkbox
+                            checked={selected.has(item.value)}
+                            disabled={groupOff}
+                            onCheckedChange={(c) => toggle(item.value, Boolean(c))}
+                          />
+                          {item.label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <SheetFooter className="flex-row justify-end gap-2 px-0">
+          <SheetFooter className="flex-row justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Vazgeç
             </Button>

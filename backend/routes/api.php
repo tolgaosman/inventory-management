@@ -39,10 +39,10 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::post('/categories/{id}/restore', [CategoryController::class, 'restore'])->middleware(['perm:products.manage', 'throttle:writes']);
 
     // Warehouses
-    Route::get('/warehouses', [WarehouseController::class, 'index'])->middleware('perm:products.view');
-    Route::get('/warehouses/detailed', [WarehouseController::class, 'detailed'])->middleware('perm:products.view');
-    Route::get('/warehouses/stock-matrix', [WarehouseController::class, 'stockMatrix'])->middleware('perm:products.view');
-    Route::get('/warehouses/{id}', [WarehouseController::class, 'show'])->middleware('perm:products.view');
+    Route::get('/warehouses', [WarehouseController::class, 'index'])->middleware('perm:products.view|warehouses.view');
+    Route::get('/warehouses/detailed', [WarehouseController::class, 'detailed'])->middleware('perm:products.view|warehouses.view');
+    Route::get('/warehouses/stock-matrix', [WarehouseController::class, 'stockMatrix'])->middleware('perm:products.view|warehouses.view');
+    Route::get('/warehouses/{id}', [WarehouseController::class, 'show'])->middleware('perm:products.view|warehouses.view');
     Route::post('/warehouses', [WarehouseController::class, 'store'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
     Route::put('/warehouses/{id}', [WarehouseController::class, 'update'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
     Route::delete('/warehouses/{id}', [WarehouseController::class, 'destroy'])->middleware(['perm:warehouses.manage', 'throttle:writes']);
@@ -62,6 +62,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
     Route::get('/products/{id}', [ProductController::class, 'show'])->middleware('perm:products.view');
     Route::get('/products/{id}/stock', [ProductController::class, 'stockByWarehouse'])->middleware('perm:products.view');
     Route::get('/products/{id}/history', [ProductController::class, 'history'])->middleware('perm:products.view');
+    Route::get('/products/{id}/purchases', [ProductController::class, 'purchases'])->middleware('perm:products.view');
     Route::post('/products', [ProductController::class, 'store'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::put('/products/{id}', [ProductController::class, 'update'])->middleware(['perm:products.manage', 'throttle:writes']);
     Route::patch('/products/{id}/status', [ProductController::class, 'toggleStatus'])->middleware(['perm:products.manage', 'throttle:writes']);
@@ -115,7 +116,7 @@ Route::middleware(['auth:sanctum', EnsurePasswordChanged::class])->group(functio
 
 
     // Dashboard + notifications
-    Route::get('/dashboard', [DashboardController::class, 'show'])->middleware('perm:products.view');
+    Route::get('/dashboard', [DashboardController::class, 'show'])->middleware('perm:dashboard.view');
     Route::get('/notifications/critical-stock', [DashboardController::class, 'criticalStockNotifications'])->middleware('perm:products.view');
 
     // Reports

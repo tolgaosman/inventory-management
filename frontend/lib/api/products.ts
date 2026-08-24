@@ -1,4 +1,4 @@
-import type { MovementType, PagedQuery, PagedResult, Product, StockLevel } from "@/lib/types";
+import type { MovementType, PagedQuery, PagedResult, Product, PurchaseOrderStatus, StockLevel } from "@/lib/types";
 import { apiFetch } from "./client";
 import { cachedFetch, invalidateCache } from "@/lib/api-cache";
 
@@ -94,7 +94,41 @@ export async function getProductHistory(id: string): Promise<ProductHistoryEntry
   return apiFetch<ProductHistoryEntry[]>(`/products/${id}/history`);
 }
 
-export type ProductInput = Omit<Product, "id" | "status">;
+/**
+ * One past purchase-order line for a product, carrying the price it was actually
+ * bought at. `unitPrice`/`lineTotal` come back null without `financial.view`.
+ */
+export interface ProductPurchaseEntry {
+  itemId: number;
+  purchaseOrderId: string;
+  code: string;
+  supplierName: string;
+  status: PurchaseOrderStatus | null;
+  createdAt: string | null;
+  receivedAt: string | null;
+  quantity: number;
+  receivedQuantity: number;
+  currency: string;
+  unitPrice: number | null;
+  lineTotal: number | null;
+}
+
+export async function getProductPurchases(
+  id: string,
+  options: { limit?: number } = {},
+): Promise<ProductPurchaseEntry[]> {
+  const query = options.limit ? `?limit=${options.limit}` : "";
+  return apiFetch<ProductPurchaseEntry[]>(`/products/${id}/purchases${query}`);
+}
+
+export type ProductInput = Omit<Product, "id" | "status"> & {
+  /**
+   * Past purchase lines that should adopt the new purchase price. Anything left
+   * out keeps its historical price. Only honoured on update, and only with
+   * `financial.view`.
+   */
+  applyPriceToItemIds?: number[];
+};
 
 export async function createProduct(input: ProductInput): Promise<ProductRow> {
   invalidateProducts();

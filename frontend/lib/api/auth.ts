@@ -2,8 +2,19 @@ import type { AppUser } from "@/lib/types";
 import { apiFetch, clearToken, setToken } from "./client";
 
 export type Permission =
+  | "dashboard.view"
+  | "dashboard.kpis"
+  | "dashboard.meta"
+  | "dashboard.purchase_summary"
+  | "dashboard.category_chart"
+  | "dashboard.recent_movements"
+  | "dashboard.stock_flow"
+  | "dashboard.warehouse_stock"
+  | "dashboard.top_movers"
+  | "dashboard.critical_stock"
   | "products.view"
   | "products.manage"
+  | "warehouses.view"
   | "warehouses.manage"
   | "stock.view"
   | "stock.in"

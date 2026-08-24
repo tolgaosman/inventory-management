@@ -40,10 +40,11 @@ import {
 } from "@/components/common/status-badge";
 import { ProductImageThumbnail } from "@/components/common/product-image-thumbnail";
 import { ProductFormSheet } from "@/components/products/product-form-sheet";
+import { PurchaseHistoryCard } from "@/components/products/purchase-history-card";
 import { StockMovementSheet, type StockMovementMode } from "@/components/products/stock-movement-sheet";
 import { useAuth } from "@/lib/auth";
 import { useAsync } from "@/lib/hooks/use-async";
-import { getProduct, getProductHistory, getProductStockByWarehouse, updateProduct } from "@/lib/api/products";
+import { getProduct, getProductHistory, getProductPurchases, getProductStockByWarehouse, updateProduct } from "@/lib/api/products";
 import { listWarehouses, listCategories, listSuppliers } from "@/lib/api/catalog";
 import { listPurchaseOrders } from "@/lib/api/purchase-orders";
 import { ApiError } from "@/lib/api/client";
@@ -76,6 +77,7 @@ export function ProductDetailClient({ id }: { id: string }) {
         listCategories(),
         listSuppliers({ pageSize: 1000 }),
         listPurchaseOrders({ pageSize: 1000 }),
+        getProductPurchases(id),
       ]),
     [id],
   );
@@ -114,7 +116,7 @@ export function ProductDetailClient({ id }: { id: string }) {
     );
   }
 
-  const [product, stockByWarehouse, history, warehouses, categories, suppliersResult, purchaseOrdersResult] = view;
+  const [product, stockByWarehouse, history, warehouses, categories, suppliersResult, purchaseOrdersResult, purchases] = view;
   const suppliers = suppliersResult.rows;
   const supplierName = suppliers.find((s) => s.id === product.supplierId)?.name ?? "-";
   const level = stockLevel(product.totalStock, product.minStock, product.critical);
@@ -377,6 +379,8 @@ export function ProductDetailClient({ id }: { id: string }) {
                 )}
               </CardContent>
             </Card>
+
+            <PurchaseHistoryCard entries={purchases} unit={product.unit} />
 
             <Card className="py-5 gap-3">
               <CardHeader className="px-5 pb-2">

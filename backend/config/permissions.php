@@ -11,8 +11,14 @@
 
 return [
     'permissions' => [
+        // Dashboard: 'dashboard.view' is the master switch for the /panel page;
+        // the rest gate individual widgets on it.
+        'dashboard.view',
+        'dashboard.kpis', 'dashboard.meta', 'dashboard.purchase_summary',
+        'dashboard.category_chart', 'dashboard.recent_movements', 'dashboard.stock_flow',
+        'dashboard.warehouse_stock', 'dashboard.top_movers', 'dashboard.critical_stock',
         'products.view', 'products.manage',
-        'warehouses.manage',
+        'warehouses.view', 'warehouses.manage',
         'stock.view', 'stock.in', 'stock.out', 'stock.transfer',
         'purchase.view', 'purchase.manage', 'purchase.approve', 'purchase.receive',
         'suppliers.view', 'suppliers.manage',

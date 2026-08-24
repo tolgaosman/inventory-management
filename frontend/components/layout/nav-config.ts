@@ -35,14 +35,14 @@ export interface NavSection {
 export const NAV_SECTIONS: NavSection[] = [
   {
     label: "Genel",
-    items: [{ label: "Gösterge Paneli", href: "/panel", icon: LayoutGrid }],
+    items: [{ label: "Gösterge Paneli", href: "/panel", icon: LayoutGrid, permission: "dashboard.view" }],
   },
   {
     label: "Envanter",
     items: [
       { label: "Ürün Yönetimi", href: "/urunler", icon: Package, permission: "products.view" },
       { label: "Kategoriler", href: "/kategoriler", icon: FolderTree, permission: "products.view" },
-      { label: "Depolar", href: "/depolar", icon: Warehouse, permission: "products.view" },
+      { label: "Depolar", href: "/depolar", icon: Warehouse, permission: ["products.view", "warehouses.view"] },
     ],
   },
   {

@@ -303,7 +303,7 @@ export function WarehousesClient() {
   };
 
   return (
-    <Can permission="products.view" fallback={<Forbidden />}>
+    <Can permission={["products.view", "warehouses.view"]} fallback={<Forbidden />}>
       <div className="space-y-6">
       {/* Page Header */}
       <PageHeader

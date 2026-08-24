@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,6 +26,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SubmitButton } from "@/components/common/submit-button";
 import { useSubmitGuard } from "@/lib/hooks/use-submit-guard";
+import { useAuth } from "@/lib/auth";
+import { ApplyPriceDialog } from "@/components/products/apply-price-dialog";
 import { useCurrency } from "@/lib/currency-context";
 import { CURRENCY_SYMBOLS } from "@/lib/export/report-data";
 import type { Product, Category, Supplier } from "@/lib/types";
@@ -62,7 +64,18 @@ const schema = z
 type FormInput = z.input<typeof schema>;
 type FormValues = z.output<typeof schema>;
 /** What actually gets submitted — `purchasePrice`/`salePrice` resolved to `number | null` (never left `undefined`) and rate-converted back to the base currency. */
-type ProductSubmission = Omit<FormValues, "purchasePrice" | "salePrice"> & { purchasePrice: number | null; salePrice: number | null };
+type ProductSubmission = Omit<FormValues, "purchasePrice" | "salePrice"> & {
+  purchasePrice: number | null;
+  salePrice: number | null;
+  /** Past purchase lines the user chose to re-price; absent/empty leaves history alone. */
+  applyPriceToItemIds?: number[];
+};
+
+/** Rounded to the stored decimal(12,2) precision so float drift isn't read as an edit. */
+function samePrice(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Math.round(a * 100) === Math.round(b * 100);
+}
 
 interface ProductFormSheetProps {
   open: boolean;
@@ -86,7 +99,10 @@ export function ProductFormSheet({
 }: ProductFormSheetProps) {
   const { pending, guard } = useSubmitGuard();
   const { currency, rates } = useCurrency();
+  const { can } = useAuth();
   const rate = rates?.[currency] || 1;
+  // Set while the price-change confirmation is up; holds the submission waiting on an answer.
+  const [priceConfirm, setPriceConfirm] = useState<ProductSubmission | null>(null);
 
   const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(schema),
@@ -142,17 +158,36 @@ export function ProductFormSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, product, rate]);
 
-  async function onSubmit(values: FormValues) {
+  async function save(submission: ProductSubmission) {
     await guard(async () => {
-      const submission = {
-        ...values,
-        purchasePrice: values.purchasePrice != null ? values.purchasePrice * rate : null,
-        salePrice: values.salePrice != null ? values.salePrice * rate : null,
-      };
       await onSaved(submission);
       toast.success(product ? "Ürün güncellendi." : "Ürün oluşturuldu.");
+      setPriceConfirm(null);
       onOpenChange(false);
     });
+  }
+
+  async function onSubmit(values: FormValues) {
+    const submission: ProductSubmission = {
+      ...values,
+      purchasePrice: values.purchasePrice != null ? values.purchasePrice * rate : null,
+      salePrice: values.salePrice != null ? values.salePrice * rate : null,
+    };
+
+    // Editing an existing product's purchase price silently rewrites what the app
+    // shows as "son satın alış fiyatı", so ask what should happen to past purchases
+    // before saving. Comparison is on base-currency values, after rate conversion.
+    const priceChanged =
+      product != null &&
+      can("financial.view") &&
+      !samePrice(submission.purchasePrice, product.purchasePrice);
+
+    if (priceChanged) {
+      setPriceConfirm(submission);
+      return;
+    }
+
+    await save(submission);
   }
 
   return (
@@ -433,6 +468,19 @@ export function ProductFormSheet({
           </form>
         </Form>
       </SheetContent>
+
+      {product && priceConfirm && (
+        <ApplyPriceDialog
+          open
+          productId={product.id}
+          productUnit={product.unit}
+          oldPrice={product.purchasePrice}
+          newPrice={priceConfirm.purchasePrice}
+          pending={pending}
+          onCancel={() => setPriceConfirm(null)}
+          onConfirm={(itemIds) => void save({ ...priceConfirm, applyPriceToItemIds: itemIds })}
+        />
+      )}
     </Sheet>
   );
 }

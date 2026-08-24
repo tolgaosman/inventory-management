@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\PurchaseOrderItem;
 use App\Models\StockLevel;
 use App\Models\StockMovement;
 use App\Models\Supplier;
@@ -232,6 +233,57 @@ class ProductController extends Controller
         return response()->json($entries);
     }
 
+    /**
+     * Past purchase-order lines for a product, newest first.
+     *
+     * Each line keeps the unit price it was bought at (purchase_order_items.unit_price
+     * is a snapshot, see PurchaseOrderService::syncItems), so editing the product's
+     * "son satın alış fiyatı" never rewrites this history.
+     */
+    public function purchases(Request $request, string $id)
+    {
+        $this->findOrFail($id);
+
+        $showPrices = (bool) $request->user()?->can('financial.view');
+        $limit = (int) $request->query('limit', 0);
+
+        $query = PurchaseOrderItem::query()
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->whereNull('purchase_orders.deleted_at')
+            ->where('purchase_order_items.product_id', $id)
+            ->orderByDesc('purchase_orders.created_at')
+            ->orderByDesc('purchase_order_items.id')
+            ->select('purchase_order_items.*');
+
+        if ($limit > 0) {
+            $query->limit($limit);
+        }
+
+        $items = $query->with('purchaseOrder.supplier')->get();
+
+        $rows = $items->map(function (PurchaseOrderItem $i) use ($showPrices) {
+            $po = $i->purchaseOrder;
+            $unitPrice = (float) $i->unit_price;
+
+            return [
+                'itemId' => (int) $i->id,
+                'purchaseOrderId' => $i->purchase_order_id,
+                'code' => $po->code ?? '-',
+                'supplierName' => $po?->supplier->name ?? $po?->adhoc_supplier_name ?? '-',
+                'status' => $po->status ?? null,
+                'createdAt' => Present::date($po?->created_at),
+                'receivedAt' => $po?->received_at ? Present::date($po->received_at) : null,
+                'quantity' => (int) $i->quantity,
+                'receivedQuantity' => (int) $i->received_quantity,
+                'currency' => $po->currency ?? 'TRY',
+                'unitPrice' => $showPrices ? $unitPrice : null,
+                'lineTotal' => $showPrices ? $unitPrice * (int) $i->quantity : null,
+            ];
+        })->all();
+
+        return response()->json($rows);
+    }
+
     /** @return array<string,mixed> snake_case attributes ready for the model */
     private function validateProductInput(Request $request): array
     {
@@ -298,7 +350,18 @@ class ProductController extends Controller
     {
         $attributes = $this->validateProductInput($request);
 
-        $product = DB::transaction(function () use ($attributes, $id) {
+        // Opt-in back-fill: the client asks which past purchase lines (if any) should
+        // adopt the new price. Everything left out keeps the price it was bought at.
+        $applyTo = $request->validate([
+            'applyPriceToItemIds' => ['nullable', 'array'],
+            'applyPriceToItemIds.*' => ['integer'],
+        ])['applyPriceToItemIds'] ?? [];
+
+        if (! $request->user()?->can('financial.view')) {
+            $applyTo = [];
+        }
+
+        $product = DB::transaction(function () use ($attributes, $applyTo, $id) {
             $product = Product::query()->lockForUpdate()->find($id);
             if (! $product) {
                 throw ApiException::notFound('Ürün bulunamadı.');
@@ -306,6 +369,14 @@ class ProductController extends Controller
             $this->assertSkuFree($attributes['sku'], $id);
 
             $product->update($attributes);
+
+            if ($applyTo !== [] && $attributes['purchase_price'] !== null) {
+                // The product_id guard keeps a stray id from rewriting another product's line.
+                PurchaseOrderItem::query()
+                    ->whereIn('id', $applyTo)
+                    ->where('product_id', $product->id)
+                    ->update(['unit_price' => $attributes['purchase_price']]);
+            }
 
             return $product;
         });
