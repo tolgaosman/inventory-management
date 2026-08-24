@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog,
@@ -117,6 +118,32 @@ function toDateInputValue(iso: string): string {
 
 const EMPTY_ITEM = { isAdhoc: false, productId: "", productName: "", unit: "Adet", quantity: 1, unitPrice: 0 };
 
+/** True when an item still matches `EMPTY_ITEM` — i.e. the user hasn't touched it. */
+function isItemEmpty(item: FormInput["items"][number]): boolean {
+  return (
+    !item.isAdhoc &&
+    !item.productId &&
+    !(item.productName ?? "").trim() &&
+    (!item.quantity || Number(item.quantity) === 1) &&
+    (!item.unitPrice || Number(item.unitPrice) === 0)
+  );
+}
+
+/** True when at least one field in the form differs from its blank default. */
+function formHasAnyValue(values: FormInput): boolean {
+  return (
+    values.useOtherSupplier ||
+    Boolean(values.supplierId) ||
+    Boolean((values.adhocSupplierName ?? "").trim()) ||
+    Boolean((values.adhocSupplierEmail ?? "").trim()) ||
+    Boolean(values.expectedAt) ||
+    Boolean((values.notes ?? "").trim()) ||
+    values.priority !== "medium" ||
+    values.items.length > 1 ||
+    (values.items.length === 1 && !isItemEmpty(values.items[0]))
+  );
+}
+
 interface PurchaseOrderFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -217,8 +244,8 @@ export function PurchaseOrderFormSheet({
     if (newOpen) {
       onOpenChange(true);
     } else {
-      // Only prompt for draft if it's a new order or already a draft
-      if (!order || order.status === "draft") {
+      // Only prompt for draft if it's a new order (or already a draft) and the user actually typed something
+      if ((!order || order.status === "draft") && formHasAnyValue(form.getValues())) {
         setDraftPromptOpen(true);
       } else {
         onOpenChange(false);
@@ -227,11 +254,6 @@ export function PurchaseOrderFormSheet({
   }
 
   async function handleSaveDraft() {
-    const isValid = await form.trigger(["useOtherSupplier", "supplierId", "adhocSupplierName", "adhocSupplierEmail", "expectedAt", "priority"]);
-    if (!isValid) {
-      toast.error("Taslak kaydetmek için lütfen zorunlu alanları (Tedarikçi vb.) doldurun.");
-      return;
-    }
     setDraftPromptOpen(false);
     const values = form.getValues();
     const validItems = values.items?.filter((i) => (i.isAdhoc && i.productName) || (!i.isAdhoc && i.productId)) || [];
@@ -350,7 +372,7 @@ export function PurchaseOrderFormSheet({
                       <FormItem>
                         <FormLabel>Beklenen Teslim Tarihi</FormLabel>
                         <FormControl>
-                          <Input type="date" min={today} {...field} />
+                          <DatePicker min={today} value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

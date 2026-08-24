@@ -17,7 +17,7 @@ export interface PurchaseOrderActions {
   canRequestApproval: boolean;
   /** Approve a "pending_approval" order, moving it straight to "ordered". */
   canApprove: boolean;
-  /** Reject a "pending_approval" order, sending it back to "draft" for rework. */
+  /** Reject a "pending_approval" order, cancelling it (same end state as "cancel"). */
   canReject: boolean;
   canEdit: boolean;
   canReceive: boolean;

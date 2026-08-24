@@ -188,7 +188,7 @@ export async function buildReportData(
       rows: criticalProducts.map(({ product, current, shortfall }) => [
         product.name,
         product.sku,
-        categoryName(product.categoryId),
+        categoryName(product.categoryId ?? ""),
         product.brand,
         current,
         product.minStock,

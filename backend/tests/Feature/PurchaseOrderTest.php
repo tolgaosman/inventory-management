@@ -24,9 +24,11 @@ class PurchaseOrderTest extends TestCase
 
     /**
      * An approver (purchase.approve) — most of the lifecycle mechanics below
-     * (draft → ordered → received, edit, cancel, delete) are orthogonal to who's
-     * doing it, so they use an approver to skip the approval-routing behavior
-     * that's covered separately in the approval-routing tests below.
+     * (ordered → received, edit, cancel, delete) are orthogonal to who's doing
+     * it, so they use an approver to skip the approval-routing behavior that's
+     * covered separately in the approval-routing tests below. A finished
+     * (non-draft) submission from an approver is auto-approved straight to
+     * "ordered" — see createOrder().
      */
     private function buyer(): User
     {
@@ -48,6 +50,30 @@ class PurchaseOrderTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * A finished (non-draft) submission — lands as "ordered" for an approver,
+     * "pending_approval" for anyone else (see test_order_created_by_staff_*).
+     */
+    private function createOrder(User $user, ?Product $product = null, ?Warehouse $warehouse = null, int $quantity = 10): array
+    {
+        $product ??= Product::factory()->create();
+        $warehouse ??= Warehouse::factory()->create();
+        $supplier = Supplier::factory()->create();
+
+        $response = $this->actingAs($user, 'sanctum')->postJson('/api/purchase-orders', [
+            'supplierId' => $supplier->id,
+            'warehouseId' => $warehouse->id,
+            'expectedAt' => now()->addDays(7)->toIso8601String(),
+            'items' => [
+                ['productId' => $product->id, 'quantity' => $quantity, 'unitPrice' => 15.5],
+            ],
+        ]);
+        $response->assertCreated();
+
+        return [$response->json(), $product, $warehouse];
+    }
+
+    /** An explicit draft — for exercising the draft-only mechanics (request-approval, reject, delete, edit). */
     private function createDraftOrder(User $user, ?Product $product = null, ?Warehouse $warehouse = null, int $quantity = 10): array
     {
         $product ??= Product::factory()->create();
@@ -61,6 +87,7 @@ class PurchaseOrderTest extends TestCase
             'items' => [
                 ['productId' => $product->id, 'quantity' => $quantity, 'unitPrice' => 15.5],
             ],
+            'isDraft' => true,
         ]);
         $response->assertCreated();
 
@@ -82,12 +109,19 @@ class PurchaseOrderTest extends TestCase
         $response->assertStatus(422)->assertJsonPath('code', 'VALIDATION');
     }
 
-    public function test_creating_an_order_starts_as_draft(): void
+    public function test_creating_an_order_by_approver_starts_as_ordered(): void
+    {
+        [$po] = $this->createOrder($this->buyer());
+
+        $this->assertSame('ordered', $po['status']);
+        $this->assertStringStartsWith('NET-PO-', $po['code']);
+    }
+
+    public function test_explicitly_saving_as_draft_starts_as_draft(): void
     {
         [$po] = $this->createDraftOrder($this->buyer());
 
         $this->assertSame('draft', $po['status']);
-        $this->assertStringStartsWith('NET-PO-', $po['code']);
     }
 
     public function test_full_approval_workflow_draft_to_pending_to_ordered(): void
@@ -106,30 +140,29 @@ class PurchaseOrderTest extends TestCase
     public function test_approve_is_rejected_when_order_is_not_pending_approval(): void
     {
         $user = $this->buyer();
-        [$po] = $this->createDraftOrder($user);
+        [$po] = $this->createOrder($user);
 
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$po['id']}/approve")
             ->assertStatus(409)->assertJsonPath('code', 'CONFLICT');
     }
 
-    public function test_reject_sends_a_pending_order_back_to_draft(): void
+    public function test_reject_cancels_a_pending_order(): void
     {
         $user = $this->buyer();
         [$po] = $this->createDraftOrder($user);
         $id = $po['id'];
 
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/request-approval")->assertOk();
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/reject")
-            ->assertOk()->assertJsonPath('status', 'draft');
+        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/reject", ['reason' => 'eksik bilgi'])
+            ->assertOk()->assertJsonPath('status', 'cancelled');
     }
 
     public function test_receiving_a_full_order_creates_stock_and_marks_it_received(): void
     {
         $user = $this->buyer();
-        [$po, $product, $warehouse] = $this->createDraftOrder($user, quantity: 10);
+        [$po, $product, $warehouse] = $this->createOrder($user, quantity: 10);
         $id = $po['id'];
 
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
         $this->attachInvoice($user, $id);
 
         $response = $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
@@ -145,9 +178,8 @@ class PurchaseOrderTest extends TestCase
     public function test_partially_receiving_an_order_leaves_it_partially_received(): void
     {
         $user = $this->buyer();
-        [$po, $product] = $this->createDraftOrder($user, quantity: 10);
+        [$po, $product] = $this->createOrder($user, quantity: 10);
         $id = $po['id'];
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
         $this->attachInvoice($user, $id);
 
         $response = $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
@@ -160,9 +192,8 @@ class PurchaseOrderTest extends TestCase
     public function test_over_receiving_is_capped_at_the_ordered_quantity(): void
     {
         $user = $this->buyer();
-        [$po, $product, $warehouse] = $this->createDraftOrder($user, quantity: 10);
+        [$po, $product, $warehouse] = $this->createOrder($user, quantity: 10);
         $id = $po['id'];
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
         $this->attachInvoice($user, $id);
 
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
@@ -176,9 +207,9 @@ class PurchaseOrderTest extends TestCase
     public function test_cancelled_order_cannot_be_received(): void
     {
         $user = $this->buyer();
-        [$po, $product] = $this->createDraftOrder($user);
+        [$po, $product] = $this->createOrder($user);
         $id = $po['id'];
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/cancel")->assertOk();
+        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/cancel", ['reason' => 'vazgeçildi'])->assertOk();
 
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
             'receivedQuantities' => [$product->id => 5],
@@ -188,24 +219,22 @@ class PurchaseOrderTest extends TestCase
     public function test_received_order_cannot_be_cancelled(): void
     {
         $user = $this->buyer();
-        [$po, $product] = $this->createDraftOrder($user, quantity: 5);
+        [$po, $product] = $this->createOrder($user, quantity: 5);
         $id = $po['id'];
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
         $this->attachInvoice($user, $id);
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
             'receivedQuantities' => [$product->id => 5],
         ])->assertOk();
 
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/cancel")
+        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/cancel", ['reason' => 'vazgeçildi'])
             ->assertStatus(409)->assertJsonPath('code', 'CONFLICT');
     }
 
     public function test_only_draft_orders_can_be_deleted(): void
     {
         $user = $this->buyer();
-        [$po] = $this->createDraftOrder($user);
+        [$po] = $this->createOrder($user);
         $id = $po['id'];
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
 
         $this->actingAs($user, 'sanctum')->deleteJson("/api/purchase-orders/{$id}")
             ->assertStatus(409)->assertJsonPath('code', 'CONFLICT');
@@ -214,9 +243,8 @@ class PurchaseOrderTest extends TestCase
     public function test_a_partially_received_order_cannot_be_edited(): void
     {
         $user = $this->buyer();
-        [$po, $product, $warehouse] = $this->createDraftOrder($user, quantity: 10);
+        [$po, $product, $warehouse] = $this->createOrder($user, quantity: 10);
         $id = $po['id'];
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
         $this->attachInvoice($user, $id);
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$id}/receive", [
             'receivedQuantities' => [$product->id => 3],
@@ -231,7 +259,7 @@ class PurchaseOrderTest extends TestCase
 
     public function test_order_created_by_staff_without_approve_starts_pending_approval(): void
     {
-        [$po] = $this->createDraftOrder($this->staff());
+        [$po] = $this->createOrder($this->staff());
 
         $this->assertSame('pending_approval', $po['status']);
     }
@@ -239,7 +267,7 @@ class PurchaseOrderTest extends TestCase
     public function test_staff_cannot_mark_a_pending_order_as_ordered_directly(): void
     {
         $staff = $this->staff();
-        [$po] = $this->createDraftOrder($staff);
+        [$po] = $this->createOrder($staff);
 
         // Already pending_approval (see test above), so /order is doubly blocked:
         // no purchase.approve, and the transition guard only allows draft -> ordered.
@@ -251,7 +279,7 @@ class PurchaseOrderTest extends TestCase
     {
         $staff = $this->staff();
         $approver = $this->buyer();
-        [$po] = $this->createDraftOrder($staff);
+        [$po] = $this->createOrder($staff);
 
         $this->assertSame('pending_approval', $po['status']);
 
@@ -262,9 +290,8 @@ class PurchaseOrderTest extends TestCase
     public function test_staff_cannot_edit_an_ordered_order(): void
     {
         $approver = $this->buyer();
-        [$po] = $this->createDraftOrder($approver);
+        [$po] = $this->createOrder($approver);
         $id = $po['id'];
-        $this->actingAs($approver, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
 
         $this->actingAs($this->staff(), 'sanctum')->putJson("/api/purchase-orders/{$id}", ['notes' => 'x'])
             ->assertStatus(403);
@@ -273,9 +300,8 @@ class PurchaseOrderTest extends TestCase
     public function test_depo_can_receive_and_invoice_but_not_create_orders(): void
     {
         $approver = $this->buyer();
-        [$po, $product] = $this->createDraftOrder($approver, quantity: 5);
+        [$po, $product] = $this->createOrder($approver, quantity: 5);
         $id = $po['id'];
-        $this->actingAs($approver, 'sanctum')->postJson("/api/purchase-orders/{$id}/order")->assertOk();
 
         $depo = User::factory()->role('depo')->create();
         $this->actingAs($depo, 'sanctum')->postJson('/api/purchase-orders', [])->assertStatus(403);
@@ -289,16 +315,15 @@ class PurchaseOrderTest extends TestCase
     public function test_bulk_cancel_reports_per_id_failures(): void
     {
         $user = $this->buyer();
-        [$draft] = $this->createDraftOrder($user);
-        [$toReceive, $product] = $this->createDraftOrder($user, quantity: 5);
-        $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$toReceive['id']}/order")->assertOk();
+        [$cancellable] = $this->createOrder($user);
+        [$toReceive, $product] = $this->createOrder($user, quantity: 5);
         $this->attachInvoice($user, $toReceive['id']);
         $this->actingAs($user, 'sanctum')->postJson("/api/purchase-orders/{$toReceive['id']}/receive", [
             'receivedQuantities' => [$product->id => 5],
         ])->assertOk();
 
         $response = $this->actingAs($user, 'sanctum')->postJson('/api/purchase-orders/bulk-cancel', [
-            'ids' => [$draft['id'], $toReceive['id']],
+            'ids' => [$cancellable['id'], $toReceive['id']],
         ]);
 
         $response->assertOk()

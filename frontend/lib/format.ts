@@ -18,7 +18,7 @@ let trDateTime = buildDateFormatter({
 });
 
 function buildDateFormatter(opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat("en-US", { ...opts, timeZone: config.timeZone });
+  return new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: config.timeZone });
 }
 
 /**

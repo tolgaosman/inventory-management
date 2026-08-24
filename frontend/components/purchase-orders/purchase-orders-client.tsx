@@ -1000,7 +1000,7 @@ export function PurchaseOrdersClient() {
               <ShoppingCart className="size-4" />
               Siparişler & Teklifler
             </TabsTrigger>
-            {user?.role === "satinalma" && (
+            {can("purchase.manage") && (
               <TabsTrigger value="my_drafts">
                 <FileSignature className="size-4" />
                 Taslaklarım
@@ -1185,7 +1185,7 @@ export function PurchaseOrdersClient() {
             </TabsContent>
           )}
 
-          {user?.role === "satinalma" && (
+          {can("purchase.manage") && (
             <TabsContent value="my_drafts">
               <SectionStack className={fetchStatus === "loading" ? "opacity-60 transition-opacity" : "transition-opacity"}>
                 <Section index={0}>

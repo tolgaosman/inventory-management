@@ -61,7 +61,8 @@ export interface Product {
   name: string;
   sku: string;
   barcode: string;
-  categoryId: string;
+  /** Null for a placeholder product auto-created from a purchase order's ad-hoc item — completed later in Ürün Yönetimi. */
+  categoryId: string | null;
   brand: string;
   unit: string;
   purchasePrice: number | null;

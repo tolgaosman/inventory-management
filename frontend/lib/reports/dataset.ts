@@ -204,7 +204,7 @@ export function categoryShares(ds: ReportDataset, warehouseId?: string): Categor
   const topLevel = ds.categories.filter((c) => c.parentId === null);
   const shares = topLevel.map((top) => {
     const descendantIds = new Set([top.id, ...ds.categories.filter((c) => c.parentId === top.id).map((c) => c.id)]);
-    const categoryProducts = ds.products.filter((p) => descendantIds.has(p.categoryId));
+    const categoryProducts = ds.products.filter((p) => descendantIds.has(p.categoryId ?? ""));
     const units = warehouseId
       ? categoryProducts.reduce((sum, p) => sum + (ds.stocksByProduct.get(p.id)?.[warehouseId] ?? 0), 0)
       : categoryProducts.reduce((sum, p) => sum + p.totalStock, 0);

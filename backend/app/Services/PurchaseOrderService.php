@@ -98,6 +98,108 @@ class PurchaseOrderService
         }
     }
 
+    /**
+     * A supplier typed as free text on a purchase order becomes a real,
+     * minimal Supplier record — reused by name if one already exists —
+     * so it shows up in Tedarikçiler and can be filled in (contact,
+     * phone, city) later instead of staying a dead-end string on the PO.
+     */
+    private function findOrCreateSupplierId(string $name, ?string $email): string
+    {
+        $name = trim($name);
+        $existing = Supplier::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->first();
+        if ($existing) {
+            return $existing->id;
+        }
+
+        $supplier = Supplier::query()->create([
+            'id' => IdGenerator::nextId('suppliers', 'id', 'sup'),
+            'name' => $name,
+            'contact_name' => '',
+            'emails' => $email ? [$email] : [],
+            'phone' => '',
+            'city' => '',
+        ]);
+
+        return $supplier->id;
+    }
+
+    /**
+     * Same idea for an order line typed as free text (no catalog product
+     * picked): create a minimal Product — reused by name if one already
+     * exists — under the resolved supplier, so it lands in Ürün Yönetimi
+     * with just name/unit/price and the rest (SKU, kategori, marka, min/max
+     * stok) can be completed there later.
+     */
+    private function findOrCreateProductId(string $name, string $unit, float $unitPrice, string $supplierId): string
+    {
+        $name = trim($name);
+        $existing = Product::query()->whereRaw('lower(name) = ?', [mb_strtolower($name)])->first();
+        if ($existing) {
+            return $existing->id;
+        }
+
+        $id = IdGenerator::nextId('products', 'id', 'prd', 4);
+        $product = Product::query()->create([
+            'id' => $id,
+            'name' => $name,
+            'sku' => strtoupper($id),
+            'barcode' => '',
+            'category_id' => null,
+            'brand' => '',
+            'unit' => trim($unit),
+            'purchase_price' => $unitPrice,
+            'sale_price' => null,
+            'min_stock' => 0,
+            'max_stock' => 0,
+            'status' => 'aktif',
+            'supplier_id' => $supplierId,
+        ]);
+
+        return $product->id;
+    }
+
+    /**
+     * Items without any resolvable supplier fall back to the old
+     * denormalized-text-only behavior (no catalog product to attach to).
+     */
+    private function resolveAdhocItems(array $items, ?string $supplierId): array
+    {
+        if (! $supplierId) {
+            return $items;
+        }
+
+        foreach ($items as &$item) {
+            if (empty($item['productId']) && ! empty($item['productName'])) {
+                $item['productId'] = $this->findOrCreateProductId(
+                    $item['productName'],
+                    $item['unit'] ?? '',
+                    (float) ($item['unitPrice'] ?? 0),
+                    $supplierId,
+                );
+            }
+        }
+        unset($item);
+
+        return $items;
+    }
+
+    /**
+     * Resolves a request's supplier + item inputs to real IDs, creating
+     * placeholder Supplier/Product rows for anything typed as free text.
+     *
+     * @return array{0: ?string, 1: array} [$supplierId, $items]
+     */
+    private function resolveAdhocEntities(array $input): array
+    {
+        $supplierId = $input['supplierId'] ?? null;
+        if (empty($supplierId) && ! empty($input['adhocSupplierName'])) {
+            $supplierId = $this->findOrCreateSupplierId($input['adhocSupplierName'], $input['adhocSupplierEmail'] ?? null);
+        }
+
+        return [$supplierId, $this->resolveAdhocItems($input['items'] ?? [], $supplierId)];
+    }
+
     private function syncItems(PurchaseOrder $po, array $items): void
     {
         $po->items()->delete();
@@ -122,7 +224,7 @@ class PurchaseOrderService
         if (! empty($input['supplierId']) && ! Supplier::query()->whereKey($input['supplierId'])->exists()) {
             throw ApiException::validation('Tedarikçi bulunamadı.');
         }
-        if (empty($input['supplierId']) && empty($input['adhocSupplierName'])) {
+        if (empty($input['supplierId']) && empty($input['adhocSupplierName']) && empty($input['isDraft'])) {
             throw ApiException::validation('Bir tedarikçi seçin veya adını girin.');
         }
         if (! empty($input['warehouseId']) && ! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
@@ -134,29 +236,34 @@ class PurchaseOrderService
         $isDraft = !empty($input['isDraft']);
         $this->validateItems($input['items'], $isDraft);
 
-        // If specifically requested as a draft, save it as a draft. Otherwise, 
-        // approvers open orders as drafts they can send straight through; everyone
-        // else's order lands in the approval queue immediately.
-        $initialStatus = !empty($input['isDraft']) ? 'draft' : ($user->can('purchase.approve') ? 'draft' : 'pending_approval');
+        // If specifically requested as a draft, save it as a draft. Otherwise, an
+        // approver's finished order is auto-approved (goes straight to `ordered`,
+        // same as if they'd approved their own submission); everyone else's order
+        // lands in the approval queue instead.
+        $isApprover = $user->can('purchase.approve');
+        $initialStatus = $isDraft ? 'draft' : ($isApprover ? 'ordered' : 'pending_approval');
 
         $po = DB::transaction(function () use ($input, $initialStatus, $user) {
+            [$supplierId, $items] = $this->resolveAdhocEntities($input);
+
             $po = PurchaseOrder::query()->create([
                 'id' => IdGenerator::nextId('purchase_orders', 'id', 'po', 4),
                 'code' => IdGenerator::nextCode('purchase_orders', 'code', 'NET-PO-'),
-                'supplier_id' => $input['supplierId'] ?? null,
-                'adhoc_supplier_name' => empty($input['supplierId']) ? ($input['adhocSupplierName'] ?? null) : null,
-                'adhoc_supplier_email' => empty($input['supplierId']) ? ($input['adhocSupplierEmail'] ?? null) : null,
+                'supplier_id' => $supplierId,
+                'adhoc_supplier_name' => null,
+                'adhoc_supplier_email' => null,
                 'warehouse_id' => $input['warehouseId'] ?? null,
                 'status' => $initialStatus,
                 'priority' => $input['priority'] ?? 'medium',
                 'created_at' => Carbon::now(),
                 'created_by' => $user->getKey(),
+                'approved_by' => $initialStatus === 'ordered' ? $user->getKey() : null,
                 'expected_at' => $input['expectedAt'],
                 'received_at' => null,
                 'currency' => 'TRY',
                 'notes' => $input['notes'] ?? null,
             ]);
-            $this->syncItems($po, $input['items']);
+            $this->syncItems($po, $items);
 
             return $po;
         });
@@ -189,13 +296,13 @@ class PurchaseOrderService
                         throw ApiException::validation('Tedarikçi bulunamadı.');
                     }
                     $po->supplier_id = $input['supplierId'];
-                    $po->adhoc_supplier_name = null;
-                    $po->adhoc_supplier_email = null;
+                } elseif (! empty($input['adhocSupplierName'])) {
+                    $po->supplier_id = $this->findOrCreateSupplierId($input['adhocSupplierName'], $input['adhocSupplierEmail'] ?? null);
                 } else {
                     $po->supplier_id = null;
-                    $po->adhoc_supplier_name = $input['adhocSupplierName'] ?? null;
-                    $po->adhoc_supplier_email = $input['adhocSupplierEmail'] ?? null;
                 }
+                $po->adhoc_supplier_name = null;
+                $po->adhoc_supplier_email = null;
             }
             if (array_key_exists('warehouseId', $input)) {
                 if (! empty($input['warehouseId']) && ! Warehouse::query()->whereKey($input['warehouseId'])->exists()) {
@@ -214,7 +321,7 @@ class PurchaseOrderService
             }
             if (array_key_exists('items', $input)) {
                 $this->validateItems($input['items']);
-                $this->syncItems($po, $input['items']);
+                $this->syncItems($po, $this->resolveAdhocItems($input['items'], $po->supplier_id));
             }
             $po->save();
 

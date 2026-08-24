@@ -248,7 +248,7 @@ export function CriticalStockList({
                     )}
                     {shows("category") && (
                       <TableCell className="px-4 py-3 text-center">
-                        <span className="text-xs text-muted-foreground">{categoryName(p.categoryId)}</span>
+                        <span className="text-xs text-muted-foreground">{categoryName(p.categoryId ?? "")}</span>
                       </TableCell>
                     )}
                     {shows("price") && (

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { SteppedFormDialog } from "@/components/common/stepped-form-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -174,7 +175,7 @@ export function QuoteRequestFormSheet({
                       <FormItem>
                         <FormLabel>Teklif Geçerlilik Tarihi</FormLabel>
                         <FormControl>
-                          <Input type="date" min={today} {...field} />
+                          <DatePicker min={today} value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -187,7 +188,7 @@ export function QuoteRequestFormSheet({
                       <FormItem>
                         <FormLabel>İstenen Teslim Tarihi</FormLabel>
                         <FormControl>
-                          <Input type="date" min={today} {...field} />
+                          <DatePicker min={today} value={field.value} onChange={field.onChange} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

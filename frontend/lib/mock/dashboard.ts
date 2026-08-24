@@ -155,7 +155,7 @@ export function getCategoryShares(warehouseId?: string): CategoryShare[] {
       top.id,
       ...categories.filter((c) => c.parentId === top.id).map((c) => c.id),
     ]);
-    const categoryProducts = products.filter((p) => descendantIds.has(p.categoryId));
+    const categoryProducts = products.filter((p) => descendantIds.has(p.categoryId ?? ""));
     const units = warehouseId
       ? stockLevels
           .filter((s) => s.warehouseId === warehouseId && categoryProducts.some((p) => p.id === s.productId))

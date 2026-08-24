@@ -12,6 +12,7 @@ import { ForbiddenState } from "@/components/common/forbidden-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Section, SectionStack } from "@/components/common/section";
 import { DataTable } from "@/components/data-table/data-table";
@@ -427,18 +428,16 @@ export function MovementHistoryClient() {
                     className="h-9 pl-8"
                   />
                 </div>
-                <Input
-                  type="date"
+                <DatePicker
                   value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
+                  onChange={setDateFrom}
                   max={dateTo || undefined}
                   className="h-9 w-fit"
                   aria-label="Başlangıç tarihi"
                 />
-                <Input
-                  type="date"
+                <DatePicker
                   value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
+                  onChange={setDateTo}
                   min={dateFrom || undefined}
                   className="h-9 w-fit"
                   aria-label="Bitiş tarihi"

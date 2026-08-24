@@ -134,7 +134,13 @@ export function QuoteRequestDialog({ open, onOpenChange, suppliers, onContinue }
           <div className="space-y-2">
             <Label className="text-xs font-medium text-muted-foreground">Tedarikçi</Label>
             {!useOtherSupplier && (
-              <Select value={supplierId} onValueChange={(v) => setSupplierId(v ?? "")}>
+              <Select
+                value={supplierId}
+                onValueChange={(v) => {
+                  setSupplierId(v ?? "");
+                  setPickerProductId("");
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue>
                     {supplierId ? suppliers.find((s) => s.id === supplierId)?.name : "Tedarikçi seçin"}
@@ -155,6 +161,7 @@ export function QuoteRequestDialog({ open, onOpenChange, suppliers, onContinue }
                 onCheckedChange={(checked) => {
                   setUseOtherSupplier(!!checked);
                   setSupplierId("");
+                  setPickerProductId("");
                 }}
                 className="mt-0.5"
               />
@@ -185,7 +192,11 @@ export function QuoteRequestDialog({ open, onOpenChange, suppliers, onContinue }
             <Label className="text-xs font-medium text-muted-foreground">Kalemler</Label>
             <div className="flex items-end gap-2">
               <div className="flex-1 min-w-0">
-                <ProductPicker value={pickerProductId} onChange={setPickerProductId} />
+                <ProductPicker
+                  value={pickerProductId}
+                  onChange={setPickerProductId}
+                  supplierId={!useOtherSupplier ? supplierId || undefined : undefined}
+                />
               </div>
               <Input
                 type="number"

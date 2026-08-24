@@ -113,7 +113,7 @@ export function ProductFormSheet({
               name: product.name,
               sku: product.sku,
               barcode: product.barcode,
-              categoryId: product.categoryId,
+              categoryId: product.categoryId ?? "",
               brand: product.brand,
               unit: product.unit,
               purchasePrice: product.purchasePrice != null ? product.purchasePrice / rate : undefined,

@@ -23,6 +23,7 @@ export function ProductPicker({
   placeholder = "Ürün seçin…",
   stockByProductId,
   excludeZeroStock = false,
+  supplierId,
 }: {
   value: string;
   onChange: (id: string) => void;
@@ -31,6 +32,8 @@ export function ProductPicker({
   stockByProductId?: Record<string, number>;
   /** When true, hides products that have 0 stock according to stockByProductId. */
   excludeZeroStock?: boolean;
+  /** When provided, restricts the list to this supplier's products. */
+  supplierId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -42,8 +45,8 @@ export function ProductPicker({
   }, [search]);
 
   const { status, data } = useAsync(
-    () => listProducts({ search: debouncedSearch, pageSize: 50 }),
-    [debouncedSearch],
+    () => listProducts({ search: debouncedSearch, pageSize: 50, supplierId }),
+    [debouncedSearch, supplierId],
   );
   const rows = data?.rows ?? [];
 
