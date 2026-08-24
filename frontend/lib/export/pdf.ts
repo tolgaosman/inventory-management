@@ -95,6 +95,49 @@ function drawKpiGrid(doc: Doc, data: ReportData, startY: number): number {
   return y + cardHeight + 18;
 }
 
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+/**
+ * Wraps a single image (an uploaded invoice photo/scan, jpg or png) into a
+ * one-page A4 PDF, scaled to fit and centered — so "İndir" on an invoice
+ * always produces a PDF regardless of what format it was uploaded as.
+ */
+export async function imageBlobToPdf(blob: Blob, filenameHint?: string): Promise<Blob> {
+  const [{ jsPDF }, dataUrl] = await Promise.all([import("jspdf"), readBlobAsDataUrl(blob)]);
+  const img = await loadImage(dataUrl);
+
+  const doc = new jsPDF({ orientation: img.width > img.height ? "landscape" : "portrait", unit: "pt", format: "a4", compress: true });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 24;
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
+  const scale = Math.min(maxWidth / img.width, maxHeight / img.height);
+  const width = img.width * scale;
+  const height = img.height * scale;
+
+  const isPng = blob.type.includes("png") || filenameHint?.toLowerCase().endsWith(".png");
+  doc.addImage(dataUrl, isPng ? "PNG" : "JPEG", (pageWidth - width) / 2, (pageHeight - height) / 2, width, height);
+
+  return doc.output("blob");
+}
+
 export async function buildReportPdf(data: ReportData, selectedSections: string[] = ["all"]): Promise<Blob> {
   // Landscape — these tables can run to a dozen-plus columns (e.g. the full
   // product catalog); the extra width keeps every cell on one line without

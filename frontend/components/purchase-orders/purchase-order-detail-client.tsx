@@ -83,6 +83,7 @@ import {
 } from "@/lib/api/purchase-orders";
 import { ApiError, BASE_URL } from "@/lib/api/client";
 import { buildPurchaseOrderPdf } from "@/lib/export/purchase-order-pdf";
+import { imageBlobToPdf } from "@/lib/export/pdf";
 import { downloadBlob, reportFilename, slugify } from "@/lib/export/download";
 import { formatNumber, formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import { useRouter } from "next/navigation";
@@ -225,8 +226,9 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
     setDownloadingInvoice(true);
     try {
       const blob = await downloadPurchaseOrderInvoice(view.id);
-      const extension = view.invoiceFilePath?.split(".").pop() || "pdf";
-      downloadBlob(blob, `fatura-${slugify(view.code)}.${extension}`);
+      const isPdf = blob.type === "application/pdf" || view.invoiceFilePath?.toLowerCase().endsWith(".pdf");
+      const pdfBlob = isPdf ? blob : await imageBlobToPdf(blob, view.invoiceFilePath);
+      downloadBlob(pdfBlob, `fatura-${slugify(view.code)}.pdf`);
     } catch {
       toast.error("Fatura indirilemedi");
     } finally {
