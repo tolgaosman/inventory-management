@@ -170,19 +170,15 @@ class DemoDataSeeder extends Seeder
     {
         $rows = [
             ['id' => '00000', 'name' => 'Admin', 'email' => 'admin@test.com', 'role' => 'admin', 'initials' => 'AD', 'password' => '12345678'],
-            ['id' => '48271', 'name' => 'Tolga Osman Falay', 'email' => 'tolgaosman@sirket.com', 'role' => 'satinalma_yonetici', 'initials' => 'TO', 'password' => '12345678'],
-            ['id' => '63094', 'name' => 'Gizem Karabaşak', 'email' => 'gizem.karabasak@sirket.com', 'role' => 'depo', 'initials' => 'GK', 'password' => '12345678'],
             ['id' => '17856', 'name' => 'Mustafa Hacı', 'email' => 'mustafa.haci@sirket.com', 'role' => 'depo', 'initials' => 'MH', 'password' => '12345678'],
-            ['id' => '39412', 'name' => 'Alara Soysan', 'email' => 'alara.soysan@sirket.com', 'role' => 'satinalma', 'initials' => 'AS', 'password' => '12345678'],
-            ['id' => '82637', 'name' => 'Aliye Kavaz', 'email' => 'aliye.kavaz@sirket.com', 'role' => 'depo', 'initials' => 'AK', 'password' => '12345678'],
-            ['id' => '54180', 'name' => 'Irmak Bozkurt', 'email' => 'irmak.bozkurt@sirket.com', 'role' => 'satinalma', 'initials' => 'IB', 'password' => '12345678'],
-            ['id' => '24680', 'name' => 'Kaan Muslu Çağa', 'email' => 'kaan.caga@sirket.com', 'role' => 'depo', 'initials' => 'KÇ', 'password' => '12345678'],
-            ['id' => '71503', 'name' => 'Arda İbrahim Şahin', 'email' => 'arda.sahin@sirket.com', 'role' => 'satinalma', 'initials' => 'AŞ', 'password' => '12345678'],
             ['id' => '20946', 'name' => 'Dehan Saycıoğlu', 'email' => 'dehan.saycioglu@sirket.com', 'role' => 'depo', 'initials' => 'DS', 'password' => '12345678'],
-            ['id' => '95328', 'name' => 'Mertkan Kılıçbey Türemen', 'email' => 'mertkan.turemen@sirket.com', 'role' => 'satinalma', 'initials' => 'MT', 'password' => '12345678'],
-            ['id' => '46715', 'name' => 'Savaş Muhammed Muhtaroğlu', 'email' => 'savas.muhtaroglu@sirket.com', 'role' => 'depo', 'initials' => 'SM', 'password' => '12345678'],
+            ['id' => '24680', 'name' => 'Kaan Muslu Çağa', 'email' => 'kaan.caga@sirket.com', 'role' => 'depo', 'initials' => 'KÇ', 'password' => '12345678'],
             ['id' => '31849', 'name' => 'Berk Fenk', 'email' => 'berk.fenk@sirket.com', 'role' => 'depo_yonetici', 'initials' => 'BF', 'password' => '12345678'],
-            ['id' => '89234', 'name' => 'Çiğdem Dürüst', 'email' => 'cigdem.durust@sirket.com', 'role' => 'satinalma', 'initials' => 'ÇD', 'password' => '12345678'],
+            ['id' => '39412', 'name' => 'Alara Soysan', 'email' => 'alara.soysan@sirket.com', 'role' => 'satinalma', 'initials' => 'AS', 'password' => '12345678'],
+            ['id' => '46715', 'name' => 'Savaş Muhtaroğlu', 'email' => 'savas.muhtaroglu@sirket.com', 'role' => 'depo', 'initials' => 'SM', 'password' => '12345678'],
+            ['id' => '48271', 'name' => 'Tolga Osman Falay', 'email' => 'tolgaosman@sirket.com', 'role' => 'satinalma_yonetici', 'initials' => 'TO', 'password' => '12345678'],
+            ['id' => '54180', 'name' => 'Irmak Bozkurt', 'email' => 'irmak.bozkurt@sirket.com', 'role' => 'satinalma', 'initials' => 'IB', 'password' => '12345678'],
+            ['id' => '71503', 'name' => 'Arda Şahin', 'email' => 'arda.sahin@sirket.com', 'role' => 'satinalma', 'initials' => 'AŞ', 'password' => '12345678'],
         ];
 
         return $this->withTimestamps($rows);
