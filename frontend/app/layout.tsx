@@ -9,6 +9,8 @@ import { CurrencyProvider } from "@/lib/currency-context";
 
 import { SettingsProvider } from "@/lib/settings-context";
 
+export const dynamic = "force-dynamic";
+
 const montserrat = Montserrat({
   variable: "--font-montserrat",
   subsets: ["latin", "latin-ext"],
