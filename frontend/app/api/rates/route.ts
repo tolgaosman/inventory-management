@@ -6,7 +6,7 @@ export const revalidate = 3600;
 
 export async function GET() {
   try {
-    const res = await fetch("https://edevlet.gov.ct.tr/kktc-merkez-bankasi-gunluk-doviz-kurlari", {
+    const res = await fetch("https://www.kktcmerkezbankasi.org/veriler/doviz_kurlari/kur_sorgulama", {
       next: { revalidate: 3600 },
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -23,17 +23,23 @@ export async function GET() {
       try: 1, // Base currency
     };
 
-    const rows = $(".resultTable.striped tbody tr");
+    const rows = $(".cbdoviz tbody tr");
     rows.each((i, el) => {
       const tds = $(el).find("td");
       if (tds.length >= 3) {
-        const currency = $(tds[0]).text().trim().toLowerCase();
-        // Using Döviz Satış (Selling Rate)
-        const sellRateStr = $(tds[2]).text().trim();
-        const sellRate = parseFloat(sellRateStr);
+        const currencyText = $(tds[0]).text().trim().toLowerCase();
+        let currency = "";
+        if (currencyText.includes("(usd)")) currency = "usd";
+        else if (currencyText.includes("(eur)")) currency = "eur";
+        else if (currencyText.includes("(gbp)")) currency = "gbp";
 
-        if (currency === "usd" || currency === "eur" || currency === "gbp") {
-          rates[currency] = sellRate;
+        if (currency) {
+          // Using Döviz Satış (Selling Rate)
+          const sellRateStr = $(tds[2]).text().trim();
+          const sellRate = parseFloat(sellRateStr);
+          if (!isNaN(sellRate)) {
+            rates[currency] = sellRate;
+          }
         }
       }
     });

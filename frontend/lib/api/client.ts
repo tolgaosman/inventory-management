@@ -1,7 +1,7 @@
 // The HTTP layer in front of the Laravel API. Every page talks to lib/api/*,
 // never to fetch directly — so the base URL, auth header, and error mapping all
 // live here.
-export const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api").replace(/\/$/, "");
+export const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "/api").replace(/\/$/, "");
 
 const TOKEN_KEY = "net_auth_token";
 /** Mirrored into a cookie so middleware.ts can gate routes before React runs. */
