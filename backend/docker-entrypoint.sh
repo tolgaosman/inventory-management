@@ -9,6 +9,12 @@ fi
 # Make sure permissions are correct
 chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
+# Generate an app key if none is set, otherwise every request that touches
+# encryption (signed URLs, cookies, etc.) fails and php-fpm looks "down" to nginx.
+if [ -f .env ] && ! grep -q "^APP_KEY=base64:" .env; then
+    php artisan key:generate --force
+fi
+
 # Wait for MySQL
 echo "Waiting for database connection..."
 while ! mysqladmin ping -h"$DB_HOST" --silent; do
