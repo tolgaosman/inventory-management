@@ -17,7 +17,7 @@ fi
 
 # Wait for MySQL
 echo "Waiting for database connection..."
-while ! mysqladmin ping -h"$DB_HOST" --silent; do
+while ! mysqladmin ping -h"$DB_HOST" -u"$DB_USERNAME" -p"$DB_PASSWORD" --silent; do
     sleep 1
 done
 
