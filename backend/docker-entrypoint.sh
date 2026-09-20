@@ -15,9 +15,26 @@ if [ -f .env ] && ! grep -q "^APP_KEY=base64:" .env; then
     php artisan key:generate --force
 fi
 
-# Wait for MySQL
+# Wait for MySQL. Deliberately uses PHP's pdo_mysql (the driver Laravel itself
+# uses) instead of `mysqladmin ping`: the mysqladmin/mariadb-client shipped via
+# default-mysql-client can hang indefinitely against MySQL 8's default
+# caching_sha2_password auth plugin, which silently wedges this whole script
+# (and the container never gets to `exec php-fpm`, so nginx sees a dead upstream).
 echo "Waiting for database connection..."
-while ! mysqladmin ping -h"$DB_HOST" -u"$DB_USERNAME" -p"$DB_PASSWORD" --silent; do
+tries=0
+until php -r '
+    try {
+        new PDO("mysql:host=" . getenv("DB_HOST") . ";port=" . getenv("DB_PORT"), getenv("DB_USERNAME"), getenv("DB_PASSWORD"));
+    } catch (PDOException $e) {
+        fwrite(STDERR, $e->getMessage() . PHP_EOL);
+        exit(1);
+    }
+'; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 60 ]; then
+        echo "Could not connect to the database after 60s, giving up." >&2
+        exit 1
+    fi
     sleep 1
 done
 
