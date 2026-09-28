@@ -19,8 +19,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: always
-    volumes:
-      - ./backend:/var/www/html
     environment:
       - DB_CONNECTION=mysql
       - DB_HOST=db
@@ -42,13 +40,12 @@ services:
       - app-network
 
   web:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
     restart: always
     ports:
       - "4005:80"
-    volumes:
-      - ./docker/nginx/conf.d:/etc/nginx/conf.d
-      - ./backend/public:/var/www/html/public
     depends_on:
       - backend
       - frontend
