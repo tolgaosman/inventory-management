@@ -45,7 +45,7 @@ services:
     image: nginx:alpine
     restart: always
     ports:
-      - "4004:80"
+      - "4005:80"
     volumes:
       - ./docker/nginx/conf.d:/etc/nginx/conf.d
       - ./backend/public:/var/www/html/public
