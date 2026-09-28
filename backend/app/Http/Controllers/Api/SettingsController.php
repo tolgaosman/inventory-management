@@ -18,7 +18,7 @@ class SettingsController extends Controller
     private function current(): Setting
     {
         return Setting::query()->firstOrCreate([], [
-            'company_name' => 'Near East Technology',
+            'company_name' => 'Global Tech IT',
             'tax_office' => 'Lefkoşa Vergi Dairesi',
             'tax_number' => '1234567890',
             'address' => 'Lefkoşa, KKTC',

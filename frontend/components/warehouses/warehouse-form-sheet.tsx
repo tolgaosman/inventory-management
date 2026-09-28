@@ -119,7 +119,7 @@ export function WarehouseFormSheet({ open, onOpenChange, warehouse, onSaved }: W
                 <FormItem>
                   <FormLabel>Açık Adres</FormLabel>
                   <FormControl>
-                    <Textarea className="min-h-[60px]" placeholder="Yakın Doğu Bulvarı No:1" {...field} />
+                    <Textarea className="min-h-[60px]" placeholder="Teknoloji Bulvarı No:1" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

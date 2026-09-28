@@ -1,4 +1,4 @@
-# Near East Technology — Envanter Yönetimi Backend (Laravel)
+# Global Tech IT — Envanter Yönetimi Backend (Laravel)
 
 Bu backend, `frontend/lib/api/*.ts` içindeki sözleşmeyi (endpoint'ler, hata
 kodları, Türkçe mesajlar, iş kuralları) birebir uygulayan bir Laravel 12 REST

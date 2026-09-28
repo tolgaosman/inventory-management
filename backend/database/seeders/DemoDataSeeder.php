@@ -90,7 +90,7 @@ class DemoDataSeeder extends Seeder
     private function warehouses(): array
     {
         $rows = [
-            ['id' => 'wh-1', 'name' => 'Lefkoşa Kampüs Ana Depo', 'city' => 'Lefkoşa', 'address' => 'Yakın Doğu Bulvarı No:1', 'capacity' => 15000],
+            ['id' => 'wh-1', 'name' => 'Lefkoşa Kampüs Ana Depo', 'city' => 'Lefkoşa', 'address' => 'Teknoloji Bulvarı No:1', 'capacity' => 15000],
             ['id' => 'wh-2', 'name' => 'Girne İnovasyon Deposu', 'city' => 'Girne', 'address' => 'Karakum Cd. No:45', 'capacity' => 8000],
             ['id' => 'wh-3', 'name' => 'Gazimağusa Veri Merkezi Deposu', 'city' => 'Gazimağusa', 'address' => 'Teknoloji Bölgesi A-Blok', 'capacity' => 10000],
             ['id' => 'wh-4', 'name' => 'Teknopark AR-GE Deposu', 'city' => 'Lefkoşa', 'address' => 'AR-GE Binası Zemin Kat', 'capacity' => 6000],
@@ -150,7 +150,7 @@ class DemoDataSeeder extends Seeder
             ['id' => 'sup-7', 'name' => 'Palo Alto Networks', 'contact_name' => 'İrem Çelik', 'emails' => ['irem@paloaltonetworks.com', 'satinalma@paloaltonetworks.com', 'info@paloaltonetworks.com'], 'phone' => '0552 777 88 99', 'city' => 'Girne'],
             ['id' => 'sup-8', 'name' => 'NetApp Storage Solutions', 'contact_name' => 'Baran Koç', 'emails' => ['baran@netapp.com', 'satinalma@netapp.com', 'info@netapp.com'], 'phone' => '0534 888 99 00', 'city' => 'Lefkoşa'],
             ['id' => 'sup-9', 'name' => 'Schneider Electric (APC)', 'contact_name' => 'Zeynep Arslan', 'emails' => ['zeynep@se.com', 'satinalma@se.com', 'info@se.com'], 'phone' => '0536 999 00 11', 'city' => 'Bursa'],
-            ['id' => 'sup-10', 'name' => 'Yakın Doğu IT Dağıtım', 'contact_name' => 'Onur Polat', 'emails' => ['onur@sirket.com', 'satinalma@sirket.com', 'info@sirket.com'], 'phone' => '0538 000 11 22', 'city' => 'Lefkoşa'],
+            ['id' => 'sup-10', 'name' => 'Global Tech Dağıtım', 'contact_name' => 'Onur Polat', 'emails' => ['onur@sirket.com', 'satinalma@sirket.com', 'info@sirket.com'], 'phone' => '0538 000 11 22', 'city' => 'Lefkoşa'],
             ['id' => 'sup-11', 'name' => 'Juniper Networks Distribution', 'contact_name' => 'Hakan Er', 'emails' => ['hakan@juniper.com', 'satinalma@juniper.com', 'info@juniper.com'], 'phone' => '0532 101 22 33', 'city' => 'Ankara'],
             ['id' => 'sup-12', 'name' => 'MikroTik Bölge Distribütörü', 'contact_name' => 'Pınar Uçar', 'emails' => ['pinar@mikrotik.com', 'satinalma@mikrotik.com', 'info@mikrotik.com'], 'phone' => '0543 202 33 44', 'city' => 'İzmir'],
             ['id' => 'sup-13', 'name' => 'Synology Türkiye', 'contact_name' => 'Burak Toprak', 'emails' => ['burak@synology.com', 'satinalma@synology.com', 'info@synology.com'], 'phone' => '0535 303 44 55', 'city' => 'İstanbul'],

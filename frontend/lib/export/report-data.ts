@@ -25,7 +25,7 @@ import {
 } from "@/lib/constants";
 import type { CurrencyCode } from "@/lib/currency-context";
 
-export const COMPANY_NAME = "Near East Technology";
+export const COMPANY_NAME = "Global Tech IT";
 export const REPORT_TITLE = "Stok & Envanter Raporu";
 
 export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {

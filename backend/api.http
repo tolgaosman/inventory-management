@@ -1,4 +1,4 @@
-### Near East Technology API — VS Code REST Client dosyası.
+### Global Tech IT API — VS Code REST Client dosyası.
 ### php artisan serve --port=8000 çalışırken kullanın.
 
 @baseUrl = http://127.0.0.1:8000/api

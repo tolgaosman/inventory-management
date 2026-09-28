@@ -17,10 +17,10 @@ import { id, int, mulberry32, pick } from "./seed";
 const rand = mulberry32(20260810);
 
 // ---------------------------------------------------------------------------
-// Near East Technology - Depolar
+// Global Tech IT - Depolar
 // ---------------------------------------------------------------------------
 export const warehouses: Warehouse[] = [
-  { id: "wh-1", name: "Lefkoşa Kampüs Ana Depo", city: "Lefkoşa", address: "Yakın Doğu Bulvarı No:1", capacity: 15000 },
+  { id: "wh-1", name: "Lefkoşa Kampüs Ana Depo", city: "Lefkoşa", address: "Teknoloji Bulvarı No:1", capacity: 15000 },
   { id: "wh-2", name: "Girne İnovasyon Deposu", city: "Girne", address: "Karakum Cd. No:45", capacity: 8000 },
   { id: "wh-3", name: "Gazimağusa Veri Merkezi Deposu", city: "Gazimağusa", address: "Teknoloji Bölgesi A-Blok", capacity: 10000 },
   { id: "wh-4", name: "Teknopark AR-GE Deposu", city: "Lefkoşa", address: "AR-GE Binası Zemin Kat", capacity: 6000 },
@@ -30,7 +30,7 @@ export const warehouses: Warehouse[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Near East Technology - Kategoriler (IT & BT Donanım)
+// Global Tech IT - Kategoriler (IT & BT Donanım)
 // ---------------------------------------------------------------------------
 export const categories: Category[] = [
   { id: "cat-sunucu", name: "Sunucu & Veri Merkezi", parentId: null },
@@ -65,7 +65,7 @@ export const leafCategories = categories.filter((c) =>
 );
 
 // ---------------------------------------------------------------------------
-// Near East Technology - Tedarikçiler
+// Global Tech IT - Tedarikçiler
 // ---------------------------------------------------------------------------
 export const suppliers: Supplier[] = [
   { id: "sup-1", name: "Cisco Systems Türkiye", contactName: "Ahmet Yılmaz", emails: ["ahmet@cisco.com", "satinalma@cisco.com", "info@cisco.com"], phone: "0533 111 22 33", city: "İstanbul" },
@@ -77,7 +77,7 @@ export const suppliers: Supplier[] = [
   { id: "sup-7", name: "Palo Alto Networks", contactName: "İrem Çelik", emails: ["irem@paloaltonetworks.com", "satinalma@paloaltonetworks.com", "info@paloaltonetworks.com"], phone: "0552 777 88 99", city: "Girne" },
   { id: "sup-8", name: "NetApp Storage Solutions", contactName: "Baran Koç", emails: ["baran@netapp.com", "satinalma@netapp.com", "info@netapp.com"], phone: "0534 888 99 00", city: "Lefkoşa" },
   { id: "sup-9", name: "Schneider Electric (APC)", contactName: "Zeynep Arslan", emails: ["zeynep@se.com", "satinalma@se.com", "info@se.com"], phone: "0536 999 00 11", city: "Bursa" },
-  { id: "sup-10", name: "Yakın Doğu IT Dağıtım", contactName: "Onur Polat", emails: ["onur@sirket.com", "satinalma@sirket.com", "info@sirket.com"], phone: "0538 000 11 22", city: "Lefkoşa" },
+  { id: "sup-10", name: "Global Tech Dağıtım", contactName: "Onur Polat", emails: ["onur@sirket.com", "satinalma@sirket.com", "info@sirket.com"], phone: "0538 000 11 22", city: "Lefkoşa" },
   { id: "sup-11", name: "Juniper Networks Distribution", contactName: "Hakan Er", emails: ["hakan@juniper.com", "satinalma@juniper.com", "info@juniper.com"], phone: "0532 101 22 33", city: "Ankara" },
   { id: "sup-12", name: "MikroTik Bölge Distribütörü", contactName: "Pınar Uçar", emails: ["pinar@mikrotik.com", "satinalma@mikrotik.com", "info@mikrotik.com"], phone: "0543 202 33 44", city: "İzmir" },
   { id: "sup-13", name: "Synology Türkiye", contactName: "Burak Toprak", emails: ["burak@synology.com", "satinalma@synology.com", "info@synology.com"], phone: "0535 303 44 55", city: "İstanbul" },
@@ -86,7 +86,7 @@ export const suppliers: Supplier[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Near East Technology - Kullanıcılar
+// Global Tech IT - Kullanıcılar
 // ---------------------------------------------------------------------------
 export const users: AppUser[] = [
   { id: "48271", name: "Tolga Osman Falay", email: "tolgaosman@sirket.com", role: "admin", initials: "TO" },
@@ -107,7 +107,7 @@ export const users: AppUser[] = [
 export const CURRENT_ROLES: Role[] = ["admin", "depo_yonetici", "satinalma_yonetici", "depo", "satinalma"];
 
 // ---------------------------------------------------------------------------
-// Near East Technology - Ürün Kataloğu
+// Global Tech IT - Ürün Kataloğu
 // ---------------------------------------------------------------------------
 const productNamesByCategory: Record<string, string[]> = {
   "cat-rack-server": ["Dell PowerEdge R760", "HPE ProLiant DL380 Gen11", "Lenovo ThinkSystem SR650 V3", "Cisco UCS C240 M6", "Dell PowerEdge R650xs", "HPE ProLiant DL360 Gen11"],
@@ -451,6 +451,6 @@ export function purchaseOrderTotal(po: PurchaseOrder): number {
 }
 
 // ---------------------------------------------------------------------------
-// Near East Technology - Teklif İstekleri (RFQ)
+// Global Tech IT - Teklif İstekleri (RFQ)
 // ---------------------------------------------------------------------------
 export const quoteRequests: QuoteRequest[] = [];

@@ -23,10 +23,10 @@ class Setting extends Model
     public static function singleton(): self
     {
         return static::firstOrCreate(['id' => 1], [
-            'company_name' => 'Near East Technology',
+            'company_name' => 'Global Tech IT',
             'tax_office' => 'Lefkoşa Vergi Dairesi',
             'tax_number' => '1234567890',
-            'address' => 'Yakın Doğu Bulvarı No:1, Lefkoşa, KKTC',
+            'address' => 'Teknoloji Bulvarı No:1, Lefkoşa, KKTC',
         ]);
     }
 }

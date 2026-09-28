@@ -52,10 +52,10 @@ interface SettingsContextValue extends PersistedSettings {
 const STORAGE_KEY = "net_app_settings_v2";
 
 const DEFAULT_COMPANY: CompanySettings = {
-  companyName: "Near East Technology",
+  companyName: "Global Tech IT",
   taxOffice: "Lefkoşa VD",
   taxNumber: "1234567890",
-  address: "Yakın Doğu Bulvarı, Lefkoşa",
+  address: "Teknoloji Bulvarı, Lefkoşa",
 };
 
 const DEFAULT_PROFILE: UserProfileSettings = {

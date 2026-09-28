@@ -26,7 +26,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Envanter Yönetimi",
-  description: "Yakın Doğu Teknoloji sunucu, ağ, bilgisayar ve lisans envanter yönetim sistemi.",
+  description: "Global Tech IT sunucu, ağ, bilgisayar ve lisans envanter yönetim sistemi.",
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png" },
