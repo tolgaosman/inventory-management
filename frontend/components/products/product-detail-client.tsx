@@ -171,7 +171,7 @@ export function ProductDetailClient({ id }: { id: string }) {
             className="group relative shrink-0 cursor-zoom-in rounded-2xl overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary/50 transition-transform"
             title="Görseli büyütmek için tıklayın"
           >
-            <ProductImageThumbnail src={product.imageUrl} alt={product.name} size="xl" className="shadow-sm transition-transform duration-200" />
+            <ProductImageThumbnail src={product.imageUrl} alt={product.name} size="xl" className="size-16 shadow-sm transition-transform duration-200 sm:size-24" />
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-[1px]">
               <ZoomIn className="size-6" />
             </div>

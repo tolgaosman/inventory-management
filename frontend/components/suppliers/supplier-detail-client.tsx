@@ -153,23 +153,23 @@ export function SupplierDetailClient({ id }: { id: string }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Package className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Ürün Çeşidi</p>
-                <p className="text-lg font-semibold tabular-nums text-foreground">{formatNumber(products.length)}</p>
+                <p className="truncate text-lg font-semibold tabular-nums text-foreground">{formatNumber(products.length)}</p>
               </div>
             </CardContent>
           </Card>
           <Card className="py-5 gap-2">
             <CardContent className="flex items-center gap-3 px-5">
-              <div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <MapPin className="size-4.5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Şehir</p>
-                <p className="text-lg font-semibold text-foreground">{supplier.city}</p>
+                <p className="truncate text-lg font-semibold text-foreground" title={supplier.city}>{supplier.city}</p>
               </div>
             </CardContent>
           </Card>

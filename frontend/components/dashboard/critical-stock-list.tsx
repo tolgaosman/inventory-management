@@ -285,7 +285,7 @@ export function CriticalStockList({
                             <Eye className="size-4" />
                             Ürün detayı
                           </DropdownMenuItem>
-                          <DropdownMenuItem render={<Link href="/stok/giris" />}>
+                          <DropdownMenuItem render={<Link href="/stok/islem" />}>
                             <ArrowDownToLine className="size-4" />
                             Stok girişi
                           </DropdownMenuItem>

@@ -943,7 +943,7 @@ export function PurchaseOrdersClient() {
           title="Satın Alma"
           description="Siparişleri, ikmal ihtiyacını ve tedarikçi performansını tek yerden yönetin."
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={

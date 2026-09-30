@@ -144,10 +144,10 @@ export function ApplyPriceDialog({
         </div>
 
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
+          <Button type="button" variant="ghost" onClick={onCancel} disabled={pending} className="sm:self-center">
             Vazgeç
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={() => onConfirm([])} disabled={pending}>
               Sadece bundan sonrası
             </Button>

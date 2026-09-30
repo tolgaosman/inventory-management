@@ -146,7 +146,7 @@ export function AppHeader() {
           <span className="hidden text-sm font-medium sm:block">Bildirimler</span>
           <ChevronDown className="size-4 text-muted-foreground" />
         </PopoverTrigger>
-        <PopoverContent align="end" sideOffset={8} className="w-80 overflow-hidden rounded-lg border border-border bg-popover p-0 shadow-soft">
+        <PopoverContent align="end" sideOffset={8} className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-popover p-0 shadow-soft">
           {role === "satinalma_yonetici" ? (
             <Tabs defaultValue="stock">
               <div className="bg-muted/40 p-2 border-b border-border">

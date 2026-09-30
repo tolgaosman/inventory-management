@@ -593,7 +593,7 @@ export function PurchaseOrderDetailClient({ id }: { id: string }) {
 
       {invoiceUrl && (
         <Dialog open={invoicePreviewOpen} onOpenChange={setInvoicePreviewOpen}>
-          <DialogContent className="max-w-4xl p-0 overflow-hidden bg-muted/20 border-border">
+          <DialogContent className="sm:max-w-4xl p-0 overflow-hidden bg-muted/20 border-border">
             <div className="flex h-12 items-center justify-between border-b px-4 bg-background">
               <DialogTitle className="text-sm font-medium">Fatura Belgesi</DialogTitle>
             </div>

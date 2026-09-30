@@ -73,7 +73,7 @@ export function SteppedFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={showCloseButton} className="max-w-2xl gap-0 p-0 overflow-hidden bg-background/95 backdrop-blur-sm sm:rounded-2xl shadow-2xl border-muted/40">
+      <DialogContent showCloseButton={showCloseButton} className="sm:max-w-2xl gap-0 p-0 overflow-hidden bg-background/95 backdrop-blur-sm sm:rounded-2xl shadow-2xl border-muted/40">
         <div className="flex flex-col max-h-[85vh]">
           {/* Header Section */}
           <div className="px-6 pt-6 pb-4 bg-background z-10 border-b border-border/50">
@@ -129,21 +129,22 @@ export function SteppedFormDialog({
           </div>
 
           {/* Footer Section */}
-          <div className="px-6 py-4 bg-muted/20 border-t border-border/50 flex items-center justify-between">
+          <div className="px-6 py-4 bg-muted/20 border-t border-border/50 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
               type="button"
               variant="outline"
               onClick={isFirstStep ? (onCancel || (() => onOpenChange(false))) : handleBack}
               disabled={isSubmitting || validating}
+              className="min-w-0"
             >
-              {isFirstStep ? "İptal" : `Geri: ${previousStep?.label}`}
+              <span className="truncate">{isFirstStep ? "İptal" : `Geri: ${previousStep?.label}`}</span>
             </Button>
 
             <Button
               type="button"
               onClick={isLastStep ? onSubmit : handleNext}
               disabled={isSubmitting || validating}
-              className={cn(isLastStep && "bg-primary hover:bg-primary/90 text-primary-foreground")}
+              className={cn("min-w-0", isLastStep && "bg-primary hover:bg-primary/90 text-primary-foreground")}
             >
               {isSubmitting || validating ? (
                 <span className="flex items-center gap-2">
@@ -153,7 +154,7 @@ export function SteppedFormDialog({
               ) : isLastStep ? (
                 submitLabel
               ) : (
-                `İleri: ${nextStep?.label}`
+                <span className="truncate">{`İleri: ${nextStep?.label}`}</span>
               )}
             </Button>
           </div>

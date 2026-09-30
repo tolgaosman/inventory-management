@@ -1,22 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isToday, addMonths, subMonths, isSameDay, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addMonths, subMonths, isSameDay, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, ShoppingCart, Calendar as CalendarIcon } from "lucide-react";
-import { Filter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAsync } from "@/lib/hooks/use-async";
 import { listMovements } from "@/lib/api/movements";
 import { listPurchaseOrders } from "@/lib/api/purchase-orders";
 import { listProducts } from "@/lib/api/products";
 import { listWarehouses } from "@/lib/api/catalog";
-import type { StockMovement, PurchaseOrderStatus } from "@/lib/types";
-import { EmptyState } from "@/components/common/empty-state";
 import { formatCurrency } from "@/lib/format";
 import { useCurrency } from "@/lib/currency-context";
 import { useSettings } from "@/lib/settings-context";
@@ -153,7 +150,7 @@ export function CalendarClient() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-1.5">
-          <div className="grid grid-cols-7 gap-1.5 auto-rows-fr h-full">
+          <div className="grid grid-cols-7 gap-1 auto-rows-fr h-full sm:gap-1.5">
             {Array.from({ length: paddingStart }).map((_, i) => (
               <div key={`pad-${i}`} className="rounded-xl border border-transparent bg-transparent" />
             ))}
@@ -204,33 +201,40 @@ export function CalendarClient() {
                   key={date.toISOString()}
                   onClick={() => totalEvents > 0 ? setSelectedDate(date) : null}
                   className={cn(
-                    "relative flex flex-col rounded-xl border p-2 min-h-[64px] transition-all",
+                    "relative flex flex-col rounded-xl border p-1 min-h-[52px] transition-all sm:p-2 sm:min-h-[64px]",
                     isCurrentDay ? "border-primary/50 bg-primary/[0.02]" : "border-border/50 bg-card",
                     totalEvents > 0 ? "hover:border-primary/50 hover:shadow-md cursor-pointer" : "opacity-80"
                   )}
                 >
                   <div className="flex items-center justify-between">
                     <span className={cn(
-                      "flex size-7 items-center justify-center rounded-full text-sm font-medium",
+                      "flex size-5 items-center justify-center rounded-full text-xs font-medium sm:size-7 sm:text-sm",
                       isCurrentDay ? "bg-primary text-primary-foreground" : "text-foreground"
                     )}>
                       {format(date, "d")}
                     </span>
                     {totalEvents > 0 && (
-                      <span className="text-micro font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md">
-                        {totalEvents} işlem
+                      <span
+                        className="text-[9px] font-medium text-muted-foreground bg-muted px-1 py-0.5 rounded-md sm:text-micro sm:px-1.5"
+                        title={`${totalEvents} işlem`}
+                      >
+                        <span className="sm:hidden">{totalEvents}</span>
+                        <span className="hidden sm:inline">{totalEvents} işlem</span>
                       </span>
                     )}
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-1.5 flex-1 min-h-0 content-end">
+                  <div className="mt-1 flex flex-wrap gap-0.5 flex-1 min-h-0 content-end sm:mt-2 sm:gap-1.5">
                     {chips.map(({ key, icon: Icon, count, title, cls }) => (
-                      <div 
-                        key={key} 
+                      <div
+                        key={key}
                         title={title}
-                        className={cn("flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md font-semibold", cls)}
+                        className={cn(
+                          "flex items-center gap-0.5 text-[10px] px-1 py-0.5 rounded-md font-semibold sm:gap-1 sm:text-xs sm:px-1.5",
+                          cls,
+                        )}
                       >
-                        <Icon className="size-3" />
+                        <Icon className="hidden size-3 sm:block" />
                         <span>{count}</span>
                       </div>
                     ))}

@@ -306,8 +306,8 @@ export function WarehouseDetailClient({ id }: { id: string }) {
                 <CardContent className="space-y-2 px-5 pt-2">
                   {criticalLevels.map((l) => (
                     <div key={l.productId} className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2 text-sm">
-                      <span className="font-medium text-foreground">{l.product.name}</span>
-                      <span className="tabular-nums text-status-critical font-semibold">
+                      <span className="min-w-0 truncate font-medium text-foreground" title={l.product.name}>{l.product.name}</span>
+                      <span className="shrink-0 tabular-nums text-status-critical font-semibold">
                         {formatNumber(l.quantity)} / min {formatNumber(l.product.minStock)}
                       </span>
                     </div>
@@ -340,10 +340,10 @@ export function WarehouseDetailClient({ id }: { id: string }) {
                       const isIncomingTransfer = m.targetWarehouseId === id;
                       return (
                         <div key={m.id} className="rounded-lg px-2 py-2 text-sm hover:bg-muted/50">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                            <div className="flex min-w-0 items-center gap-2">
                               <MovementTypeBadge type={m.type} />
-                              <span className="text-xs text-muted-foreground">
+                              <span className="min-w-0 truncate text-xs text-muted-foreground">
                                 {product?.productName ?? "Bilinmeyen ürün"}
                                 {isIncomingTransfer ? ` (${sourceWarehouse?.name ?? "?"} → buraya)` : ""}
                                 {" · "}
@@ -353,18 +353,18 @@ export function WarehouseDetailClient({ id }: { id: string }) {
                             </div>
                             <span
                               className={cn(
-                                "tabular-nums font-semibold",
+                                "shrink-0 tabular-nums font-semibold",
                                 isIncomingTransfer ? "text-status-good" : m.type === "cikis" ? "text-status-critical" : "text-status-good",
                               )}
                             >
                               {formatSigned(isIncomingTransfer ? m.quantity : m.type === "cikis" ? -m.quantity : m.quantity)}
                             </span>
                           </div>
-                          <div className="mt-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                            <span>
+                          <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="min-w-0 truncate">
                               {m.userName ?? "Bilinmeyen kullanıcı"} · {formatDateTime(m.createdAt)}
                             </span>
-                            {m.note ? <span className="italic">&ldquo;{m.note}&rdquo;</span> : null}
+                            {m.note ? <span className="min-w-0 truncate italic">&ldquo;{m.note}&rdquo;</span> : null}
                           </div>
                         </div>
                       );

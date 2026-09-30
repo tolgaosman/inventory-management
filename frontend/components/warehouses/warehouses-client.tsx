@@ -717,7 +717,7 @@ export function WarehousesClient() {
 
       {/* Product Warehouse Breakdown Detail Modal */}
       <Dialog open={!!detailProduct} onOpenChange={(open) => !open && setDetailProduct(null)}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <Package className="size-4 text-primary" />
@@ -730,7 +730,7 @@ export function WarehousesClient() {
 
           {detailProduct && (
             <div className="space-y-4 py-2 text-xs">
-              <div className="grid grid-cols-3 gap-3 rounded-lg border border-border/60 bg-muted/30 p-3 text-center">
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 bg-muted/30 p-3 text-center sm:grid-cols-3">
                 <div>
                   <p className="text-muted-foreground">Toplam Stok</p>
                   <p className="text-sm font-semibold text-foreground">{formatNumber(detailProduct.totalStock)} Birim</p>
@@ -755,9 +755,9 @@ export function WarehousesClient() {
                   {warehouses?.map((w) => {
                     const qty = detailProduct.stocksByWarehouse[w.id] ?? 0;
                     return (
-                      <div key={w.id} className="flex items-center justify-between px-3 py-2">
-                        <span className="font-medium text-foreground">{w.name}</span>
-                        <div className="flex items-center gap-2">
+                      <div key={w.id} className="flex items-center justify-between gap-2 px-3 py-2">
+                        <span className="min-w-0 truncate font-medium text-foreground" title={w.name}>{w.name}</span>
+                        <div className="flex shrink-0 items-center gap-2">
                           <span className={cn("font-mono font-semibold", qty > 0 ? "text-foreground" : "text-muted-foreground")}>
                             {formatNumber(qty)} Birim
                           </span>
@@ -812,7 +812,7 @@ export function WarehousesClient() {
 
       {/* Stock Transfer Modal */}
       <Dialog open={!!transferProduct} onOpenChange={(open) => !open && setTransferProduct(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <ArrowLeftRight className="size-4 text-primary" />

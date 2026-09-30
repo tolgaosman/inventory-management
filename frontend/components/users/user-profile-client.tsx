@@ -327,7 +327,7 @@ export function UserProfileClient({ id }: { id: string }) {
                     <div className="space-y-3">
                       <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stok Hareketleri</p>
                       <StatGrid
-                        className="grid-cols-3 gap-3"
+                        className="grid-cols-1 gap-3 sm:grid-cols-3"
                         items={[
                           {
                             icon: ArrowDownToLine,

@@ -438,7 +438,7 @@ export function ProductImportModal({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden rounded-xl border border-border">
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden rounded-xl border border-border">
         {/* Header */}
         <DialogHeader className="p-6 pb-4 border-b border-border bg-card">
           <div className="flex items-center gap-3">
@@ -458,7 +458,7 @@ export function ProductImportModal({
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5 custom-scrollbar">
           {/* Template Info Card */}
-          <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-tint-green/20 bg-tint-green/5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-tint-green/20 bg-tint-green/5">
             <div className="flex items-start gap-3 min-w-0">
               <FileText className="size-4 text-tint-green shrink-0 mt-0.5" />
               <div className="space-y-0.5 min-w-0">
@@ -473,7 +473,7 @@ export function ProductImportModal({
               variant="outline"
               size="sm"
               onClick={handleDownloadTemplate}
-              className="gap-1.5 shrink-0 border-tint-green/30 text-tint-green hover:bg-tint-green/10 text-xs h-8"
+              className="gap-1.5 shrink-0 self-start border-tint-green/30 text-tint-green hover:bg-tint-green/10 text-xs h-8 sm:self-auto"
             >
               <Download className="size-3.5" />
               Şablon İndir (.xlsx)
@@ -562,7 +562,7 @@ export function ProductImportModal({
           {!isParsing && parsedRows.length > 0 && (
             <div className="space-y-3 pt-1">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="font-semibold text-foreground">Önizleme ({parsedRows.length} Satır)</span>
                   <Badge variant="outline" className="bg-tint-green/10 text-tint-green border-tint-green/30">
                     {validCount} Geçerli

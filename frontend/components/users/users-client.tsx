@@ -83,9 +83,12 @@ function RoleBadge({ role, label }: { role: Role; label: string }) {
   const style = ROLE_STYLE[role] ?? ROLE_STYLE_DEFAULT;
   const Icon = style.icon;
   return (
-    <Badge variant="outline" className={cn("gap-1 border-0 font-semibold text-xs", style.bg, style.text)}>
-      <Icon className="size-3" />
-      {label}
+    <Badge
+      variant="outline"
+      className={cn("min-w-0 shrink gap-1 border-0 font-semibold text-xs", style.bg, style.text)}
+    >
+      <Icon className="size-3 shrink-0" />
+      <span className="min-w-0 truncate">{label}</span>
     </Badge>
   );
 }
@@ -311,10 +314,10 @@ export function UsersClient() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-b border-border/70 bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="text-left">Kullanıcı</TableHead>
-                    <TableHead className="text-center">ID</TableHead>
-                    <TableHead className="text-center">E-posta</TableHead>
-                    <TableHead className="text-center">
+                    <TableHead className="w-[34%] text-left">Kullanıcı</TableHead>
+                    <TableHead className="w-[10%] text-center">ID</TableHead>
+                    <TableHead className="w-[30%] text-center">E-posta</TableHead>
+                    <TableHead className="w-[16%] text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button
                           type="button"
@@ -381,9 +384,11 @@ export function UsersClient() {
                           <span className="font-mono text-xs text-muted-foreground">#{user.id}</span>
                         </TableCell>
                         <TableCell className="py-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <Mail className="size-3.5 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                          <div className="flex min-w-0 items-center justify-center gap-1.5">
+                            <Mail className="size-3.5 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 truncate text-xs text-muted-foreground" title={user.email}>
+                              {user.email}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell className="py-3 text-center">
@@ -436,7 +441,7 @@ export function UsersClient() {
 
         {/* ── Create / Edit Dialog ──────────────────────────────────────── */}
         <Dialog open={formOpen} onOpenChange={setFormOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserCog className="size-4 text-primary" />

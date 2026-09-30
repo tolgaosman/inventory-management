@@ -145,10 +145,10 @@ export default function LoginPage() {
                 key={account.email}
                 type="button"
                 onClick={() => { setEmail(account.email); setPassword("12345678"); }}
-                className="flex justify-between items-center px-4 py-2.5 text-xs rounded-xl bg-slate-50/80 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800/80 transition-colors text-left group"
+                className="flex justify-between items-center gap-2 px-4 py-2.5 text-xs rounded-xl bg-slate-50/80 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800/80 transition-colors text-left group"
               >
-                <span className="font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">{account.email}</span>
-                <span className="text-slate-500 dark:text-slate-500">{account.role}</span>
+                <span className="min-w-0 truncate font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 transition-colors">{account.email}</span>
+                <span className="shrink-0 text-slate-500 dark:text-slate-500">{account.role}</span>
               </button>
             ))}
           </div>

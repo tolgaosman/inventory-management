@@ -43,7 +43,6 @@ export function MovementCommandHero({
 }) {
   const todayTotal = stats ? stats.todayIn + stats.todayOut : 0;
   const inPercent = stats && todayTotal > 0 ? Math.round((stats.todayIn / todayTotal) * 100) : 0;
-  const net = stats ? stats.todayIn - stats.todayOut : 0;
 
   const chips: CommandHeroChip[] = [
     { key: "total", icon: Package, label: "toplam kayıt", value: typeBreakdown?.total, onClick: () => onTypeClick("all") },
@@ -59,16 +58,16 @@ export function MovementCommandHero({
     <CommandHero
       title="Stok Hareket Merkezi"
       headlineContent={
-        <div className="flex gap-8">
+        <div className="flex flex-wrap gap-x-8 gap-y-3">
           <div className="space-y-1.5">
-            <p className="text-xl font-bold tracking-tight text-surface-inverse-foreground/70">Bugünkü Giriş</p>
-            <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground">
+            <p className="text-base font-bold tracking-tight text-surface-inverse-foreground/70 sm:text-xl">Bugünkü Giriş</p>
+            <span className="flex items-baseline text-[32px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground sm:text-[42px]">
               {stats ? formatNumber(stats.todayIn) : "—"}
             </span>
           </div>
           <div className="space-y-1.5">
-            <p className="text-xl font-bold tracking-tight text-surface-inverse-foreground/70">Bugünkü Çıkış</p>
-            <span className="flex items-baseline text-[42px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground">
+            <p className="text-base font-bold tracking-tight text-surface-inverse-foreground/70 sm:text-xl">Bugünkü Çıkış</p>
+            <span className="flex items-baseline text-[32px] font-bold leading-none tracking-tight tabular-nums text-surface-inverse-foreground sm:text-[42px]">
               {stats ? formatNumber(stats.todayOut) : "—"}
             </span>
           </div>
